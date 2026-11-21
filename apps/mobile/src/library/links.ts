@@ -3,6 +3,7 @@ How links and titles are cleaned and shown, following the extension settings tha
 the rules are tested without the app.
 */
 import type {Settings} from '../../../extension/src/shared/types';
+import {DEFAULT_SETTINGS} from '../../../extension/src/shared/library-normalize';
 import {stripTrackingParameters} from '../../../extension/src/shared/tracking-parameters';
 import {
 	displayUrl,
@@ -20,10 +21,17 @@ export type LinkSettings = Pick<
 	| 'markLocalLinks'
 	| 'bookmarkDensity'
 	| 'showAllBookmarks'
+	| 'bookmarkSort'
 	| 'sessionSort'
 	| 'showSessionFaviconPreviews'
 	| 'expandSessionsByDefault'
+	| 'sessionNameStyle'
+	| 'sessionNameTemplate'
+	| 'sessionNameFallback'
+	| 'autoArchiveDays'
+	| 'trashRetentionDays'
 	| 'toastDuration'
+	| 'siteIcons'
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
@@ -36,10 +44,17 @@ export const DEFAULTS: LinkSettings = {
 	markLocalLinks: false,
 	bookmarkDensity: 'comfortable',
 	showAllBookmarks: true,
+	bookmarkSort: 'manual',
 	sessionSort: 'newest',
 	showSessionFaviconPreviews: true,
 	expandSessionsByDefault: false,
+	sessionNameStyle: DEFAULT_SETTINGS.sessionNameStyle,
+	sessionNameTemplate: DEFAULT_SETTINGS.sessionNameTemplate,
+	sessionNameFallback: DEFAULT_SETTINGS.sessionNameFallback,
+	autoArchiveDays: DEFAULT_SETTINGS.autoArchiveDays,
+	trashRetentionDays: DEFAULT_SETTINGS.trashRetentionDays,
 	toastDuration: 'default',
+	siteIcons: 'server',
 };
 
 /**

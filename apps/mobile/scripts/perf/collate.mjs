@@ -1,4 +1,3 @@
-// Turns the files run-matrix.sh wrote into one Markdown table. Usage: node scripts/perf/collate.mjs <results dir>
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';

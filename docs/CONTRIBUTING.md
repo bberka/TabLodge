@@ -12,6 +12,8 @@ Install the Vite+ CLI once as described in [Development](#development), then run
 
 For code locations and how the pieces fit together, see the [project structure](#project-structure) and [architecture notes](architecture.md).
 
+Performance work: `apps/extension/scripts/browser/perf-fixture.ts` builds a synthetic library of any size, `perf-profile.ts` measures it over the headless dev browser's CDP endpoint (`node scripts/browser/perf-profile.ts <endpoint> <bookmark count>`), `perf-matrix.ts` runs one scenario of the scale matrix (`node scripts/browser/perf-matrix.ts <endpoint> <scenario>`; scenarios are listed in the file: 100 to 10,000 bookmarks in one column, 100 columns, 100 to 10,000 sessions, one session with up to 10,000 links, 100 folders) and prints one JSON row with every edge case that broke, and `perf-cpu.ts` prints a CPU profile of the page or the worker. `perf-profile.ts` and `perf-matrix.ts` are left out of lint and typecheck (`xo.config.ts`, `tsconfig.node.json`) because most of it runs inside the page or the worker, where this project has no DOM or `chrome` types. None of them is bundled.
+
 ## Development
 
 Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then use `vp run <task>` from the repository root.
@@ -20,8 +22,9 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | --- | --- |
 | `vp run dev:chrome` | Build, watch, and open a test browser with TabLodge loaded. `--seed-data` adds sample data and `--headless` opens no window |
 | `vp run dev:firefox` | The same in Firefox |
-| `vp run check` | Lint, type checks, and tests |
+| `vp run check` | Lint, type checks, tests, and the comment ratchet |
 | `vp run check:changed` | The quick loop: lint, type check, and test only what differs from `origin/master`. Not the gate |
+| `vp run check:comments` | Fails when a file this branch touches gains a comment or drops below its baseline in `scripts/comment-baseline.json` (see [Code comments](agents/comments.md)) |
 | `vp run check:agent-context` | Fails when the agent instructions in `AGENTS.md` and `docs/agents/` differ from `scripts/agent-context-budget.json` |
 | `vp run check:a11y` | Accessibility and keyboard checks on the built extension. The other `check:` tasks (`build`, `startup`, `firefox`, `dev-browser`, `private-storage`) each test one part of the built extension |
 | `vp run build` / `vp run pack` | Build and verify both browsers, then package them |

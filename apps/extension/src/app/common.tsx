@@ -47,7 +47,7 @@ import {
 	privateConfigNeedsReload,
 	reloadPrivatePage,
 } from './private-config';
-import {send} from './message-client';
+import {onUndoOffer, send} from './message-client';
 import {PROJECT} from './project';
 import {plural} from './plural';
 import {cn} from '@/lib/utils';
@@ -688,6 +688,44 @@ export function useStatus(): [Status | null, ShowStatus] {
 					}
 				: null,
 		);
+	const showStatusRef = useRef(showStatus);
+	showStatusRef.current = showStatus;
+	const offeredUndoRef = useRef<string | undefined>(undefined);
+	useEffect(
+		() =>
+			onUndoOffer(
+				(done, undoId) => {
+					offeredUndoRef.current = undoId;
+					showStatusRef.current(done, false, {
+						action: {
+							label: 'Undo',
+							async onClick() {
+								const result = await send('UNDO', {id: undoId});
+								if (result?.ok) {
+									showStatusRef.current(`Undone: ${result.label}.`, false, {
+										toast: true,
+									});
+								} else {
+									showStatusRef.current(
+										result?.error || 'Could not undo that.',
+										true,
+									);
+								}
+							},
+						},
+					});
+				},
+				(undoId) => {
+					if (offeredUndoRef.current !== undoId) {
+						return;
+					}
+
+					offeredUndoRef.current = undefined;
+					showStatusRef.current(null);
+				},
+			),
+		[],
+	);
 	return [status, showStatus];
 }
 

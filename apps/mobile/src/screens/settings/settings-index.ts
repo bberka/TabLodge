@@ -32,6 +32,10 @@ export const ROWS = {
 		hint: 'Open them somewhere other than your other links',
 	},
 	privateOpenApp: {label: 'Private browser', hint: 'The app for private links'},
+	deviceName: {
+		label: 'Device name',
+		hint: 'Shown on sessions saved here. Empty uses your phone’s make and model',
+	},
 	syncSettings: {
 		label: 'Sync settings',
 		hint: 'Link options reach every device, the look and gestures your other phones. The device name and browsers stay here',
@@ -59,7 +63,7 @@ export const ROWS = {
 	},
 	compactSessions: {
 		label: 'Compact session cards',
-		hint: 'Tighter cards without the tab icon strip',
+		hint: 'Tighter cards: no tab icon strip, description, or Saved on line',
 	},
 	sessionIcons: {
 		label: 'Tab icons on session cards',
@@ -67,7 +71,7 @@ export const ROWS = {
 	},
 	showSavedOn: {
 		label: 'Show where a session was saved',
-		hint: 'The device name on the card',
+		hint: 'The device name on the card. Compact cards hide it',
 	},
 	expandSessions: {
 		label: 'Keep sessions expanded',
@@ -99,16 +103,12 @@ export const ROWS = {
 	sessionSwipeLeft: {label: 'Swipe a session left'},
 	linkSwipeRight: {label: 'Swipe a link right', hint: 'In an open session'},
 	linkSwipeLeft: {label: 'Swipe a link left', hint: 'In an open session'},
-	tap: {label: 'Tap a bookmark'},
+	tap: {label: 'Tap a bookmark', hint: 'Open the link or edit it'},
 	swipeRight: {label: 'Swipe a bookmark right'},
 	swipeLeft: {label: 'Swipe a bookmark left'},
-	cleanOnSave: {
-		label: 'Clean links when saving',
-		hint: 'Removes utm_source and similar',
-	},
 	siteIcons: {
 		label: 'Site icons',
-		hint: 'Through your server by default, or from the sites too',
+		hint: 'Through your server, or letter tiles only',
 	},
 	savePreview: {
 		label: 'Preview links when saving',
@@ -120,7 +120,7 @@ export const ROWS = {
 	},
 	removeTracking: {
 		label: 'Remove tracking parameters',
-		hint: 'When opening links. Saved links stay as they are',
+		hint: 'Removes utm_source, fbclid and similar when opening or copying saved links. Stored links stay unchanged',
 	},
 	showUnder: {label: 'Under a bookmark title'},
 	shortenAddresses: {
@@ -140,7 +140,34 @@ export const ROWS = {
 		label: 'Show All in the bookmark list',
 		hint: 'The first item, listing every bookmark. Shared with the extension',
 	},
-	sortSessions: {label: 'Sort sessions'},
+	sortSessions: {
+		label: 'Sort sessions',
+		hint: 'Newest, oldest, last opened, name, most tabs, or your order. The extension uses it too',
+	},
+	sortBookmarks: {
+		label: 'Sort bookmarks',
+		hint: 'Only Manual order can be rearranged',
+	},
+	sessionName: {
+		label: 'Session name',
+		hint: 'How a new session is named. The name field on the save sheet wins when you type one',
+	},
+	sessionNameFallback: {
+		label: 'Name to use when left empty',
+		hint: 'Used when the name is left empty, with Ask each time',
+	},
+	sessionNameTemplate: {
+		label: 'Session name template',
+		hint: 'Placeholders: {date}, {time}, {weekday}, {title}, {domain}, {count}',
+	},
+	archiveSessions: {
+		label: 'Archive sessions not opened for',
+		hint: 'Moves them to the Archived folder when the app starts. Nothing is deleted',
+	},
+	trashRetention: {
+		label: 'Keep items in the trash for',
+		hint: 'Then deleted items are removed for good',
+	},
 	licences: {
 		label: 'Open source licences',
 		hint: 'The third party code this app is built from',
@@ -216,6 +243,10 @@ export const SECTIONS = {
 		],
 		rows: [
 			ROWS.sortSessions,
+			ROWS.sessionName,
+			ROWS.sessionNameFallback,
+			ROWS.sessionNameTemplate,
+			ROWS.archiveSessions,
 			ROWS.sessionView,
 			ROWS.sessionTap,
 			ROWS.sessionMain,
@@ -250,6 +281,7 @@ export const SECTIONS = {
 			ROWS.showUnder,
 			ROWS.spacing,
 			ROWS.showAll,
+			ROWS.sortBookmarks,
 			ROWS.siteIcons,
 			ROWS.savePreview,
 		],
@@ -263,7 +295,6 @@ export const SECTIONS = {
 			ROWS.shortenAddresses,
 			ROWS.markInsecure,
 			ROWS.markLocal,
-			ROWS.cleanOnSave,
 		],
 	},
 	openLinks: {
@@ -319,8 +350,9 @@ export const SECTIONS = {
 			'bin',
 			'undelete',
 			'empty trash',
+			'retention',
 		],
-		rows: [],
+		rows: [ROWS.trashRetention],
 	},
 	private: {
 		title: 'Private library',
@@ -357,7 +389,7 @@ export const SECTIONS = {
 			'widget',
 			'battery',
 		],
-		rows: [ROWS.syncPrivate, ROWS.backgroundSync],
+		rows: [ROWS.syncPrivate, ROWS.backgroundSync, ROWS.deviceName],
 	},
 	excluded: {
 		title: 'Excluded websites',

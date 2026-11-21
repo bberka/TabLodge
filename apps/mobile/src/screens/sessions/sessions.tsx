@@ -12,7 +12,8 @@ import {
 	sessionsIn,
 	searchSessions,
 } from '../../library/session-edits';
-import {edit, useLibrary, useSyncStatus} from '../../library/library-store';
+import {useLibrary, useSyncStatus} from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
 import {useBackAction} from '../../ui/back-actions';
 import {useSelection} from '../../ui/use-selection';
@@ -34,6 +35,7 @@ import {useBarSpace} from '../../ui/tab-bar';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {trackScroll} from '../../ui/scroll-state';
+import {useScrollTop} from '../../ui/scroll-top';
 import {useView} from '../../library/view';
 import {useRefresh} from '../../library/use-refresh';
 import {takeJump, usePendingJump} from '../../library/jump';
@@ -100,6 +102,7 @@ export function SessionsScreen({
 	const [tipsOpen, setTipsOpen] = useState(false);
 	const {query} = search;
 	const listRef = useRef<FlatList<Session>>(null);
+	const scrollTop = useScrollTop(listRef);
 	const [revealId, setRevealId] = useState<string>();
 	const selection = useSelection();
 	useBackAction(selection.active, selection.stop);
@@ -516,7 +519,10 @@ export function SessionsScreen({
 								animated: false,
 							});
 						}}
-						onScroll={trackScroll}
+						onScroll={(event) => {
+							trackScroll(event);
+							scrollTop.onScroll(event);
+						}}
 						onRefresh={() => {
 							void refresh();
 						}}
@@ -540,7 +546,7 @@ export function SessionsScreen({
 				folderId={renaming?.folderId}
 				onSave={(name, description, color, chosenFolderId) => {
 					if (renaming) {
-						void edit((current) =>
+						void editWithUndo(editDone('UPDATE_GROUP'), (current) =>
 							saveSessionDetails(
 								current,
 								renaming,
@@ -561,8 +567,9 @@ export function SessionsScreen({
 				folders={store.folders}
 				onPick={(target) => {
 					if (moving) {
-						void edit((current) =>
-							moveSession(current, moving.id, target, Date.now()),
+						void editWithUndo(
+							`Moved to ${store.folders.find((folder) => folder.id === target)?.name ?? 'the folder'}.`,
+							(current) => moveSession(current, moving.id, target, Date.now()),
 						);
 					}
 				}}
@@ -636,6 +643,7 @@ export function SessionsScreen({
 					buttonLabel="Add links"
 					onAdd={onAdd}
 					onSearch={search.show}
+					onUp={scrollTop.visible ? scrollTop.up : undefined}
 				/>
 			)}
 			{search.open && (
@@ -649,6 +657,7 @@ export function SessionsScreen({
 					onTips={() => {
 						setTipsOpen(true);
 					}}
+					onUp={scrollTop.visible ? scrollTop.up : undefined}
 				/>
 			)}
 			<SearchTipsSheet

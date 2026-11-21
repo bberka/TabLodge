@@ -84,11 +84,6 @@ export const newSyncState = (device: string): SyncState => ({
 	outbox: [],
 });
 
-/*
-A record's hash is worked out once per value object. A round reads the whole library several times, and on a phone
-the library's own objects do not change between reads (an edit makes new ones), so the unchanged records, nearly all
-of them, are not hashed again. A new object, as a read from storage makes, is hashed as before.
-*/
 const hashes = new WeakMap<object, string>();
 const hashOf = (value: unknown) => {
 	if (typeof value !== 'object' || value === null) {
@@ -267,7 +262,6 @@ export function capture(
 		}
 	}
 
-	// Nothing stamped, deleted, or forgotten: the same state, so a caller can tell that there is nothing to save.
 	if (!changed && forgotten.size === 0) {
 		return state;
 	}
@@ -350,7 +344,6 @@ export function receive(
 	page: {changes: readonly SyncChange[]; cursor: number; purged: number},
 	now: number,
 ): {state: SyncState; records: Records; changed: boolean} {
-	// An empty page that moves nothing: the same state, so the caller can tell that there is nothing to save.
 	if (
 		page.changes.length === 0 &&
 		page.cursor === state.cursor &&

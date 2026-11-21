@@ -1,7 +1,3 @@
-/*
-The scale matrix of issue #415 as libraries, built on the extension's perf fixture so the browser and the phone are
-measured on the same data. Deterministic. Not shipped: it lives under scripts/ and is used by the seeder and the tests.
-*/
 // eslint-disable-next-line no-restricted-imports -- a profiling script that is never bundled into the app
 import {createLargeLibrary} from '../../../extension/scripts/browser/perf-fixture';
 import type {Store} from '../../../extension/src/shared/types';
@@ -24,7 +20,6 @@ export type Scenario = (typeof SCENARIOS)[number];
 
 const base = Date.UTC(2026, 9, 1);
 
-// The folder the fixture's sessions point at. Without it a session waits for its folder in sync and never shows.
 const unfiled = {
 	id: 'unfiled',
 	name: 'Unfiled',
@@ -46,7 +41,6 @@ export function buildScenario(name: Scenario): Store {
 	const count = Number.parseInt(size, 10);
 	switch (kind) {
 		case 'bookmarks': {
-			// One column holds every bookmark.
 			const store = library(count, 0);
 			const [column] = store.bookmarkColumns;
 			return {
@@ -57,7 +51,6 @@ export function buildScenario(name: Scenario): Store {
 		}
 
 		case 'columns': {
-			// 120 columns of 120 bookmarks each.
 			const [columns, per] = size.split('x').map(Number);
 			const store = library(columns * per, 0);
 			const made = Array.from({length: columns}, (_, index) => ({
@@ -82,7 +75,6 @@ export function buildScenario(name: Scenario): Store {
 		}
 
 		case 'links': {
-			// One session with `count` links.
 			const store = library(0, 1);
 			const [session] = store.groups;
 			const template = session.tabs[0];
@@ -104,7 +96,6 @@ export function buildScenario(name: Scenario): Store {
 		}
 
 		case 'folders': {
-			// 100 folders, 300 sessions spread over them.
 			const store = library(0, 300);
 			const folders = Array.from({length: count}, (_, index) => ({
 				id: `perf-folder-${index}`,

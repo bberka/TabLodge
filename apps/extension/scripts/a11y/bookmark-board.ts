@@ -58,6 +58,8 @@ async function seedQuickActions(page: Page, actions: string[]) {
 	);
 }
 
+const MOUNTED_ROWS_LIMIT = 40;
+
 async function seedLongBookmarkColumn(page: Page, count: number) {
 	const fixture = createDevFixture(await readDevStore(page));
 	fixture.bookmarkColumns = [
@@ -421,22 +423,18 @@ export async function columnCapCheck(env: Env, theme: Theme) {
 				.locator('section[data-column-id]')
 				.filter({has: board.getByRole('heading', {name: 'Limit test'})});
 			const cards = column.locator('[data-bookmark-id]');
-			const unfiled = board.locator(
-				'section[data-column-id="bookmark-unfiled"]',
-			);
-			const unfiledCards = unfiled.locator('[data-bookmark-id]');
 			await until(
-				async () => (await cards.count()) === 65,
-				'all bookmarks in the capped column',
+				async () => (await cards.count()) > 0,
+				'bookmarks in the capped column',
 			);
-			await until(
-				async () => (await unfiledCards.count()) === 65,
-				'all unfiled bookmarks in the capped column',
+			assert.ok(
+				(await cards.count()) <= MOUNTED_ROWS_LIMIT,
+				'a capped column mounts only the rows near its viewport',
 			);
 			assert.equal(
 				await column.getByRole('button', {name: /^Show \d+ more$/}).count(),
 				0,
-				'a capped column draws every bookmark instead of asking to load more',
+				'a capped column scrolls instead of asking to load more',
 			);
 			const columnBody = column.locator('[role="region"]');
 			await columnBody.focus();
@@ -447,6 +445,20 @@ export async function columnCapCheck(env: Env, theme: Theme) {
 						(element) => (element as {scrollTop: number}).scrollTop,
 					)) > 0,
 				'the capped column to scroll by keyboard',
+			);
+			await until(async () => {
+				await columnBody.evaluate((element) => {
+					(element as {scrollTop: number}).scrollTop = 1e9;
+				});
+				return (
+					(await column
+						.locator('[data-bookmark-id="bookmark-limit-65"]')
+						.count()) > 0
+				);
+			}, 'the last bookmark to appear as the column scrolls to its end');
+			assert.ok(
+				(await cards.count()) <= MOUNTED_ROWS_LIMIT,
+				'rows leave the page again as the column scrolls',
 			);
 			await board.screenshot({
 				path: `.dev/evidence/bookmark-limit-${theme}.png`,
@@ -840,4 +852,129 @@ export async function bookmarkAddToSessionCheck(env: Env) {
 		);
 		await page.close();
 	});
+}
+
+async function seedBookmarkGrid(
+	page: Page,
+	columnCount: number,
+	perColumn: number,
+	view: 'board' | 'focus',
+) {
+	const fixture = createDevFixture(await readDevStore(page));
+	fixture.bookmarkColumns = Array.from({length: columnCount}, (_, index) => ({
+		id: `grid-column-${index}`,
+		name: `Grid column ${index + 1}`,
+		createdAt: index,
+		isDefault: index === 0,
+	}));
+	fixture.bookmarks = Array.from(
+		{length: columnCount * perColumn},
+		(_, index) => ({
+			id: `grid-bookmark-${index}`,
+			title: `Grid bookmark ${index}`,
+			url: `https://example.com/grid-${index}`,
+			columnId: `grid-column-${Math.floor(index / perColumn)}`,
+			createdAt: index,
+			updatedAt: index,
+		}),
+	);
+	fixture.settings = {
+		...fixture.settings,
+		limitBookmarksPerColumn: true,
+		bookmarkBoardView: view,
+	};
+	await writeDevStore(page, fixture);
+}
+
+export async function rowWindowCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(
+		`10,000 bookmarks mount a bounded number of rows (${theme})`,
+		async () => {
+			for (const [columns, perColumn, view] of [
+				[1, 10_000, 'focus'],
+				[100, 100, 'board'],
+				[100, 100, 'focus'],
+			] as const) {
+				const seedPage = await openPage(context, extensionId, 'newtab');
+				await seedBookmarkGrid(seedPage, columns, perColumn, view);
+				await seedPage.close();
+				const board = await openPage(context, extensionId, 'newtab');
+				await setTheme(board, theme);
+				await board.locator('[data-bookmark-id]').first().waitFor();
+				const mounted = await board.locator('[data-bookmark-id]').count();
+				assert.ok(
+					mounted <= MOUNTED_ROWS_LIMIT * (view === 'board' ? 6 : 1),
+					`${columns} columns of ${perColumn} in ${view} view mounted ${mounted} rows`,
+				);
+				await board.close();
+			}
+
+			const resetPage = await openPage(context, extensionId, 'newtab');
+			await seed(resetPage);
+			await resetPage.close();
+		},
+	);
+}
+
+export async function sessionLinksWindowCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(
+		`an expanded session of 1,000 links mounts a bounded number of rows (${theme})`,
+		async () => {
+			const seedPage = await openPage(context, extensionId, 'newtab');
+			const fixture = createDevFixture(await readDevStore(seedPage));
+			fixture.groups = [
+				{
+					...fixture.groups[0],
+					id: 'long-session',
+					name: 'Long session',
+					tabs: Array.from({length: 1000}, (_, index) => ({
+						...fixture.groups[0].tabs[0],
+						id: `long-tab-${index}`,
+						title: `Long session link ${index}`,
+						url: `https://example.com/long-${index}`,
+						originalIndex: index,
+					})),
+				},
+			];
+			await writeDevStore(seedPage, fixture);
+			await seedPage.close();
+
+			const page = await openPage(context, extensionId, 'newtab');
+			await setTheme(page, theme);
+			const card = page.locator('#session-long-session');
+			await card.waitFor();
+			await card.getByRole('button', {expanded: false}).first().click();
+			const region = card.getByRole('region', {name: 'Links in Long session'});
+			await region.waitFor();
+			await page.locator('[data-tab-id]').first().waitFor();
+			const rows = page.locator('[data-tab-id]');
+			assert.ok(
+				(await rows.count()) <= MOUNTED_ROWS_LIMIT,
+				'an expanded session mounts only the links near its viewport',
+			);
+			const box = await region.boundingBox();
+			assert.ok(box, 'the link list has a box');
+			assert.ok(
+				box.height <= 44 * 16 + 1,
+				'the link list stops at its maximum height and scrolls inside the card',
+			);
+			await until(async () => {
+				await region.evaluate((element) => {
+					(element as {scrollTop: number}).scrollTop = 1e9;
+				});
+				return (await page.locator('[data-tab-id="long-tab-999"]').count()) > 0;
+			}, 'the last link to appear as the session scrolls to its end');
+			assert.ok(
+				(await rows.count()) <= MOUNTED_ROWS_LIMIT,
+				'links leave the page again as the session scrolls',
+			);
+			await page.close();
+
+			const resetPage = await openPage(context, extensionId, 'newtab');
+			await seed(resetPage);
+			await resetPage.close();
+		},
+	);
 }

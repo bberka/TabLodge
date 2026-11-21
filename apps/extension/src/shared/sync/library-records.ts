@@ -97,7 +97,6 @@ const PORTABLE_PREFERENCES = [
 	'sessionLinkClickAction',
 	'bookmarkQuickActions',
 	'sessionsOnTop',
-	'copyFormat',
 	'removeTrackingParameters',
 	'simplifyUrls',
 	'markInsecureLinks',
@@ -210,11 +209,6 @@ One site's Sources choices as they sync: present while the site is on, with a va
 */
 export type SyncedSource = {id: string; value: Record<string, unknown>};
 
-/*
-The records of one session or bookmark, kept for as long as that object lives. A phone edits its library by making new
-objects, so what an edit did not touch gives the same record objects on every read, and their hashes are known (see
-`hashOf` in engine.ts). Nothing may change a library object in place.
-*/
 const sessionCache = new WeakMap<Session, LibraryRecord[]>();
 const bookmarkCache = new WeakMap<Bookmark, LibraryRecord[]>();
 

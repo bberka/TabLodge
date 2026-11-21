@@ -34,9 +34,6 @@ const BOARD =
 	"The extension's dashboard: the phone lays out its screens with its own preferences.";
 const MENU = "The browser's right-click menu.";
 const KEPT = 'Snapshots and backups the extension keeps in the browser.';
-const NAMES = 'Names for sessions saved from browser windows.';
-const DUPLICATE =
-	'The phone has its own preference for this (#429); until the two are one, each app keeps its own.';
 const LOOK = 'Appearance, which each app draws its own way.';
 const PHONE_LOOK = 'Appearance of the Android app, which phones share.';
 const GESTURES = "Taps and swipes on the phone's screens.";
@@ -49,7 +46,10 @@ const HINT = 'A per-screen hint, dismissed on this device.';
 Extension settings in the library (`Settings`), except `heldSettings`, which only carries a newer version's settings.
 */
 export const LIBRARY_SETTINGS = {
-	closeOnSave: ['platform', TABS],
+	closeOnSave: [
+		'platform',
+		'Closes the browser tabs a save used; the phone has no browser tabs.',
+	],
 	emptyWindowAfterSave: ['platform', TABS],
 	includePinnedTabs: ['platform', TABS],
 	ignoreTabGroups: ['platform', TABS],
@@ -80,10 +80,20 @@ export const LIBRARY_SETTINGS = {
 	stretchBookmarkColumns: ['platform', BOARD],
 	bookmarkColumnWidth: ['platform', BOARD],
 	bookmarkColumnsPerRow: ['platform', BOARD],
+	bookmarkSort: ['all', BOTH],
 	bookmarkDensity: ['all', BOTH],
-	limitBookmarksPerColumn: ['platform', BOARD],
-	bookmarkColumnPageSize: ['platform', BOARD],
-	pasteLinkToBookmark: ['platform', BOARD],
+	limitBookmarksPerColumn: [
+		'platform',
+		'Caps the height of a column on the board; the phone shows one column at a time and scrolls it.',
+	],
+	bookmarkColumnPageSize: [
+		'platform',
+		'How many bookmarks fit in a board column before it scrolls; the phone has no board.',
+	],
+	pasteLinkToBookmark: [
+		'platform',
+		'Pasting on the board with a keyboard; the phone saves links from the share sheet and its Add button.',
+	],
 	toastPosition: [
 		'platform',
 		"Where the extension's messages appear; the phone has its own Message position.",
@@ -95,8 +105,11 @@ export const LIBRARY_SETTINGS = {
 	bookmarkQuickActions: ['platform', BOARD],
 	sessionsOnTop: ['platform', BOARD],
 	showSaveWindowButton: ['platform', BOARD],
-	linkPreviews: ['platform', DUPLICATE],
-	siteIcons: ['platform', DUPLICATE],
+	linkPreviews: [
+		'platform',
+		'The hover card on the dashboard. The phone has no hover preview; its save screen lookup is `savePreview`, which also fills in the title of a bare shared address.',
+	],
+	siteIcons: ['all', BOTH],
 	showTrashBinButton: ['platform', BOARD],
 	dashboardWidth: ['platform', BOARD],
 	bookmarkBoardView: ['platform', BOARD],
@@ -105,7 +118,6 @@ export const LIBRARY_SETTINGS = {
 	keepLodgePinned: ['platform', TABS],
 	browserBookmarkAction: ['platform', "The browser's own bookmarks."],
 	browserBookmarkColumn: ['platform', "The browser's own bookmarks."],
-	copyFormat: ['platform', 'No longer shown; kept for older browsers.'],
 	dashboardBehavior: ['platform', TABS],
 	removeTrackingParameters: ['all', BOTH],
 	simplifyUrls: ['all', BOTH],
@@ -128,13 +140,10 @@ export const LIBRARY_SETTINGS = {
 		'Needs the optional downloads permission, which only a click in that browser can grant.',
 	],
 	trashRetentionDays: ['all', BOTH],
-	autoArchiveDays: [
-		'platform',
-		'The extension archives idle sessions; the phone has no such option yet.',
-	],
-	sessionNameStyle: ['platform', NAMES],
-	sessionNameTemplate: ['platform', NAMES],
-	sessionNameFallback: ['platform', NAMES],
+	autoArchiveDays: ['all', BOTH],
+	sessionNameStyle: ['all', BOTH],
+	sessionNameTemplate: ['all', BOTH],
+	sessionNameFallback: ['all', BOTH],
 	mobileApp: [
 		'platform',
 		"The Android app's own preferences, which only phones read (`ANDROID_PREFERENCES`).",
@@ -222,12 +231,10 @@ export const ANDROID_PREFERENCES = {
 	sessionView: ['platform', PHONE_LOOK],
 	sessionTap: ['platform', GESTURES],
 	sessionMain: ['platform', GESTURES],
-	cleanOnSave: [
+	savePreview: [
 		'platform',
-		'Strips tracking parameters when the phone saves a link. The shared `removeTrackingParameters` strips them when a link opens.',
+		"A phone only lookup of the page on the save screen, which also fills in the title of a bare shared address; the extension's tab already has its title. Not the extension's hover card, `linkPreviews`.",
 	],
-	siteIcons: ['platform', DUPLICATE],
-	savePreview: ['platform', DUPLICATE],
 	backgroundSync: [
 		'platform',
 		'Syncing with the app closed, which means the same on every phone.',

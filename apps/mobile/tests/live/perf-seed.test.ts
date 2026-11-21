@@ -1,8 +1,3 @@
-/*
-Fills a sync server with one scale scenario (see scripts/perf/scenarios.ts), as the extension would. Skipped unless
-TL_SCENARIO is set. Env: TL_SCENARIO, TL_URL, TL_TOKEN; TL_DUMP=<file> writes the library there and stops. Prints the time of the first push and how many records
-the server then holds. A phone that connects to that server pulls the whole library.
-*/
 import {writeFileSync} from 'node:fs';
 import process from 'node:process';
 import {describe, test} from 'vite-plus/test';
@@ -23,7 +18,6 @@ describe.skipIf(!scenario)('seed a scale scenario', () => {
 		async () => {
 			const store: Store = buildScenario(scenario!);
 			if (process.env.TL_DUMP) {
-				// Only write the library, for run-matrix.sh LOCAL=1 to put straight into the phone's storage.
 				writeFileSync(process.env.TL_DUMP, JSON.stringify(store));
 				return;
 			}

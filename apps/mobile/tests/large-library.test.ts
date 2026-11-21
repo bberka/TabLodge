@@ -1,9 +1,3 @@
-/*
-Cost checks for large libraries (issue #436), as counts of work and not as timings, so they hold on any runner: how
-often the code reads a bookmark's column, how often a search lowercases a text, how many records one edit sends, and
-how much sync state one round saves. A step that goes from linear to quadratic, or repeats work every round, fails
-here at 10,000 bookmarks. The scale matrix itself is in scripts/perf/scenarios.ts.
-*/
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {createApi} from '../../server/src/api';
@@ -30,9 +24,6 @@ import {
 } from '../src/library/tab-window';
 import {buildWidgetSnapshot} from '../src/library/widget-snapshot';
 
-/**
-The same objects, with every read of `watched` counted.
-*/
 function counting<T extends object>(
 	items: readonly T[],
 	watched: string,
@@ -67,7 +58,6 @@ describe('lists at many columns', () => {
 		const watched = counting(store.bookmarks, 'columnId');
 		const all = allBookmarks({...store, bookmarks: watched.items});
 		assert.equal(all.length, total);
-		// A few passes find each bookmark's column; before this was one pass per column (120 and more).
 		assert.ok(watched.reads() <= 4 * total, `${watched.reads()} reads`);
 	});
 
@@ -101,7 +91,6 @@ describe('session folders', () => {
 			views.slice(1).reduce((sum, view) => sum + view.count, 0),
 			store.groups.length,
 		);
-		// A few passes for the All count, the folder counts, and the loose ones (before, one per folder, about 100).
 		assert.ok(
 			watched.reads() <= 5 * store.groups.length,
 			`${watched.reads()} reads`,
@@ -171,7 +160,6 @@ describe('search on every key', () => {
 });
 
 describe('one edit in a large library', () => {
-	// The key the client keeps its record of what the server has under (a record per item in the library).
 	const SYNC_STATE_KEY = 'tablodge.sync.state';
 	const TOKEN = 'mobile-test-token-0123456789-abcdefghijk';
 
@@ -242,8 +230,6 @@ describe('one edit in a large library', () => {
 		await client.syncNow();
 		assert.equal(state.posted, 1);
 		assert.ok(state.reads <= 5, `${state.reads} library reads`);
-		// Each save writes a record for every item in the library, so a round saves it only when it changed: after the
-		// edit is stamped, and after the server answers. Before this was one save per step, five or six.
 		assert.ok(state.stateWrites <= 3, `${state.stateWrites} state writes`);
 	}, 60_000);
 
@@ -262,7 +248,6 @@ describe('a session with 10,000 links', () => {
 	test('an expanded card draws a window of links and the button adds the next window', () => {
 		const total = buildScenario('links-10000').groups[0].tabs.length;
 		assert.equal(total, 10_000);
-		// 100 rows, not 10,000: each drawn link is a swipeable row.
 		assert.equal(visibleTabCount(TAB_WINDOW, total), TAB_WINDOW);
 		assert.equal(visibleTabCount(nextTabWindow(TAB_WINDOW), total), 200);
 		let drawn = TAB_WINDOW;
@@ -282,8 +267,6 @@ describe('a session with 10,000 links', () => {
 });
 
 describe('lists with more than 100,000 entries', () => {
-	// Spreading a list into `push(...list)` throws a RangeError past about 100,000 arguments (sooner in Hermes), which
-	// is how the search from the other places failed on a library with 145,000 saved links.
 	const [session] = buildScenario('links-10000').groups;
 	const tabs = Array.from({length: 150_000}, (_, index) => ({
 		...session.tabs[index % session.tabs.length],

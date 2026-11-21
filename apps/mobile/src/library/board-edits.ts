@@ -52,10 +52,6 @@ export function columnViews(store: Store): ColumnView[] {
 	return views;
 }
 
-/**
-Every bookmark under its column's id, in the library's order; a bookmark whose column does not exist goes under the
-Unfiled id. One pass over the bookmarks, for what shows many columns at once.
-*/
 export function bookmarksByColumn(store: Store): Map<string, Bookmark[]> {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
 	const groups = new Map<string, Bookmark[]>();
@@ -96,10 +92,6 @@ export function allBookmarks(store: Store): Bookmark[] {
 	return columnViews(store).flatMap((column) => groups.get(column.id) ?? []);
 }
 
-/*
-The lowercased text a search looks through, made once per bookmark object. A search runs on every key, and an edit
-makes new objects only for what it changed, so the rest of a large library is not lowercased again.
-*/
 const searchText = new WeakMap<Bookmark, {tags: string; text: string}>();
 
 function searchableText(bookmark: Bookmark) {

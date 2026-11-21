@@ -36,6 +36,7 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {trashDeleted} from '../../library/trash-store';
 import {linkToOpen} from '../../library/links';
 import {openAll, openLink} from '../../platform/open-links';
@@ -47,9 +48,14 @@ import {useColors} from '../../ui/theme';
 import {PrivateSwitch} from '../../private/private-switch';
 import {useRefresh} from '../../library/use-refresh';
 import {useSelection} from '../../ui/use-selection';
-import {BOOKMARK_UNFILED_ID} from '../../../../extension/src/shared/bookmark-rules';
+import {
+	BOOKMARK_UNFILED_ID,
+	sortBookmarks,
+} from '../../../../extension/src/shared/bookmark-rules';
 import {useStableCallback} from '../../ui/stable-callback';
 import {trackScroll} from '../../ui/scroll-state';
+import {useScrollTop} from '../../ui/scroll-top';
+import {bookmarkSortName} from '../../library/bookmark-sort';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
@@ -68,6 +74,7 @@ import {openShare} from '../transfer/transfer-sheets';
 import {copyActions} from '../copy/copy-actions';
 import {linkOpenActions, openIn} from '../open-in';
 import {useCopyUrls} from '../../library/page-copies';
+import {SortSheet} from './sort-sheet';
 import {TagFilterSheet} from './tags';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
@@ -125,6 +132,8 @@ export function BookmarksScreen({
 	const {query} = search;
 	const {refreshing, refresh} = useRefresh();
 	const listRef = useRef<FlatList<Bookmark>>(null);
+	const scrollTop = useScrollTop(listRef);
+	const [sortOpen, setSortOpen] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	// The bookmark whose menu is open, from holding down its row.
 	const [rowMenuId, setRowMenuId] = useState<string>();
@@ -209,17 +218,27 @@ export function BookmarksScreen({
 	useBackAction(isListView && inside && !isSearching, () => {
 		setInside(false);
 	});
+	const sort = links.bookmarkSort;
+	const manualOrder = sort === 'manual';
 	const shown = useMemo(
 		() =>
 			isSearching
 				? searchBookmarks(store, query)
 				: atList
 					? []
-					: columnId === ALL_BOOKMARKS_ID
-						? allBookmarks(store)
-						: bookmarksIn(store, columnId),
-		[store, query, columnId, isSearching, atList],
+					: (sortBookmarks(
+							columnId === ALL_BOOKMARKS_ID
+								? allBookmarks(store)
+								: bookmarksIn(store, columnId),
+							sort,
+						) as Bookmark[]),
+		[store, query, columnId, isSearching, atList, sort],
 	);
+	useEffect(() => {
+		if (!manualOrder) {
+			setReordering(false);
+		}
+	}, [manualOrder]);
 	const searchCount = useSettledText(isSearching, resultCount(shown.length));
 	const columnName =
 		columnId === ALL_BOOKMARKS_ID
@@ -388,7 +407,10 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!isSearching && shown.length > 1 && columnId !== ALL_BOOKMARKS_ID
+		...(!isSearching &&
+		manualOrder &&
+		shown.length > 1 &&
+		columnId !== ALL_BOOKMARKS_ID
 			? [
 					{
 						icon: 'swap-vertical-outline' as const,
@@ -433,6 +455,18 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
+		...(store.bookmarks.length > 1
+			? [
+					{
+						icon: 'filter-outline' as const,
+						label: 'Sort bookmarks',
+						hint: bookmarkSortName(sort),
+						onPress() {
+							setSortOpen(true);
+						},
+					},
+				]
+			: []),
 		...(!isSearching && !atList && columnId === ALL_BOOKMARKS_ID
 			? [
 					{
@@ -457,8 +491,9 @@ export function BookmarksScreen({
 						icon: 'arrow-back-outline' as const,
 						label: 'Move column earlier',
 						onPress() {
-							void edit((current) =>
-								moveColumn(current, columnId, -1, Date.now()),
+							void editWithUndo(
+								editDone('REORDER_BOOKMARK_COLUMN'),
+								(current) => moveColumn(current, columnId, -1, Date.now()),
 							);
 						},
 					},
@@ -472,8 +507,9 @@ export function BookmarksScreen({
 						icon: 'arrow-forward-outline' as const,
 						label: 'Move column later',
 						onPress() {
-							void edit((current) =>
-								moveColumn(current, columnId, 1, Date.now()),
+							void editWithUndo(
+								editDone('REORDER_BOOKMARK_COLUMN'),
+								(current) => moveColumn(current, columnId, 1, Date.now()),
 							);
 						},
 					},
@@ -534,7 +570,9 @@ export function BookmarksScreen({
 	];
 
 	const reorder = (id: string, move: BookmarkMove) => {
-		void edit((current) => moveBookmark(current, id, move, Date.now()));
+		void editWithUndo(editDone('REORDER_BOOKMARK'), (current) =>
+			moveBookmark(current, id, move, Date.now()),
+		);
 	};
 
 	const headerActions = selection.active ? (
@@ -827,6 +865,7 @@ export function BookmarksScreen({
 						onScroll={(event) => {
 							dragSelect.onScroll(event);
 							trackScroll(event);
+							scrollTop.onScroll(event);
 						}}
 						onRefresh={() => {
 							void refresh();
@@ -835,7 +874,12 @@ export function BookmarksScreen({
 				</Animated.View>
 			</GlassTarget>
 			{!selection.active && !reordering && !search.open && (
-				<FloatingActions bottom={space} onAdd={onAdd} onSearch={search.show} />
+				<FloatingActions
+					bottom={space}
+					onAdd={onAdd}
+					onSearch={search.show}
+					onUp={scrollTop.visible ? scrollTop.up : undefined}
+				/>
 			)}
 			{search.open && (
 				<SearchDock
@@ -848,8 +892,20 @@ export function BookmarksScreen({
 					onTips={() => {
 						setTipsOpen(true);
 					}}
+					onUp={scrollTop.visible ? scrollTop.up : undefined}
 				/>
 			)}
+			<SortSheet
+				visible={sortOpen}
+				value={sort}
+				onClose={() => {
+					setSortOpen(false);
+				}}
+				onPick={(next) => {
+					void setSyncedSetting('bookmarkSort', next);
+					showSnack(`Bookmarks sorted: ${bookmarkSortName(next)}`);
+				}}
+			/>
 			<SearchTipsSheet
 				visible={tipsOpen}
 				onClose={() => {
@@ -971,8 +1027,9 @@ export function BookmarksScreen({
 					setSheet(undefined);
 				}}
 				onPick={(id) => {
-					void edit((current) =>
-						moveBookmarks(current, selection.ids, id, Date.now()),
+					void editWithUndo(
+						`Moved ${selection.ids.size === 1 ? '1 bookmark' : `${selection.ids.size} bookmarks`}.`,
+						(current) => moveBookmarks(current, selection.ids, id, Date.now()),
 					);
 					setSheet(undefined);
 					selection.stop();

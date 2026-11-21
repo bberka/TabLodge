@@ -10,7 +10,10 @@ import type {
 } from '../../../extension/src/shared/types';
 import {isColumnColor} from '../../../extension/src/shared/accent-colors';
 import type {DeviceStamp} from '../../../extension/src/shared/device';
-import {normalizeNotes} from '../../../extension/src/shared/library-normalize';
+import {
+	findOrAddArchivedFolder,
+	normalizeNotes,
+} from '../../../extension/src/shared/library-normalize';
 import {
 	FOLDER_LIMIT_MESSAGE,
 	folderLimitReached,
@@ -27,6 +30,7 @@ import {
 	duplicateHandlingOf,
 	sessionDuplicates,
 } from '../../../extension/src/shared/save-rules';
+import {staleSessions} from '../../../extension/src/shared/session-rules';
 import {extractUrl, hostOf} from './store-shape';
 
 export const ALL_SESSIONS_ID = 'all';
@@ -609,6 +613,31 @@ export function archiveSession(store: Store, id: string, now: number): Store {
 	return moveSession(withFolder, id, found?.id ?? ARCHIVED_FOLDER_ID, now);
 }
 
+export function archiveStale(store: Store, now: number): Store {
+	const stale = new Set(
+		staleSessions(
+			store.groups,
+			store.folders,
+			store.settings.autoArchiveDays,
+			now,
+		).map((session) => session.id),
+	);
+	if (stale.size === 0) {
+		return store;
+	}
+
+	const folders = store.folders.map((folder) => ({...folder}));
+	const archived = findOrAddArchivedFolder(folders);
+	return {
+		...store,
+		folders,
+		groups: store.groups.map((session) =>
+			stale.has(session.id) ? {...session, folderId: archived.id} : session,
+		),
+		updatedAt: now,
+	};
+}
+
 /**
 Whether a session sits in the Archived folder.
 */
@@ -795,9 +824,6 @@ export function markSessionOpened(
 	);
 }
 
-/*
-The lowercased texts a search looks through, made once per session object (see `searchableText` in board-edits.ts).
-*/
 const sessionTexts = new WeakMap<
 	Session,
 	{texts: string[]; lowered: string[]}

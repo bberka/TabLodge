@@ -12,6 +12,8 @@ import {
 	adoptPreferences,
 	getChangedAt,
 	getPreferences,
+	clearLegacySiteIcons,
+	getLegacySiteIcons,
 	watchLocalChanges,
 } from './preferences';
 import {NO_MOBILE_APP, settlePreferences} from './preference-merge';
@@ -41,6 +43,15 @@ function settle(): void {
 Call once at startup, after the preferences and the library have loaded.
 */
 export function startPreferencesSync(): void {
+	const legacy = getLegacySiteIcons();
+	if (legacy && getLibrary().settings.siteIcons !== legacy) {
+		void setSyncedSetting('siteIcons', legacy)
+			.then(clearLegacySiteIcons)
+			.catch(() => undefined);
+	} else {
+		clearLegacySiteIcons();
+	}
+
 	watchLocalChanges(settle);
 	subscribeLibrary(settle);
 	settle();

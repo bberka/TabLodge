@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
+import {defaults} from '../src/settings/preference-schema';
+import {RESETS} from '../src/screens/settings/row-defaults';
 import {
 	headHit,
 	matchCount,
 	normalizeQuery,
 	ROWS,
 	rowHit,
+	type Row,
 	SECTIONS,
 	sectionVisible,
 } from '../src/screens/settings/settings-index';
@@ -52,7 +55,7 @@ describe('settings search', () => {
 	});
 
 	test('a row is found by its own text, and a card name matches without its rows', () => {
-		assert.equal(rowHit(ROWS.cleanOnSave, 'utm'), true);
+		assert.equal(rowHit(ROWS.removeTracking, 'utm'), true);
 		assert.equal(rowHit(ROWS.tap, 'utm'), false);
 		assert.equal(headHit(SECTIONS.bookmarks, 'bookmarks'), true);
 		assert.equal(headHit(SECTIONS.bookmarks, 'utm'), false);
@@ -67,6 +70,39 @@ describe('settings search', () => {
 					row.label,
 				);
 			}
+		}
+	});
+
+	test('every row belongs to a card, so a search can reach it', () => {
+		const listed = new Set<object>(
+			Object.values(SECTIONS).flatMap((section) => section.rows),
+		);
+		for (const [name, row] of Object.entries(ROWS)) {
+			assert.equal(listed.has(row), true, `${name} is in no card`);
+		}
+	});
+
+	test('every preference has a row, or says why it has none', () => {
+		const withRow = new Set(
+			[...RESETS.values()].flatMap((reset) => reset.prefs ?? []),
+		);
+		const noReset: Record<string, Row> = {
+			syncSettings: ROWS.syncSettings,
+			syncPrivate: ROWS.syncPrivate,
+			backgroundSync: ROWS.backgroundSync,
+			deviceName: ROWS.deviceName,
+		};
+		const noRow = {
+			lastColumnId: 'remembers the last column used; not a setting',
+		};
+		for (const key of Object.keys(defaults)) {
+			assert.equal(
+				withRow.has(key as never) ||
+					Object.hasOwn(noReset, key) ||
+					Object.hasOwn(noRow, key),
+				true,
+				`${key} has no settings row (add one to settings-index.ts and row-defaults.ts, or list it here with a reason)`,
+			);
 		}
 	});
 });

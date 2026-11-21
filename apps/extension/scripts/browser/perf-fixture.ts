@@ -1,10 +1,5 @@
 import type {DevStore} from '../../src/shared/dev-fixture.ts';
 
-/*
-A synthetic library of any size for performance work (see perf-profile.ts). It lives under scripts/, so it never
-reaches the shipped bundle. Deterministic: the same count always gives the same library.
-*/
-
 const hosts = [
 	'github.com',
 	'developer.mozilla.org',
@@ -127,6 +122,101 @@ export function createLargeLibrary(
 		groups,
 		bookmarkColumns: columns,
 		bookmarks,
+		updatedAt: base,
+	};
+}
+
+export type Scenario = {
+	bookmarks?: number;
+	columns?: number;
+	perColumn?: number;
+	sessions?: number;
+	tabsPerSession?: number;
+	folders?: number;
+	view?: 'board' | 'focus';
+};
+
+export function createScenario(store: DevStore, spec: Scenario): DevStore {
+	const columnCount = spec.columns ?? 12;
+	const bookmarkCount =
+		spec.perColumn === undefined
+			? (spec.bookmarks ?? 0)
+			: spec.perColumn * columnCount;
+	const sessionCount = spec.sessions ?? 0;
+	const tabsPerSession = spec.tabsPerSession ?? 12;
+	const next = random(bookmarkCount * 31 + sessionCount * 17 + columnCount);
+	const pick = <T>(list: readonly T[]) =>
+		list[Math.floor(next() * list.length)];
+	const columns = Array.from({length: columnCount}, (_, index) => ({
+		id: `perf-column-${index}`,
+		name: `${columnNames[index % columnNames.length]} ${index + 1}`,
+		icon: 'star',
+		createdAt: base,
+		isDefault: false,
+	}));
+	const bookmarks = Array.from({length: bookmarkCount}, (_, index) => {
+		const host = pick(hosts);
+		const column =
+			spec.perColumn === undefined
+				? Math.floor(next() ** 1.5 * columnCount)
+				: Math.floor(index / spec.perColumn);
+		return {
+			id: `perf-bookmark-${index}`,
+			title: `${pick(words)} ${index + 1}: ${pick(words)} for ${host}`,
+			url: `https://${host}/p/${index + 1}`,
+			columnId: columns[column].id,
+			...(next() < 0.3 && {notes: `Compare with the older ${pick(words)}.`}),
+			...(next() < 0.35 && {tags: [pick(tagNames)]}),
+			createdAt: base + index * 60_000,
+			updatedAt: base + index * 60_000,
+		};
+	});
+	const folderCount = spec.folders ?? 0;
+	const folders = [
+		...store.folders.filter((folder) => folder.isDefault),
+		...Array.from({length: folderCount}, (_, index) => ({
+			id: `perf-folder-${index}`,
+			name: `Folder ${index + 1}`,
+			icon: 'folder',
+			createdAt: base - index,
+			isDefault: false,
+		})),
+	];
+	const groups = Array.from({length: sessionCount}, (_, index) => ({
+		id: `perf-session-${index}`,
+		name: `Session ${index + 1}: ${pick(words)}`,
+		folderId:
+			folderCount > 0 ? `perf-folder-${index % folderCount}` : 'unfiled',
+		description: '',
+		createdAt: base - index * 60_000,
+		updatedAt: base - index * 60_000,
+		sourceWindowName: '',
+		sourceWindowId: null,
+		tabs: Array.from({length: tabsPerSession}, (__, tabIndex) => {
+			const host = pick(hosts);
+			return {
+				id: `perf-tab-${index}-${tabIndex}`,
+				title: `${pick(words)} ${tabIndex + 1} on ${host}`,
+				url: `https://${host}/s/${index}/${tabIndex}`,
+				notes: '',
+				pinned: false,
+				nativeGroup: null,
+				savedAt: base - index * 60_000,
+				originalIndex: tabIndex,
+			};
+		}),
+	}));
+	return {
+		...store,
+		groups,
+		folders,
+		bookmarkColumns: columns,
+		bookmarks,
+		settings: {
+			...store.settings,
+			...(spec.view && {bookmarkBoardView: spec.view}),
+			...(folderCount > 0 && {sessionFolderView: 'auto'}),
+		},
 		updatedAt: base,
 	};
 }

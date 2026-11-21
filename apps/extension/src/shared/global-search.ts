@@ -220,8 +220,6 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	// Not `push(...list)`: the list can hold tens of thousands of items, and spreading that many arguments throws a
-	// RangeError (Hermes on the phone, V8 in the extension).
 	for (const item of cachedBookmarkItems(
 		sources.bookmarks,
 		sources.columns,

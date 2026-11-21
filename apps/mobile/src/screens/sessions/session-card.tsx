@@ -125,7 +125,6 @@ function SessionCardView({
 	onMenu: (session: Session) => void;
 }) {
 	const colors = useColors();
-	// How many links an expanded card draws; a long session gets a button for the rest.
 	const [asked, setAsked] = useState(TAB_WINDOW);
 	const drawn = visibleTabCount(asked, session.tabs.length);
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';

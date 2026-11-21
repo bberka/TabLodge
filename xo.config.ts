@@ -3,10 +3,64 @@
 // Every rule turned off or relaxed below says why; prefer fixing the code over adding to this list.
 import xoReact from 'eslint-config-xo-react';
 import type {XoConfigItem} from 'xo';
+import baseline from './scripts/comment-baseline.json' with {type: 'json'};
+import {
+	BANNED_COMMENT_MESSAGE,
+	isAllowedComment,
+} from './scripts/comment-policy.ts';
+
+type RuleDefinition = NonNullable<
+	NonNullable<XoConfigItem['plugins']>[string]['rules']
+>[string];
+
+type SourceComment = {
+	type: 'Line' | 'Block' | 'Shebang';
+	value: string;
+	loc?: {
+		start: {line: number; column: number};
+		end: {line: number; column: number};
+	} | null;
+};
+
+const noComments: RuleDefinition = {
+	meta: {
+		type: 'problem',
+		docs: {description: 'Ban code comments except directives with a reason.'},
+		schema: [],
+		messages: {banned: BANNED_COMMENT_MESSAGE},
+	},
+	create(context) {
+		const sourceCode = context.sourceCode as unknown as {
+			getAllComments(): SourceComment[];
+		};
+		return {
+			// eslint-disable-next-line @typescript-eslint/naming-convention -- ESLint names the visitor after the AST node
+			Program() {
+				for (const comment of sourceCode.getAllComments()) {
+					if (
+						comment.loc &&
+						!isAllowedComment(
+							comment.type === 'Line'
+								? 'line'
+								: comment.type === 'Block'
+									? 'block'
+									: 'shebang',
+							comment.value,
+						)
+					) {
+						context.report({loc: comment.loc, messageId: 'banned'});
+					}
+				}
+			},
+		};
+	},
+};
 
 const xoConfig: XoConfigItem[] = [
 	{
 		ignores: [
+			'apps/extension/scripts/browser/perf-profile.ts',
+			'apps/extension/scripts/browser/perf-matrix.ts',
 			'dist/**',
 			'release/**',
 			'docs/**',
@@ -23,6 +77,14 @@ const xoConfig: XoConfigItem[] = [
 		],
 	},
 	{prettier: true},
+	{
+		plugins: {local: {rules: {'no-comments': noComments}}},
+		rules: {'local/no-comments': 'error'},
+	},
+	{
+		files: Object.keys(baseline),
+		rules: {'local/no-comments': 'off'},
+	},
 	...(xoReact({prettier: true}) as XoConfigItem[]),
 	{files: ['**/*.tsx'], settings: {react: {version: 'detect'}}},
 	{

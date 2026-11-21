@@ -10,6 +10,7 @@ import {
 	BOOKMARKS_FORMAT_ID,
 	SESSIONS_FORMAT_ID,
 } from './backup-format';
+import {MAX_TABS_PER_SESSION} from './library-normalize';
 import {tagFields} from './bookmark-tags';
 import {
 	cleanDeviceName,
@@ -29,13 +30,9 @@ Largest file the import accepts, in bytes (also checked against the text length)
 */
 export const MAX_IMPORT_BYTES = 45 * 1024 * 1024;
 /**
-Links read from one file; anything beyond is reported as skipped.
+Links read from one file. A file with more is refused as a whole, so an import never drops part of its links.
 */
-const MAX_IMPORT_LINKS = 50_000;
-/**
-Matches the service worker's per-session cap; larger groups are split into numbered parts.
-*/
-const MAX_TABS_PER_SESSION = 1000;
+const MAX_IMPORT_LINKS = 250_000;
 const MAX_TITLE = 500;
 const MAX_GROUP_NAME = 120;
 const MAX_NOTES = 10_000;
@@ -225,8 +222,9 @@ class Collector {
 		}
 
 		if (this.total >= MAX_IMPORT_LINKS) {
-			this.invalid += 1;
-			return null;
+			throw new ImportFormatError(
+				`This file has more than ${MAX_IMPORT_LINKS.toLocaleString('en-US')} links. Nothing was imported; split it into smaller files.`,
+			);
 		}
 
 		this.total += 1;
@@ -313,7 +311,6 @@ function mergeBookmarkFolders(entries: ImportGroup[]): ImportGroup[] {
 	const looseLinks: ImportLink[] = [];
 	for (const entry of entries) {
 		const {name} = entry;
-		// Loops and not `push(...links)`: a folder can hold more links than a call may take as arguments.
 		if (!name) {
 			for (const link of entry.links) {
 				looseLinks.push(link);

@@ -6,7 +6,8 @@ import {
 	sourceColumnSite,
 } from '../../../../extension/src/shared/source-columns';
 import {moveColumn} from '../../library/board-edits';
-import {edit, useLibrary} from '../../library/library-store';
+import {useLibrary} from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {soften, TARGET, useColors} from '../../ui/theme';
 import {Button, Icon, IconButton} from '../../ui/widgets';
 
@@ -117,8 +118,10 @@ export function ColumnsSheet({
 										label={`Move ${column.name} earlier`}
 										disabled={position <= 0}
 										onPress={() => {
-											void edit((current) =>
-												moveColumn(current, column.id, -1, Date.now()),
+											void editWithUndo(
+												editDone('REORDER_BOOKMARK_COLUMN'),
+												(current) =>
+													moveColumn(current, column.id, -1, Date.now()),
 											);
 										}}
 									/>
@@ -127,8 +130,10 @@ export function ColumnsSheet({
 										label={`Move ${column.name} later`}
 										disabled={index >= store.bookmarkColumns.length - 1}
 										onPress={() => {
-											void edit((current) =>
-												moveColumn(current, column.id, 1, Date.now()),
+											void editWithUndo(
+												editDone('REORDER_BOOKMARK_COLUMN'),
+												(current) =>
+													moveColumn(current, column.id, 1, Date.now()),
 											);
 										}}
 									/>

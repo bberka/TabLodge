@@ -32,6 +32,7 @@ import {
 	trashedUrls,
 	type TrashEntry,
 } from '../src/shared/trash';
+import {undoableEdit, type UndoableEdit} from '../src/shared/undo-policy';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {
 	folderNameExists,
@@ -70,6 +71,11 @@ import {
 	hasTabMenu,
 } from '../src/shared/context-menu-plan';
 import {
+	builtNameStyle,
+	formatSessionName,
+	staleSessions,
+} from '../src/shared/session-rules';
+import {
 	ARCHIVED_FOLDER_NAME,
 	DEFAULT_FOLDER,
 	DEFAULT_FOLDER_ID,
@@ -81,7 +87,6 @@ import {
 	SCHEMA_VERSION,
 	SESSION_NAME_FALLBACKS,
 	SESSION_NAME_STYLES,
-	SESSION_NAME_TEMPLATE_MAX,
 	SESSION_TEXT_MAX,
 	archivedFolderIds,
 	arrayOf,
@@ -897,94 +902,6 @@ function pageTitle(
 ): string {
 	const text = cleanText(value, fallback, max);
 	return clean ? text.replace(TITLE_JUNK, '').trim() || text : text;
-}
-
-/**
-The style that builds the name: `ask` falls back to its fallback style whenever the worker has to name a session
-without asking (or the answer was left empty).
-*/
-function builtNameStyle(settings: {
-	sessionNameStyle: Settings['sessionNameStyle'];
-	sessionNameFallback: Settings['sessionNameFallback'];
-}): Settings['sessionNameFallback'] {
-	return settings.sessionNameStyle === 'ask'
-		? settings.sessionNameFallback
-		: settings.sessionNameStyle;
-}
-
-const SESSION_NAME_STYLE_TEMPLATES: Record<string, string> = {
-	title: '{title}',
-	datetime: '{date} · {time}',
-	'date-title': '{date} · {title}',
-};
-
-type SessionNameParts = {
-	style: Settings['sessionNameFallback'];
-	template: string;
-	/**
-	Title and address of the first saved tab.
-	*/
-	title: string;
-	url: string;
-	count: number;
-	/**
-	1-based window number when saving all windows; 0 or omitted otherwise.
-	*/
-	windowNumber?: number;
-	now: Date;
-	locale: string;
-};
-
-/**
-The name for a new session. `{date}` is "Sat, Oct 25" (no year: a new session is always named for today),
-`{time}` the locale's short time, `{weekday}` a short weekday. Unknown `{...}` tokens stay as typed.
-*/
-function formatSessionName(parts: SessionNameParts): string {
-	const format = (options: Intl.DateTimeFormatOptions) => {
-		try {
-			return new Intl.DateTimeFormat(parts.locale, options).format(parts.now);
-		} catch {
-			return new Intl.DateTimeFormat('en-US', options).format(parts.now);
-		}
-	};
-
-	let host = '';
-	try {
-		host = new URL(parts.url).hostname.replace(/^www\./i, '');
-	} catch {
-		/*
-		A page without a usable address has no domain.
-		*/
-	}
-
-	const values: Record<string, () => string> = {
-		date: () => format({weekday: 'short', month: 'short', day: 'numeric'}),
-		time: () => format({timeStyle: 'short'}),
-		weekday: () => format({weekday: 'short'}),
-		title: () => cleanText(parts.title, host, 500),
-		domain: () => host,
-		count: () => String(parts.count),
-		window: () => (parts.windowNumber ? String(parts.windowNumber) : ''),
-	};
-	const template =
-		parts.style === 'custom'
-			? cleanText(
-					parts.template,
-					DEFAULT_SETTINGS.sessionNameTemplate,
-					SESSION_NAME_TEMPLATE_MAX,
-				)
-			: (SESSION_NAME_STYLE_TEMPLATES[parts.style] ??
-				SESSION_NAME_STYLE_TEMPLATES['date-title']);
-	return cleanText(
-		template
-			.replaceAll(/\{(\w+)\}/g, (token, key: string) =>
-				Object.hasOwn(values, key) ? values[key]() : token,
-			)
-			// Narrow no-break spaces from the time format, and gaps left by an empty placeholder
-			.replaceAll(/\s+/g, ' '),
-		'Saved session',
-		120,
-	);
 }
 
 const browserLocale = () =>
@@ -3959,7 +3876,7 @@ async function updateGroup(
 	groupId: string,
 	fields: SessionFields,
 ): Promise<ActionResult<'UPDATE_GROUP'>> {
-	return mutate(async () => {
+	return mutateWithUndo('UPDATE_GROUP', async () => {
 		const store = await getStore();
 		const group = findGroup(store, groupId);
 		if (!group) {
@@ -4015,7 +3932,7 @@ async function updateGroup(
 async function archiveGroup(
 	groupId: string,
 ): Promise<ActionResult<'ARCHIVE_GROUP'>> {
-	return mutate(async () => {
+	return mutateWithUndo('ARCHIVE_GROUP', async () => {
 		const store = await getStore();
 		const group = findGroup(store, groupId);
 		if (!group) {
@@ -4044,19 +3961,11 @@ function archiveStaleSessions(): Promise<void> {
 	return mutate(async () => {
 		const store = await getStore();
 		const {autoArchiveDays} = store.settings;
-		if (autoArchiveDays === 0) {
-			return;
-		}
-
-		const cutoff = Date.now() - autoArchiveDays * 86_400_000;
-		const archivedId = store.folders.find(
-			(folder) => folder.name === ARCHIVED_FOLDER_NAME,
-		)?.id;
-		const stale = store.groups.filter(
-			(group) =>
-				group.folderId !== archivedId &&
-				Math.max(group.lastOpenedAt ?? 0, group.updatedAt, group.createdAt) <
-					cutoff,
+		const stale = staleSessions(
+			store.groups,
+			store.folders,
+			autoArchiveDays,
+			Date.now(),
 		);
 		if (stale.length === 0) {
 			return;
@@ -4074,7 +3983,7 @@ function archiveStaleSessions(): Promise<void> {
 async function setGroupOrder(
 	order: string[],
 ): Promise<ActionResult<'SET_GROUP_ORDER'>> {
-	return mutate(async () => {
+	return mutateWithUndo('SET_GROUP_ORDER', async () => {
 		const store = await getStore();
 		const byId = new Map(store.groups.map((group) => [group.id, group]));
 		const ids = [
@@ -4107,7 +4016,7 @@ async function createFolder(
 	color?: unknown,
 	colorSessions?: unknown,
 ): Promise<ActionResult<'CREATE_FOLDER'>> {
-	return mutate(async () => {
+	return mutateWithUndo('CREATE_FOLDER', async () => {
 		const store = await getStore();
 		const problem = folderNameProblem(store.folders, name);
 		if (problem) {
@@ -4140,7 +4049,7 @@ async function updateFolder(
 	color?: unknown,
 	colorSessions?: unknown,
 ): Promise<ActionResult<'UPDATE_FOLDER'>> {
-	return mutate(async () => {
+	return mutateWithUndo('UPDATE_FOLDER', async () => {
 		const store = await getStore();
 		const folder = store.folders.find((entry) => entry.id === folderId);
 		if (!folder) {
@@ -4719,7 +4628,7 @@ async function moveTab(
 	copy = false,
 	restoreTrashId: string | null = null,
 ): Promise<ActionResult<'MOVE_TAB'>> {
-	return mutate(async () => {
+	return mutateWithUndo('MOVE_TAB', async () => {
 		const store = await getStore();
 		const source = findGroup(store, fromGroupId);
 		const target = findGroup(store, toGroupId);
@@ -4824,7 +4733,7 @@ async function updateTab(
 	tabId: string,
 	fields: TabFields = {},
 ): Promise<ActionResult<'UPDATE_TAB'>> {
-	return mutate(async () => {
+	return mutateWithUndo('UPDATE_TAB', async () => {
 		const store = await getStore();
 		const group = findGroup(store, groupId);
 		const tab = group?.tabs.find((entry) => entry.id === tabId);
@@ -4903,7 +4812,7 @@ function findBookmark(store: Store, bookmarkId: string) {
 async function addBookmark(
 	fields: BookmarkFields = {},
 ): Promise<ActionResult<'ADD_BOOKMARK'>> {
-	return mutate(async () => {
+	return mutateWithUndo('ADD_BOOKMARK', async () => {
 		const store = await getStore();
 		const url = normalizeUrl(fields.url);
 		if (!url) {
@@ -5383,7 +5292,7 @@ async function updateBookmark(
 	bookmarkId: string,
 	fields: BookmarkFields = {},
 ): Promise<ActionResult<'UPDATE_BOOKMARK'>> {
-	return mutate(async () => {
+	return mutateWithUndo('UPDATE_BOOKMARK', async () => {
 		const store = await getStore();
 		const bookmark = findBookmark(store, bookmarkId);
 		if (!bookmark) {
@@ -5562,7 +5471,7 @@ async function createBookmarkColumn(
 	color?: unknown,
 	domains?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
-	return mutate(async () => {
+	return mutateWithUndo('CREATE_BOOKMARK_COLUMN', async () => {
 		const store = await getStore();
 		const problem = columnNameProblem(store.bookmarkColumns, name);
 		if (problem) {
@@ -5593,7 +5502,7 @@ async function updateBookmarkColumn(
 	color?: unknown,
 	domains?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
-	return mutate(async () => {
+	return mutateWithUndo('UPDATE_BOOKMARK_COLUMN', async () => {
 		const store = await getStore();
 		const column = store.bookmarkColumns.find((entry) => entry.id === columnId);
 		if (!column) {
@@ -5757,7 +5666,7 @@ async function reorderBookmarkColumn(
 	targetColumnId: string,
 	position: InsertPosition = 'before',
 ): Promise<ActionResult<'REORDER_BOOKMARK_COLUMN'>> {
-	return mutate(async () => {
+	return mutateWithUndo('REORDER_BOOKMARK_COLUMN', async () => {
 		const store = await getStore();
 		const sourceIndex = store.bookmarkColumns.findIndex(
 			(column) => column.id === columnId,
@@ -5791,71 +5700,91 @@ async function reorderBookmarkColumn(
 	});
 }
 
-async function reorderBookmark(
+function placeBookmark(
+	store: Store,
 	bookmarkId: string,
+	targetColumnId: string,
+	targetBookmarkId: string | null,
+	position: InsertPosition,
+): string | undefined {
+	const bookmark = findBookmark(store, bookmarkId);
+	if (!bookmark) {
+		return 'That bookmark no longer exists.';
+	}
+
+	const targetColumnExists = store.bookmarkColumns.some(
+		(column) => column.id === targetColumnId,
+	);
+	if (!targetColumnExists && targetColumnId !== BOOKMARK_UNFILED_ID) {
+		return 'Choose an existing bookmark column.';
+	}
+
+	if (targetBookmarkId === bookmarkId && bookmark.columnId === targetColumnId) {
+		return undefined;
+	}
+
+	const targetItems = store.bookmarks.filter(
+		(entry) => entry.columnId === targetColumnId && entry.id !== bookmarkId,
+	);
+	let insertAt = targetItems.length;
+	const targetIndex = targetBookmarkId
+		? targetItems.findIndex((entry) => entry.id === targetBookmarkId)
+		: -1;
+	if (targetIndex >= 0) {
+		insertAt = targetIndex + (position === 'after' ? 1 : 0);
+	}
+
+	bookmark.columnId = targetColumnId;
+	bookmark.updatedAt = Date.now();
+	targetItems.splice(insertAt, 0, bookmark);
+	const itemsByColumn = new Map<string, Bookmark[]>([
+		...store.bookmarkColumns.map((column): [string, Bookmark[]] => [
+			column.id,
+			[],
+		]),
+		[BOOKMARK_UNFILED_ID, []],
+	]);
+	for (const entry of store.bookmarks) {
+		if (entry.id === bookmarkId) {
+			continue;
+		}
+
+		if (itemsByColumn.has(entry.columnId)) {
+			itemsByColumn.get(entry.columnId)!.push(entry);
+		}
+	}
+
+	itemsByColumn.set(targetColumnId, targetItems);
+	store.bookmarks = [
+		...store.bookmarkColumns.flatMap(
+			(column) => itemsByColumn.get(column.id) || [],
+		),
+		...(itemsByColumn.get(BOOKMARK_UNFILED_ID) || []),
+	];
+	return undefined;
+}
+
+async function reorderBookmark(
+	bookmarkIds: string[],
 	targetColumnId: string,
 	targetBookmarkId: string | null = null,
 	position: InsertPosition = 'after',
 ): Promise<ActionResult<'REORDER_BOOKMARK'>> {
-	return mutate(async () => {
+	return mutateWithUndo('REORDER_BOOKMARK', async () => {
 		const store = await getStore();
-		const bookmark = findBookmark(store, bookmarkId);
-		if (!bookmark) {
-			return {ok: false, error: 'That bookmark no longer exists.'};
-		}
-
-		const targetColumnExists = store.bookmarkColumns.some(
-			(column) => column.id === targetColumnId,
-		);
-		if (!targetColumnExists && targetColumnId !== BOOKMARK_UNFILED_ID) {
-			return {ok: false, error: 'Choose an existing bookmark column.'};
-		}
-
-		if (
-			targetBookmarkId === bookmarkId &&
-			bookmark.columnId === targetColumnId
-		) {
-			return {ok: true};
-		}
-
-		const targetItems = store.bookmarks.filter(
-			(entry) => entry.columnId === targetColumnId && entry.id !== bookmarkId,
-		);
-		let insertAt = targetItems.length;
-		const targetIndex = targetBookmarkId
-			? targetItems.findIndex((entry) => entry.id === targetBookmarkId)
-			: -1;
-		if (targetIndex >= 0) {
-			insertAt = targetIndex + (position === 'after' ? 1 : 0);
-		}
-
-		bookmark.columnId = targetColumnId;
-		bookmark.updatedAt = Date.now();
-		targetItems.splice(insertAt, 0, bookmark);
-		const itemsByColumn = new Map<string, Bookmark[]>([
-			...store.bookmarkColumns.map((column): [string, Bookmark[]] => [
-				column.id,
-				[],
-			]),
-			[BOOKMARK_UNFILED_ID, []],
-		]);
-		for (const entry of store.bookmarks) {
-			if (entry.id === bookmarkId) {
-				continue;
-			}
-
-			if (itemsByColumn.has(entry.columnId)) {
-				itemsByColumn.get(entry.columnId)!.push(entry);
+		for (const bookmarkId of bookmarkIds) {
+			const problem = placeBookmark(
+				store,
+				bookmarkId,
+				targetColumnId,
+				targetBookmarkId,
+				position,
+			);
+			if (problem) {
+				return {ok: false, error: problem};
 			}
 		}
 
-		itemsByColumn.set(targetColumnId, targetItems);
-		store.bookmarks = [
-			...store.bookmarkColumns.flatMap(
-				(column) => itemsByColumn.get(column.id) || [],
-			),
-			...(itemsByColumn.get(BOOKMARK_UNFILED_ID) || []),
-		];
 		await writeStore(store);
 		return {ok: true};
 	});
@@ -6169,9 +6098,7 @@ async function importGroups(
 		withUndo('Import', [STORAGE_KEY], async () => {
 			const store = await getStore();
 			const candidates =
-				importMode === 'bookmarks'
-					? []
-					: importCandidates(input).slice(0, MAX_SESSIONS);
+				importMode === 'bookmarks' ? [] : importCandidates(input);
 			const hasBookmarkData =
 				importMode !== 'sessions' &&
 				(Array.isArray(input?.bookmarks) ||
@@ -8907,6 +8834,7 @@ type UndoRecord = {
 	before: Raw;
 	// A hash of each key's value right after the action, to notice later changes.
 	after: Record<string, string>;
+	from?: string;
 };
 
 const isUndoRecord = (value: unknown): value is UndoRecord =>
@@ -9005,6 +8933,7 @@ async function withUndo<K extends TabLodgeMessageType>(
 			label,
 			createdAt: Date.now(),
 			keys,
+			...(checkpoint && {from: fingerprintBefore ?? 'none'}),
 			before: {
 				...before,
 				...(delta && {[STORAGE_KEY]: delta}),
@@ -9022,6 +8951,13 @@ async function withUndo<K extends TabLodgeMessageType>(
 		// Undo is a convenience; the action itself succeeded.
 		return result;
 	}
+}
+
+function mutateWithUndo<K extends UndoableEdit>(
+	type: K,
+	run: () => Promise<ActionResult<K>>,
+): Promise<ActionResult<K>> {
+	return mutate(() => withUndo(undoableEdit(type)!.label, [STORAGE_KEY], run));
 }
 
 function purgeUndo(): Promise<void> {
@@ -9084,11 +9020,6 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 					(key) => undoHash(current[key]) !== record.after[key],
 				)
 			) {
-				await undoMutate(async () => {
-					await writeUndo(
-						(await readUndo()).filter((entry) => entry.id !== id),
-					);
-				});
 				return {ok: false, error: "Can't undo: your data changed since."};
 			}
 
@@ -9113,8 +9044,23 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 
 			invalidateSettings();
 
+			const fingerprintNow =
+				delta && record.from !== undefined
+					? ((await libraryState.fingerprint()) ?? 'none')
+					: undefined;
 			await undoMutate(async () => {
-				await writeUndo((await readUndo()).filter((entry) => entry.id !== id));
+				const remaining = (await readUndo())
+					.filter((entry) => entry.id !== id)
+					.map((entry) =>
+						fingerprintNow !== undefined &&
+						entry.after[STORAGE_KEY] === record.from
+							? {
+									...entry,
+									after: {...entry.after, [STORAGE_KEY]: fingerprintNow},
+								}
+							: entry,
+					);
+				await writeUndo(remaining);
 			});
 			if (record.keys.includes(STORAGE_KEY)) {
 				// Settings may differ from what the alarms, toolbar, and menus were last set up for.
@@ -10850,7 +10796,7 @@ async function handleMessage(
 
 		case 'REORDER_BOOKMARK': {
 			return reorderBookmark(
-				message.bookmarkId,
+				message.bookmarkIds ?? [message.bookmarkId],
 				message.targetColumnId,
 				message.targetBookmarkId || null,
 				message.position,

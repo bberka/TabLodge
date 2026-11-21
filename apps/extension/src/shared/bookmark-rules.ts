@@ -1,6 +1,7 @@
 // The bookmark column rules every app follows: the extension's, which the Android app adopts. The service worker and
 // the phone each keep their own storage and undo; what they agree on is here.
-import type {BookmarkColumn} from './types';
+import type {Bookmark, BookmarkColumn, BookmarkSort} from './types';
+import {siteName} from './web-url';
 
 // The id of the extension's first column, and the bucket for bookmarks whose column is gone.
 export const DEFAULT_BOOKMARK_COLUMN_ID = 'bookmark-default';
@@ -79,4 +80,39 @@ export function landingColumnId(
 		columns[0]?.id ||
 		BOOKMARK_UNFILED_ID
 	);
+}
+
+/**
+The sort choices of a bookmark column, in menu order, with the label each app shows.
+*/
+export const BOOKMARK_SORT_OPTIONS = [
+	['manual', 'Manual order'],
+	['newest', 'Newest first'],
+	['oldest', 'Oldest first'],
+	['title', 'Title A–Z'],
+	['site', 'Site A–Z'],
+] as const satisfies ReadonlyArray<readonly [BookmarkSort, string]>;
+
+/**
+The bookmarks of one column as a sort shows them. `manual` returns the list as stored; every other sort returns a
+sorted copy and leaves the stored order alone. Ties keep their stored order.
+*/
+export function sortBookmarks<
+	T extends Pick<Bookmark, 'title' | 'url' | 'createdAt'>,
+>(bookmarks: readonly T[], sort: BookmarkSort): readonly T[] {
+	if (sort === 'manual') {
+		return bookmarks;
+	}
+
+	const compare: Record<
+		Exclude<BookmarkSort, 'manual'>,
+		(a: T, b: T) => number
+	> = {
+		newest: (a, b) => b.createdAt - a.createdAt,
+		oldest: (a, b) => a.createdAt - b.createdAt,
+		title: (a, b) =>
+			(a.title || siteName(a.url)).localeCompare(b.title || siteName(b.url)),
+		site: (a, b) => siteName(a.url).localeCompare(siteName(b.url)),
+	};
+	return bookmarks.toSorted(compare[sort]);
 }
