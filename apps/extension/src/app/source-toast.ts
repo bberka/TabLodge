@@ -24,6 +24,13 @@ import {isRecord} from '../shared/library-values';
 const HOST_ID = 'tablodge-source-toast';
 const VISIBLE_MS = 8000;
 const MAX_TOASTS = 3;
+// Where the stack sits: its offsets from the viewport edges, and which way the toasts line up, so the newest is
+// nearest the corner. Everything about the corner is here, so a later setting changes only this value.
+const STACK_POSITION = {
+	offsets: {right: '16px', bottom: '16px'},
+	direction: 'column',
+	align: 'flex-end',
+} as const;
 // A notice that asks something stays longer, so there is time to read it and decide.
 const ASKING_VISIBLE_MS = 20_000;
 const SVG = 'http://www.w3.org/2000/svg';
@@ -219,8 +226,7 @@ function createStack(theme: Theme): Stack {
 	set(host, {
 		all: 'initial',
 		position: 'fixed',
-		right: '16px',
-		bottom: '16px',
+		...STACK_POSITION.offsets,
 		'z-index': '2147483647',
 		display: 'block',
 		width: 'min(448px, calc(100vw - 32px))',
@@ -240,8 +246,8 @@ function createStack(theme: Theme): Stack {
 	// Newest last, so it sits nearest the corner.
 	set(list, {
 		display: 'flex',
-		'flex-direction': 'column',
-		'align-items': 'flex-end',
+		'flex-direction': STACK_POSITION.direction,
+		'align-items': STACK_POSITION.align,
 		gap: '8px',
 	});
 	root.append(list);
