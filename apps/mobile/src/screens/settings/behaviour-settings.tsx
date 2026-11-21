@@ -256,17 +256,11 @@ const ARCHIVE_CHOICES = [
 	{id: '365', name: '1 year'},
 ];
 
-/**
-The archive choices, with the browser's own number of days when it set one the list lacks.
-*/
 const archiveChoices = (days: number) =>
 	ARCHIVE_CHOICES.some((choice) => choice.id === String(days))
 		? ARCHIVE_CHOICES
 		: [...ARCHIVE_CHOICES, {id: String(days), name: `${days} days`}];
 
-/**
-The custom session name, saved when the field loses focus so sync does not send every keystroke.
-*/
 function NameTemplateField({template}: {template: string}) {
 	const [draft, setDraft] = useState(template);
 	const visible = useRowVisible(ROWS.sessionNameTemplate);
@@ -306,7 +300,6 @@ export function SessionSettingsCard() {
 	const settings = useLinkSettings(true);
 	const sessionActions = useSessionActionChoices();
 	const linkChoices = useLinkActionChoices();
-	// A search shows the name rows even when the style hides them, so "template" still finds its field.
 	const searching = use(SettingsQuery) !== '';
 	return (
 		<SettingsCard

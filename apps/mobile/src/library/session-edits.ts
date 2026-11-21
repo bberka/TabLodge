@@ -608,11 +608,6 @@ export function archiveSession(store: Store, id: string, now: number): Store {
 	return moveSession(withFolder, id, found?.id ?? ARCHIVED_FOLDER_ID, now);
 }
 
-/**
-Moves every session not opened, saved, or edited for the Archive setting's days into the Archived folder, as the
-extension does each day. Like the extension it leaves `updatedAt` alone, so the move is not an edit. The same store
-comes back when there is nothing to move. Nothing is deleted.
-*/
 export function archiveStale(store: Store, now: number): Store {
 	const stale = new Set(
 		staleSessions(

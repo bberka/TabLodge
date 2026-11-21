@@ -94,10 +94,6 @@ export async function startLibrary(): Promise<void> {
 	await archiveIdleSessions();
 }
 
-/**
-Archives the sessions that sat unused for the Archive setting's days. Run when the app starts, as the extension does at
-browser start. Nothing is written when nothing moved.
-*/
 export async function archiveIdleSessions(): Promise<void> {
 	const now = Date.now();
 	if (archiveStale(core.store, now) !== core.store) {
