@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {use, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {SESSION_NAME_TEMPLATE_MAX} from '../../../../extension/src/shared/library-normalize';
 import {setSyncedSetting} from '../../library/library-store';
@@ -19,7 +19,7 @@ import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {Field, type IconName, Switch} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
-import {SettingsCard, useRowVisible} from './settings-card';
+import {SettingsCard, SettingsQuery, useRowVisible} from './settings-card';
 import {RowLabel, SelectRow} from './select-row';
 import {type Row, ROWS, SECTIONS} from './settings-index';
 
@@ -306,6 +306,8 @@ export function SessionSettingsCard() {
 	const settings = useLinkSettings(true);
 	const sessionActions = useSessionActionChoices();
 	const linkChoices = useLinkActionChoices();
+	// A search shows the name rows even when the style hides them, so "template" still finds its field.
+	const searching = use(SettingsQuery) !== '';
 	return (
 		<SettingsCard
 			section={SECTIONS.sessions}
@@ -335,7 +337,7 @@ export function SessionSettingsCard() {
 					void setSyncedSetting('sessionNameStyle', value);
 				}}
 			/>
-			{settings.sessionNameStyle === 'ask' && (
+			{(searching || settings.sessionNameStyle === 'ask') && (
 				<SelectRow
 					row={ROWS.sessionNameFallback}
 					value={settings.sessionNameFallback}
@@ -345,10 +347,14 @@ export function SessionSettingsCard() {
 					}}
 				/>
 			)}
-			{(settings.sessionNameStyle === 'custom' ||
+			{(searching ||
+				settings.sessionNameStyle === 'custom' ||
 				(settings.sessionNameStyle === 'ask' &&
 					settings.sessionNameFallback === 'custom')) && (
-				<NameTemplateField template={settings.sessionNameTemplate} />
+				<NameTemplateField
+					key={settings.sessionNameTemplate}
+					template={settings.sessionNameTemplate}
+				/>
 			)}
 			<SelectRow
 				row={ROWS.archiveSessions}

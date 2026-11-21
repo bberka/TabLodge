@@ -27,6 +27,7 @@ import {useView} from '../../library/view';
 import {setPreferences} from '../../settings/preferences';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
+import {linkSettings} from '../../library/links';
 import {defaultSessionName} from '../../library/session-name';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {Button, Chips, Field, Segmented} from '../../ui/widgets';
@@ -87,7 +88,7 @@ export function SaveLinksForm({
 	const links = allowed;
 	const ids = () => links.map(() => newId());
 	const placeholder = defaultSessionName(
-		settings,
+		linkSettings(store.settings),
 		links.map((url) => ({url})),
 	);
 	const blocked =
@@ -124,7 +125,7 @@ export function SaveLinksForm({
 			const label =
 				name.trim() ||
 				defaultSessionName(
-					settings,
+					linkSettings(store.settings),
 					links.map((url) => ({url})),
 				);
 			const run = counted(tabCount, (current) =>

@@ -42,7 +42,7 @@ import {
 import {hostIsExcluded} from '../../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../../library/library-choice';
 import {useView} from '../../library/view';
-import {cleanPageTitle} from '../../library/links';
+import {cleanPageTitle, linkSettings} from '../../library/links';
 import {useLinkPreview} from '../../library/link-preview';
 import {setPreferences, usePreferences} from '../../settings/preferences';
 import {SiteIcon} from '../../ui/site-icon';
@@ -166,7 +166,8 @@ export function SaveLinkForm({
 			if (toSession) {
 				const label =
 					sessionId === NEW_SESSION
-						? sessionName.trim() || defaultSessionName(settings, [saved])
+						? sessionName.trim() ||
+							defaultSessionName(linkSettings(store.settings), [saved])
 						: (sessions.find((session) => session.id === sessionId)?.name ??
 							'the session');
 				const run = counted(tabCount, (current) =>
@@ -403,7 +404,9 @@ export function SaveLinkForm({
 								icon="albums-outline"
 								placeholder={
 									url
-										? defaultSessionName(settings, [{url, title}])
+										? defaultSessionName(linkSettings(store.settings), [
+												{url, title},
+											])
 										: 'Saved links'
 								}
 								value={sessionName}
