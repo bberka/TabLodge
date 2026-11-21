@@ -15,7 +15,11 @@ export const send = async <K extends TabLodgeMessageType>(
 	...[fields]: OptionalFields<K>
 ): Promise<ActionResult<K>> => {
 	try {
-		return await chrome.runtime.sendMessage({type, ...fields});
+		const answer: ActionResult<K> | undefined =
+			await chrome.runtime.sendMessage({type, ...fields});
+		return (
+			answer ?? {ok: false, error: `${PROJECT.name} did not answer. Try again.`}
+		);
 	} catch {
 		// The worker is gone (the extension was reloaded or updated while this page stayed open).
 		return {
