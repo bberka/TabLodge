@@ -45,9 +45,6 @@ export function DuplicateBookmarksDialog({
 	columns: readonly BookmarkColumn[];
 	showStatus: ShowStatus;
 	onChanged: () => unknown;
-	/**
-	The Simplify addresses setting, so the addresses shown follow it.
-	*/
 	simplifyUrls: boolean;
 }) {
 	const groups = useMemo(

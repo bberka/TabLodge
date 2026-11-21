@@ -62,9 +62,6 @@ export function TabStatsDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	sessions: readonly Session[];
-	/**
-	The Simplify addresses setting, so the idle tabs list follows it.
-	*/
 	simplifyUrls: boolean;
 }) {
 	const [openTabs, setOpenTabs] = useState<OpenTabs | null>(null);

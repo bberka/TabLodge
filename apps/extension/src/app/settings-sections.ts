@@ -1,9 +1,7 @@
 // The sections of the Settings page as the finder lists them. The Settings page names its section anchors with
 // `sectionId`, and the a11y check (scripts/a11y/settings.ts) fails when a section it renders is missing here or an
 // entry here points at no section, so a new Settings section must be added to this list. No browser APIs here: that
-// check imports this file in Node, so it imports nothing either; its entries are global-search.ts's FinderSetting. The fields in the sections are listed by
-// settings-finder.ts. The fields in the sections are listed by
-// settings-finder.ts.
+// check imports this file in Node, so it imports nothing either; its entries are global-search.ts's FinderSetting.
 
 export const sectionId = (title: string) =>
 	`settings-${title.toLowerCase().replaceAll(/[^0-9a-z]+/g, '-')}`;

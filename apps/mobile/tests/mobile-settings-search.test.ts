@@ -86,7 +86,6 @@ describe('settings search', () => {
 		const withRow = new Set(
 			[...RESETS.values()].flatMap((reset) => reset.prefs ?? []),
 		);
-		// Preferences whose row has no reset of its own; the test above checks each row is in a card.
 		const noReset: Record<string, Row> = {
 			syncSettings: ROWS.syncSettings,
 			syncPrivate: ROWS.syncPrivate,

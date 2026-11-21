@@ -68,7 +68,6 @@ export function SaveQuoteForm({
 	const pageUrl = link ? pageAddress(link) : undefined;
 	const target = pageUrl ? quoteTarget(store, pageUrl) : undefined;
 	const {savePreview, cleanOnSave} = usePreferences();
-	// A page that already has a bookmark keeps its address; only a new bookmark is cleaned, as Save link does.
 	const url =
 		pageUrl && target?.kind === 'new' && cleanOnSave
 			? stripTrackingParameters(pageUrl)
