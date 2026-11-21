@@ -268,7 +268,7 @@ Manifest V3 has no reliable browser shutdown event. TabLodge therefore treats cr
 
 A normal quit can look like a crash if the worker stops before handling the last window event. Changes within roughly five seconds of a crash may be missing. Reloading or updating the extension is not a browser startup and does not produce a crash banner.
 
-`RESTORE_SNAPSHOT` creates a window for each saved window, reuses normal restore logic, allows duplicate URLs, and restores active tabs, maximized state, and focus. `SAVE_SNAPSHOT_AS_SESSION` converts a window to a saved session, splitting it into several sessions above 1,000 tabs.
+`RESTORE_SNAPSHOT` creates a window for each saved window, reuses normal restore logic, allows duplicate URLs, and restores active tabs, maximized state, and focus. `SAVE_SNAPSHOT_AS_SESSION` converts a window to a saved session, splitting it into several sessions above 20,000 tabs (`MAX_TABS_PER_SESSION`; at most `MAX_SESSIONS` = 20,000 sessions are kept, and loading never drops any above a limit: a write that would pass one is refused with a message).
 
 ### Backups
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
+import {MAX_TABS_PER_SESSION} from '../src/shared/library-normalize';
 import {
 	BOOKMARKS_FORMAT_ID,
 	SESSIONS_FORMAT_ID,
@@ -729,27 +730,31 @@ test('malformed and unsupported input fails with a readable message', () => {
 	);
 });
 
-test('link limits and session size: groups over 1000 tabs are split, extra links are counted as skipped', () => {
+test('a session of more links than one session holds is split into numbered parts, and a file over the link limit is refused whole', () => {
+	const total = MAX_TABS_PER_SESSION * 2 + 500;
 	const many = Array.from(
-		{length: 2500},
+		{length: total},
 		(_, index) => `https://many.example/${index}`,
 	).join('\n');
 	const parsed = parseImportFile(many, 'many.txt');
 	assert.deepEqual(
 		parsed.sessions.map((group) => group.links.length),
-		[1000, 1000, 500],
+		[MAX_TABS_PER_SESSION, MAX_TABS_PER_SESSION, 500],
 	);
 	assert.deepEqual(names(parsed), [
 		'Imported tabs (1)',
 		'Imported tabs (2)',
 		'Imported tabs (3)',
 	]);
-	assert.equal(parsed.bookmarks[0].links.length, 2500);
+	assert.equal(parsed.bookmarks[0].links.length, total);
 	const tooMany = Array.from(
-		{length: 50_010},
+		{length: 250_010},
 		(_, index) => `https://x.example/${index}`,
 	).join('\n');
-	assert.equal(parseImportFile(tooMany, 'x.txt').invalid, 10);
+	assert.throws(
+		() => parseImportFile(tooMany, 'x.txt'),
+		/more than 250,000 links.*Nothing was imported/,
+	);
 });
 
 test('preview counts duplicates against saved and repeated links, keeps pinned tabs of a TabLodge export, and samples items', () => {

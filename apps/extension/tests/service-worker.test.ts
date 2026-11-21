@@ -19,6 +19,10 @@ import type {
 } from '../src/shared/types';
 import {createApi} from '../../server/src/api';
 import {sqlite} from '../../server/src/node-sqlite';
+import {
+	MAX_SESSIONS,
+	MAX_TABS_PER_SESSION,
+} from '../src/shared/library-normalize';
 import {SqlPageStore} from '../../server/src/shared-pages';
 import {SqlChangeLog} from '../../server/src/sql-change-log';
 import {ChangeLog} from '../src/shared/sync/change-log';
@@ -9264,32 +9268,33 @@ test('MOVE_TAB trashes a session emptied by the move, and Undo brings it back wi
 	assert.equal(plain.trashId, undefined);
 });
 
-test('a capture of more than 1000 tabs becomes numbered sessions and loses nothing', async () => {
+test('a capture of more tabs than one session holds becomes numbered sessions and loses nothing', async () => {
+	const total = MAX_TABS_PER_SESSION * 2 + 500;
 	const harness = createWorkerHarness(
 		stateWithSession({closeOnSave: false}),
-		manyTabs(2500),
+		manyTabs(total),
 	);
 	const response = await harness.sendMessage({
 		type: 'SAVE_TABS',
 		scope: 'window',
 	});
 	assert.equal(response.ok, true, response.error);
-	assert.equal(response.count, 2500);
+	assert.equal(response.count, total);
 	assert.equal(response.groups, 3);
 	const saved = harness.state.groups.slice(0, 3);
 	assert.deepEqual(
 		saved.map((group) => group.tabs.length),
-		[1000, 1000, 500],
+		[MAX_TABS_PER_SESSION, MAX_TABS_PER_SESSION, 500],
 	);
 	assert.match(String(saved[0].name), /\(1\/3\)$/);
 	assert.match(String(saved[2].name), /\(3\/3\)$/);
 	assert.equal(response.groupId, saved[0].id);
 });
 
-test('saving is refused with a clear error when it would exceed 1000 sessions, and no tab is closed', async () => {
+test('saving is refused with a clear error when it would exceed the session limit, and no tab is closed', async () => {
 	const state = stateWithSession();
 	state.groups = Array.from(
-		{length: 1000},
+		{length: MAX_SESSIONS},
 		(_, index) => filler(`s${index}`) as Session,
 	);
 	const harness = createWorkerHarness(state);
@@ -9298,17 +9303,17 @@ test('saving is refused with a clear error when it would exceed 1000 sessions, a
 		scope: 'window',
 	});
 	assert.equal(response.ok, false);
-	assert.match(String(response.error), /1000 sessions/);
+	assert.match(String(response.error), new RegExp(`${MAX_SESSIONS} sessions`));
 	assert.equal(harness.removedTabIds.length, 0);
-	assert.equal(harness.state.groups.length, 1000);
-});
+	assert.equal(harness.state.groups.length, MAX_SESSIONS);
+}, 60_000);
 
 test('adding into a full session is refused for a move and for saving the current tab', async () => {
 	const state = reorderState();
 	// The default target is the most recently updated session, so make the full one that.
 	state.groups[0] = {
 		...state.groups[0],
-		...filler('A', 1000),
+		...filler('A', MAX_TABS_PER_SESSION),
 		updatedAt: 9_999_999_999_999,
 	};
 	const harness = createWorkerHarness(state);
@@ -9319,16 +9324,23 @@ test('adding into a full session is refused for a move and for saving the curren
 		toGroupId: 'A',
 	});
 	assert.equal(moved.ok, false);
-	assert.match(String(moved.error), /1000 links/);
+	assert.match(
+		String(moved.error),
+		new RegExp(`${MAX_TABS_PER_SESSION} links`),
+	);
 	assert.deepEqual(tabIdsOf(harness.state, 'B'), ['b1', 'b2']);
 
 	const saved = await harness.sendMessage({type: 'SAVE_CURRENT_TAB_TO_GROUP'});
 	assert.equal(saved.ok, false);
-	assert.match(String(saved.error), /1000 links/);
-	assert.equal(harness.state.groups[0].tabs.length, 1000);
+	assert.match(
+		String(saved.error),
+		new RegExp(`${MAX_TABS_PER_SESSION} links`),
+	);
+	assert.equal(harness.state.groups[0].tabs.length, MAX_TABS_PER_SESSION);
 });
 
-test('importing a session of more than 1000 links splits it into numbered sessions', async () => {
+test('importing a session of more links than one session holds splits it into numbered sessions', async () => {
+	const huge = MAX_TABS_PER_SESSION + 500;
 	const harness = createWorkerHarness(stateWithSession());
 	const result = await harness.sendMessage({
 		type: 'IMPORT_SESSIONS',
@@ -9336,7 +9348,7 @@ test('importing a session of more than 1000 links splits it into numbered sessio
 			groups: [
 				{
 					name: 'Huge',
-					tabs: Array.from({length: 1500}, (_, index) => ({
+					tabs: Array.from({length: huge}, (_, index) => ({
 						url: `https://huge${index}.example/`,
 					})),
 				},
@@ -9345,21 +9357,21 @@ test('importing a session of more than 1000 links splits it into numbered sessio
 	});
 	assert.equal(result.ok, true, result.error);
 	assert.equal(result.groups, 2);
-	assert.equal(result.count, 1500);
+	assert.equal(result.count, huge);
 	const parts = harness.state.groups.filter((group) =>
 		String(group.name).startsWith('Huge'),
 	);
 	assert.deepEqual(
 		parts.map((group) => [group.name, group.tabs.length]),
 		[
-			['Huge (1/2)', 1000],
+			['Huge (1/2)', MAX_TABS_PER_SESSION],
 			['Huge (2/2)', 500],
 		],
 	);
 
 	const full = stateWithSession();
 	full.groups = Array.from(
-		{length: 1000},
+		{length: MAX_SESSIONS},
 		(_, index) => filler(`s${index}`) as Session,
 	);
 	const refused = createWorkerHarness(full);
@@ -9370,9 +9382,9 @@ test('importing a session of more than 1000 links splits it into numbered sessio
 		},
 	});
 	assert.equal(second.ok, false);
-	assert.match(String(second.error), /1000 sessions/);
-	assert.equal(refused.state.groups.length, 1000);
-});
+	assert.match(String(second.error), new RegExp(`${MAX_SESSIONS} sessions`));
+	assert.equal(refused.state.groups.length, MAX_SESSIONS);
+}, 60_000);
 
 test('excluded sites ignore a trailing dot in the host, also when capturing', async () => {
 	const harness = createWorkerHarness(
@@ -10302,7 +10314,7 @@ test('session names: a tab group title and a typed name win, an untitled group u
 });
 
 test('session names: chunk suffixes follow the generated name', async () => {
-	const tabs = Array.from({length: 1500}, (_, index) =>
+	const tabs = Array.from({length: MAX_TABS_PER_SESSION + 500}, (_, index) =>
 		webTab(index + 1, 10, index, {active: index === 0}),
 	);
 	const harness = nameHarness({sessionNameStyle: 'datetime'}, tabs);
@@ -11477,13 +11489,16 @@ test('UPDATE_GROUP_FROM_WINDOW keeps split pairs from the window and refuses a s
 	]);
 
 	const full = sessionToEdit();
-	full.groups[0].tabs = Array.from({length: 1000}, (_, index) => ({
-		id: `t${index}`,
-		title: `T${index}`,
-		url: `https://full.example/${index}`,
-		pinned: false,
-		originalIndex: index,
-	}));
+	full.groups[0].tabs = Array.from(
+		{length: MAX_TABS_PER_SESSION},
+		(_, index) => ({
+			id: `t${index}`,
+			title: `T${index}`,
+			url: `https://full.example/${index}`,
+			pinned: false,
+			originalIndex: index,
+		}),
+	);
 	const overflow = createWorkerHarness(full, windowTabs);
 	const refused = await overflow.sendMessage({
 		type: 'UPDATE_GROUP_FROM_WINDOW',
@@ -11491,7 +11506,7 @@ test('UPDATE_GROUP_FROM_WINDOW keeps split pairs from the window and refuses a s
 		mode: 'append',
 	});
 	assert.equal(refused.ok, false);
-	assert.equal(overflow.state.groups[0].tabs.length, 1000);
+	assert.equal(overflow.state.groups[0].tabs.length, MAX_TABS_PER_SESSION);
 });
 
 function splittable(): StoredState {
