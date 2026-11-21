@@ -549,17 +549,18 @@ function Help() {
 							and the site can&apos;t use the save for its recommendations. To
 							save only on the site, remove the site from Sources. The notice in
 							the page offers Undo and Also save on the site, which passes the
-							same click on to the site; press Tab to reach them. Hold Shift as
-							you click to save on the site and in {PROJECT.name} once. If{' '}
-							{PROJECT.name} can&apos;t read which item you saved, or can&apos;t
-							save it, the click goes on to the site, so a save is never lost.
-							The site&apos;s own keyboard shortcuts still save there.{' '}
-							{PROJECT.name} blocks no network requests, hides nothing on the
-							site, and doesn&apos;t stop the site learning from anything else
-							you do there. Items you saved on the site before stay saved there.
-							Medium doesn&apos;t offer the choice: its bookmark button opens
-							Medium&apos;s Save to list panel, and the page doesn&apos;t say
-							whether the story is already in a list, so stopping the click
+							same click on to the site; press Tab to reach them. Notices stack
+							in the corner, up to three, and each keeps its own Undo. Hold
+							Shift as you click to save on the site and in {PROJECT.name} once.
+							If {PROJECT.name} can&apos;t read which item you saved, or
+							can&apos;t save it, the click goes on to the site, so a save is
+							never lost. The site&apos;s own keyboard shortcuts still save
+							there. {PROJECT.name} blocks no network requests, hides nothing on
+							the site, and doesn&apos;t stop the site learning from anything
+							else you do there. Items you saved on the site before stay saved
+							there. Medium doesn&apos;t offer the choice: its bookmark button
+							opens Medium&apos;s Save to list panel, and the page doesn&apos;t
+							say whether the story is already in a list, so stopping the click
 							would also stop you moving or removing it.
 						</>
 					),
