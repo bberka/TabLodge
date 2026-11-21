@@ -213,6 +213,7 @@ export async function addBookmarkNewColumnCheck(env: Env, theme: Theme) {
 				const card = column
 					.locator('[data-bookmark-id]')
 					.filter({has: board.locator(`a[href="${url}"]`)});
+				await card.waitFor();
 				assert.equal(await card.count(), 1);
 				assert.match(await card.innerText(), new RegExp(note));
 				await board.close();
