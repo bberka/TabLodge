@@ -36,7 +36,7 @@ const worker = list.find(
 	(t) => t.type === 'service_worker' && t.url.endsWith('service-worker.js'),
 )!;
 const pageTarget = list.find(
-	(t) => t.type === 'page' && t.url.startsWith('chrome-extension://'),
+	(t) => t.type === 'page' && t.url.includes('/newtab.html'),
 )!;
 const attach = async (targetId: string) =>
 	(await call('Target.attachToTarget', {targetId, flatten: true})).result
@@ -97,7 +97,7 @@ switch (action) {
 
 	case 'search': {
 		await evalPage(
-			"(async()=>{const i=document.querySelector('input[aria-label=\"Search bookmarks\"], input[type=\"search\"], input[placeholder*=\"earch\"]');const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;let v='';for(const l of 'performance guide'){v+=l;s.call(i,v);i.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>requestAnimationFrame(()=>setTimeout(r)));}return 1})()",
+			"(async()=>{const i=document.querySelector('input[aria-label=\"Search bookmarks\"], input[type=\"search\"], input[placeholder*=\"earch\"]');if(!i)throw new Error('The search input is not mounted; open the search first.');const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;let v='';for(const l of 'performance guide'){v+=l;s.call(i,v);i.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>requestAnimationFrame(()=>setTimeout(r)));}return 1})()",
 		);
 
 		break;

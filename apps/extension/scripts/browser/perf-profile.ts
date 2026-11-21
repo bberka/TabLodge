@@ -150,11 +150,15 @@ await worker.evaluate(() => {
 	const area = chrome.storage.local as unknown as Record<string, unknown>;
 	const g = globalThis as unknown as {__perf: {sets: number; chars: number}};
 	g.__perf = {sets: 0, chars: 0};
-	const original = (area.set as (...a: unknown[]) => unknown).bind(area);
+	const original = area.set as (...a: unknown[]) => unknown;
+	(globalThis as unknown as {__perfRestore: () => void}).__perfRestore = () => {
+		area.set = original;
+	};
+
 	area.set = (items: unknown, ...rest: unknown[]) => {
 		g.__perf.sets += 1;
 		g.__perf.chars += JSON.stringify(items).length;
-		return original(items, ...rest);
+		return original.call(area, items, ...rest);
 	};
 });
 const edits = [];
@@ -170,9 +174,11 @@ for (let i = 0; i < runs; i++) {
 	);
 }
 
-const traffic = await worker.evaluate(
-	() => (globalThis as unknown as {__perf: unknown}).__perf,
-);
+const traffic = await worker.evaluate(() => {
+	// Put the real `set` back, so a later run in the same worker is not counted twice.
+	(globalThis as unknown as {__perfRestore: () => void}).__perfRestore();
+	return (globalThis as unknown as {__perf: unknown}).__perf;
+});
 results.editRoundTripMs = round(median(edits));
 results.editStorageWrites = traffic;
 results.editStorageKBPerEdit = Math.round(
