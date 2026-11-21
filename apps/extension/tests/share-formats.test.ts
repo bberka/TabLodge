@@ -298,3 +298,15 @@ test('a malformed page with many data ids in one tag is read in linear time', ()
 	assert.throws(() => parseImportFile(attack, 'page.html'), /no links/);
 	assert.ok(performance.now() - started < 500, 'took too long');
 });
+
+test('a title whose lower case is longer, like İstanbul, still reads back', () => {
+	const page = shareHtmlPage(
+		'İstanbul İzmir',
+		[{name: 'İstanbul', tabs: [{title: 'İ', url: 'https://i.example/'}]}],
+		'TabLodge',
+	);
+	const parsed = parseImportFile(page, 'page.html');
+	assert.equal(parsed.format, 'shared-page');
+	assert.equal(parsed.bookmarks[0].name, 'İstanbul');
+	assert.equal(parsed.bookmarks[0].links[0].title, 'İ');
+});

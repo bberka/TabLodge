@@ -31,7 +31,7 @@ const DATA_ID_ATTRIBUTES = [
 ];
 
 function dataBlockText(html: string): string | undefined {
-	const lower = html.toLowerCase();
+	const lower = html.replaceAll(/[A-Z]/g, (letter) => letter.toLowerCase());
 	let at = lower.indexOf('<script');
 	while (at !== -1) {
 		const tagEnd = lower.indexOf('>', at);
