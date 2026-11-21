@@ -92,6 +92,29 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec xo ${{ matrix.paths }}
 
+  # A pull request may not add comments or leave a file's baseline stale (docs/agents/comments.md). It needs history for
+  # the merge base, and it runs for every change, including the docs and website changes that skip the other jobs.
+  comments:
+    needs: changes
+    name: Comment ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: node scripts/comment-ratchet.ts --base "$BASE"
+      - if: ${{ github.event_name != 'pull_request' }}
+        run: node scripts/comment-ratchet.ts --base HEAD^
+
   typecheck:
     needs: changes
     if: ${{ needs.changes.outputs.core == 'true' }}
@@ -253,7 +276,7 @@ jobs:
   # The branch ruleset requires this check name. It passes only when every job above passes.
   test:
     name: Lint, typecheck, test, build, package, Firefox smoke check
-    needs: [changes, lint, typecheck, unit, extension, a11y, browser, private-storage, cloudflare, mobile]
+    needs: [changes, lint, comments, typecheck, unit, extension, a11y, browser, private-storage, cloudflare, mobile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
