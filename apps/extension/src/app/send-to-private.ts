@@ -1,5 +1,6 @@
 import {useSyncExternalStore} from 'react';
 import {INBOX_PUBLIC_KEY} from '../shared/private-inbox';
+import {LOCK_RECORD_KEY} from '../shared/private-lock';
 import type {SendTarget} from '../shared/send-to-private';
 import type {SendToPrivateState} from '../shared/types';
 import type {ShowStatus} from './common';
@@ -34,7 +35,8 @@ function watchSendState(listener: () => void) {
 			if (
 				area === 'local' &&
 				(Object.hasOwn(changes, INBOX_PUBLIC_KEY) ||
-					Object.hasOwn(changes, PRIVATE_CONFIG_KEY))
+					Object.hasOwn(changes, PRIVATE_CONFIG_KEY) ||
+					Object.hasOwn(changes, LOCK_RECORD_KEY))
 			) {
 				void loadSendState();
 			}

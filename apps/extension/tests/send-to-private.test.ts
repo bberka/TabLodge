@@ -188,14 +188,25 @@ test('the public key alone cannot open an entry', async () => {
 });
 
 test('a send of more than 500 links is refused before anything leaves the library', () => {
+	const store = normalizeStore({
+		bookmarkColumns: [{id: 'c1', name: 'Work'}],
+		bookmarks: Array.from({length: 501}, (_, index) => ({
+			id: `b${index}`,
+			title: `Link ${index}`,
+			url: `https://link-${index}.example/`,
+			columnId: 'c1',
+		})),
+	});
+	const untouched = structuredClone(store);
 	const result = takeOutForPrivate(
-		regular(),
-		Array.from({length: 501}, () => ({
+		store,
+		store.bookmarks.map((bookmark) => ({
 			kind: 'bookmark' as const,
-			bookmarkId: 'b1',
+			bookmarkId: bookmark.id,
 		})),
 	);
 	assert.equal(result.ok, false);
+	assert.deepEqual(store, untouched);
 });
 
 test('the same address with a different note is still added; an identical replay is not', () => {

@@ -240,6 +240,7 @@ import {
 } from '../src/shared/private-inbox';
 import {
 	addSentLinks,
+	MAX_SENT_LINKS,
 	parseSendTargets,
 	takeOutForPrivate,
 	type SentLink,
@@ -8995,7 +8996,11 @@ async function sendToPrivateState(): Promise<SendToPrivateState> {
 		return 'hidden';
 	}
 
-	return (await inboxPublicKey()) ? 'ready' : 'needs-private-window';
+	const lock = await chrome.storage.local.get([LOCK_RECORD_KEY]);
+	return parseLockRecord(lock[LOCK_RECORD_KEY])?.state === 'encrypted' &&
+		(await inboxPublicKey())
+		? 'ready'
+		: 'needs-private-window';
 }
 
 async function inboxPublicKey(): Promise<string | undefined> {
@@ -9006,6 +9011,13 @@ async function inboxPublicKey(): Promise<string | undefined> {
 async function sendToPrivate(
 	rawTargets: unknown,
 ): Promise<ActionResult<'SEND_TO_PRIVATE'>> {
+	if (Array.isArray(rawTargets) && rawTargets.length > MAX_SENT_LINKS) {
+		return {
+			ok: false,
+			error: `Send at most ${MAX_SENT_LINKS} links at a time. Select fewer.`,
+		};
+	}
+
 	const targets = parseSendTargets(rawTargets);
 	if (!targets) {
 		return {ok: false, error: 'Choose the links to send.'};
@@ -9053,6 +9065,7 @@ async function sendToPrivate(
 			}
 
 			await library.set({[SEND_CLEANUP_KEY]: true});
+			await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
 			return {ok: true, count: taken.links.length};
 		}),
 	);
@@ -9085,7 +9098,9 @@ async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
 			records.filter(
 				(entry) =>
 					entry.id !== id &&
-					(entries.length === 0 || entry.createdAt > record.createdAt),
+					(entries.length === 0 ||
+						entry.createdAt > record.createdAt ||
+						!entry.keys.includes(STORAGE_KEY)),
 			),
 		);
 		return entries;
@@ -9141,7 +9156,9 @@ async function receiveSentLinks(): Promise<void> {
 	}
 }
 
-async function takeInSentLinks(): Promise<void> {
+async function takeInSentLinks({
+	ignoreHold = false,
+}: {ignoreHold?: boolean} = {}): Promise<void> {
 	await mutate(async () => {
 		const gate = await lockGate();
 		if (!gate?.key || gate.state !== 'encrypted') {
@@ -9160,7 +9177,7 @@ async function takeInSentLinks(): Promise<void> {
 			}
 
 			const hold = heldUntil(value);
-			if (hold > now) {
+			if (hold > now && !ignoreHold) {
 				wakeAt = Math.min(wakeAt, hold);
 				continue;
 			}
@@ -9687,7 +9704,10 @@ async function handlePrivateLockMessage(
 				}
 
 				const {credential} = message;
+				await takeInSentLinks({ignoreHold: true}).catch(() => undefined);
 				await mutate(async () => {
+					await library.remove([INBOX_PRIVATE_KEY_NAME]);
+					await chrome.storage.local.remove([INBOX_PUBLIC_KEY]);
 					await privateLock.disable(credential);
 				});
 				invalidateSettings();

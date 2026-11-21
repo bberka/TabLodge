@@ -94,11 +94,21 @@ export async function sendToPrivate(targets: SendTarget[]): Promise<boolean> {
 
 	const id = await queueSentLinks(taken.links);
 	let removed = false;
-	await editRegular((current) => {
-		const again = takeOutForPrivate(current, targets);
-		removed = again.ok;
-		return again.ok ? again.store : current;
-	});
+	try {
+		await editRegular((current) => {
+			const again = takeOutForPrivate(current, targets);
+			removed = again.ok;
+			return again.ok ? again.store : current;
+		});
+	} catch {
+		await withdrawSent(id);
+		await editRegular((current) =>
+			putBack(current, before, targets, Date.now()),
+		).catch(() => undefined);
+		showSnack('Could not save that. Nothing was sent');
+		return false;
+	}
+
 	if (!removed) {
 		await withdrawSent(id);
 		showSnack('Those links changed. Nothing was sent');

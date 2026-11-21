@@ -15938,3 +15938,51 @@ test('cleanup still runs when another action rewrote the Undo list before the al
 		false,
 	);
 });
+
+test('removing the private password takes waiting links in and retires the inbox key first', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const owner = restartPrivate({
+		...privateWorker,
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: regular.extraStorage[entry],
+		},
+	});
+	const removed = await owner.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(inboxEntries(owner.extraStorage).length, 0);
+	assert.equal(owner.extraStorage[INBOX_KEY], undefined);
+	assert.equal(
+		owner.extraStorage['tablodge.private.sendprivate.key'],
+		undefined,
+	);
+	const library = await owner.sendMessage({type: 'GET_STATE'});
+	assert.ok(library.bookmarks?.some((bookmark) => bookmark.url === SENT_URL));
+	const after = createWorkerHarness(stateWithSession(), undefined, {
+		storage: structuredClone(owner.extraStorage),
+	});
+	assert.equal(
+		(await after.sendMessage({type: 'SEND_TO_PRIVATE_STATE'})).state,
+		'needs-private-window',
+	);
+});
+
+test('a selection over 500 links is refused with the limit', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	const refused = await regular.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: Array.from({length: 501}, (_, index) => ({
+			kind: 'bookmark',
+			bookmarkId: `b${index}`,
+		})),
+	});
+	assert.equal(refused.ok, false);
+	assert.match(String(refused.error), /at most 500/);
+});

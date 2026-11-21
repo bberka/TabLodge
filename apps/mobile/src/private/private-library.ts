@@ -1114,13 +1114,15 @@ export async function takeInSent(): Promise<void> {
 			return;
 		}
 
-		await editPrivate(
-			(current) =>
+		await core.mutate(async () => {
+			await core.write(
 				addSentLinks(
-					current,
+					core.store,
 					ready.flatMap((entry) => entry.links),
 				).store,
-		);
+			);
+		});
+		client?.localChanged();
 		const imported = new Set(ready.map((entry) => entry.id));
 		await writePending(pending.filter((entry) => !imported.has(entry.id)));
 	});
