@@ -92,6 +92,7 @@ import {
 	backupsDialogCheck,
 	settingResetCheck,
 	settingsFinderCheck,
+	settingsNarrowLayoutCheck,
 	settingsSearchCheck,
 	siteSourcePickerCheck,
 	siteSourceRemoveCheck,
@@ -143,6 +144,7 @@ async function main() {
 		await seed(seedPage);
 		await seedPage.close();
 		await settingsSearchCheck(env);
+		await settingsNarrowLayoutCheck(env);
 		await settingsFinderCheck(env);
 		await eachTheme(env, [siteSourcePickerCheck, siteSourceRemoveCheck]);
 		await eachTheme(env, [backupsDialogCheck]);

@@ -940,11 +940,14 @@ export function EmptyState({
 
 // Header is a flex row (space-y reset so the text block is not pushed down) with the icon
 // centered against the title/description block, on a tinted strip separated from the body.
+// `reset` is a small icon button that stays beside the title at every width; `action` is a
+// text button that drops onto its own full width line on a phone.
 export function SectionCard({
 	id,
 	title,
 	description,
 	icon: Icon,
+	reset,
 	action,
 	children,
 	className = '',
@@ -952,6 +955,7 @@ export function SectionCard({
 	title: ReactNode;
 	description?: ReactNode;
 	icon?: IconComponent;
+	reset?: ReactNode;
 	action?: ReactNode;
 	children?: ReactNode;
 	className?: string;
@@ -965,7 +969,7 @@ export function SectionCard({
 						<Icon className="h-4 w-4" aria-hidden="true" />
 					</span>
 				)}
-				<div className="min-w-[12rem] flex-1">
+				<div className="min-w-0 flex-1 sm:min-w-[12rem]">
 					<CardTitle className="text-[15px] leading-6">{title}</CardTitle>
 					{Boolean(description) && (
 						<CardDescription className="text-xs leading-5">
@@ -973,6 +977,7 @@ export function SectionCard({
 						</CardDescription>
 					)}
 				</div>
+				{Boolean(reset) && <div className="shrink-0">{reset}</div>}
 				{Boolean(action) && (
 					<div className="max-sm:basis-full max-sm:[&>*]:w-full sm:shrink-0">
 						{action}
