@@ -35,8 +35,6 @@ const BOARD =
 const MENU = "The browser's right-click menu.";
 const KEPT = 'Snapshots and backups the extension keeps in the browser.';
 const NAMES = 'Names for sessions saved from browser windows.';
-const DUPLICATE =
-	'The phone has its own preference for this (#429); until the two are one, each app keeps its own.';
 const LOOK = 'Appearance, which each app draws its own way.';
 const PHONE_LOOK = 'Appearance of the Android app, which phones share.';
 const GESTURES = "Taps and swipes on the phone's screens.";
@@ -95,8 +93,11 @@ export const LIBRARY_SETTINGS = {
 	bookmarkQuickActions: ['platform', BOARD],
 	sessionsOnTop: ['platform', BOARD],
 	showSaveWindowButton: ['platform', BOARD],
-	linkPreviews: ['platform', DUPLICATE],
-	siteIcons: ['platform', DUPLICATE],
+	linkPreviews: [
+		'platform',
+		'The hover card on the dashboard. The phone has no hover preview; its save screen lookup is `savePreview`, which also fills in the title of a bare shared address.',
+	],
+	siteIcons: ['all', BOTH],
 	showTrashBinButton: ['platform', BOARD],
 	dashboardWidth: ['platform', BOARD],
 	bookmarkBoardView: ['platform', BOARD],
@@ -226,8 +227,10 @@ export const ANDROID_PREFERENCES = {
 		'platform',
 		'Strips tracking parameters when the phone saves a link. The shared `removeTrackingParameters` strips them when a link opens.',
 	],
-	siteIcons: ['platform', DUPLICATE],
-	savePreview: ['platform', DUPLICATE],
+	savePreview: [
+		'platform',
+		"A phone only lookup of the page on the save screen, which also fills in the title of a bare shared address; the extension's tab already has its title. Not the extension's hover card, `linkPreviews`.",
+	],
 	backgroundSync: [
 		'platform',
 		'Syncing with the app closed, which means the same on every phone.',

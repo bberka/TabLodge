@@ -8,6 +8,7 @@ import {useSyncExternalStore} from 'react';
 import {readJson, writeJson} from '../platform/storage';
 import {
 	defaults,
+	legacySiteIconsOf,
 	parsePreferences,
 	SYNCED_KEYS,
 	type Look,
@@ -41,6 +42,8 @@ const KEY = 'tablodge.prefs';
 const CHANGED_AT_KEY = 'tablodge.prefs.changed-at';
 
 let current = defaults;
+// A site icon choice this phone stored before the setting moved to the library, until the library takes it.
+let legacySiteIcons: 'browser' | undefined;
 // When this phone last changed each synced preference, or took it from another phone. Settings sync compares these.
 let changedAt: ChangedAt = {};
 const listeners = new Set<() => void>();
@@ -62,11 +65,28 @@ export async function loadPreferences(): Promise<void> {
 		return;
 	}
 
+	legacySiteIcons = legacySiteIconsOf(
+		(saved as Record<string, unknown>).siteIcons,
+	);
 	current = parsePreferences(saved);
 	applyTheme(current.theme);
 	for (const listener of listeners) {
 		listener();
 	}
+}
+
+/**
+The library's `siteIcons` value this phone's old preference stands for, once. Taking it also drops the old key from
+storage, so the library setting is the only copy from then on.
+*/
+export function takeLegacySiteIcons(): 'browser' | undefined {
+	const found = legacySiteIcons;
+	if (found) {
+		legacySiteIcons = undefined;
+		void writeJson(KEY, current);
+	}
+
+	return found;
 }
 
 let onLocalChange: ((change: Partial<Preferences>) => void) | undefined;

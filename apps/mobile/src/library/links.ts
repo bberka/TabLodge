@@ -24,6 +24,7 @@ export type LinkSettings = Pick<
 	| 'showSessionFaviconPreviews'
 	| 'expandSessionsByDefault'
 	| 'toastDuration'
+	| 'siteIcons'
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
@@ -40,6 +41,7 @@ export const DEFAULTS: LinkSettings = {
 	showSessionFaviconPreviews: true,
 	expandSessionsByDefault: false,
 	toastDuration: 'default',
+	siteIcons: 'server',
 };
 
 /**

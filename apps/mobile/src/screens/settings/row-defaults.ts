@@ -44,7 +44,7 @@ export const RESETS = new Map<Row, Reset>([
 	[ROWS.swipeRight, {prefs: ['swipeRight']}],
 	[ROWS.swipeLeft, {prefs: ['swipeLeft']}],
 	[ROWS.cleanOnSave, {prefs: ['cleanOnSave']}],
-	[ROWS.siteIcons, {prefs: ['siteIcons']}],
+	[ROWS.siteIcons, {synced: ['siteIcons']}],
 	[ROWS.savePreview, {prefs: ['savePreview']}],
 	[ROWS.cleanTitles, {synced: ['cleanTitles']}],
 	[ROWS.removeTracking, {synced: ['removeTrackingParameters']}],

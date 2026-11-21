@@ -108,7 +108,7 @@ export const ROWS = {
 	},
 	siteIcons: {
 		label: 'Site icons',
-		hint: 'Through your server by default, or from the sites too',
+		hint: 'Through your server, or letter tiles only',
 	},
 	savePreview: {
 		label: 'Preview links when saving',

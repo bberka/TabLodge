@@ -13,6 +13,7 @@ import {
 } from '../src/settings/preference-merge';
 import {
 	defaults,
+	legacySiteIconsOf,
 	parsePreferences,
 	readSyncedPreferences,
 	SYNCED_KEYS,
@@ -38,7 +39,6 @@ const changed: Preferences = {
 	sessionTap: 'open',
 	sessionMain: 'archive',
 	cleanOnSave: false,
-	siteIcons: 'direct',
 	savePreview: false,
 	accent: '#336699',
 	theme: 'dark',
@@ -124,12 +124,21 @@ describe('preference schema', () => {
 		assert.equal('openApp' in syncedPreferences(loaded), false);
 	});
 
-	test('the Icons only bar and the old site icon switch still read', () => {
+	test('the Icons only bar still reads', () => {
 		const bar = parsePreferences({barSize: 'icons'});
 		assert.equal(bar.barSize, 'full');
 		assert.equal(bar.barLabels, 'never');
-		assert.equal(parsePreferences({siteIcons: true}).siteIcons, 'direct');
-		assert.equal(parsePreferences({siteIcons: false}).siteIcons, 'server');
+	});
+
+	// #429: the phone's site icons moved to the library setting, and a choice made before must carry over.
+	test('an old site icon choice that asked nobody carries over as the shared Letter tiles only', () => {
+		assert.equal(legacySiteIconsOf('off'), 'browser');
+		assert.equal(legacySiteIconsOf('direct'), 'browser');
+		assert.equal(legacySiteIconsOf(true), 'browser');
+		assert.equal(legacySiteIconsOf('server'), undefined);
+		assert.equal(legacySiteIconsOf(false), undefined);
+		assert.equal(legacySiteIconsOf(undefined), undefined);
+		assert.equal('siteIcons' in parsePreferences({siteIcons: 'off'}), false);
 	});
 
 	test('anything that is not an object loads as the defaults', () => {

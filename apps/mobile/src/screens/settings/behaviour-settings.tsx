@@ -200,7 +200,7 @@ export function BookmarkBehaviourCard() {
 			/>
 			<SelectRow
 				row={ROWS.siteIcons}
-				value={prefs.siteIcons}
+				value={settings.siteIcons}
 				choices={[
 					{
 						id: 'server',
@@ -209,20 +209,14 @@ export function BookmarkBehaviourCard() {
 						icon: 'cloud-outline',
 					},
 					{
-						id: 'direct',
-						name: 'From the sites too',
-						hint: 'Without a server, this phone asks each site',
-						icon: 'globe-outline',
-					},
-					{
-						id: 'off',
-						name: 'Off',
-						hint: 'Letter tiles',
+						id: 'browser',
+						name: 'Letter tiles only',
+						hint: 'Nothing is asked of your server or the sites',
 						icon: 'text-outline',
 					},
 				]}
-				onChange={(siteIcons) => {
-					setPreferences({siteIcons});
+				onChange={(value) => {
+					void setSyncedSetting('siteIcons', value);
 				}}
 			/>
 			<Toggle

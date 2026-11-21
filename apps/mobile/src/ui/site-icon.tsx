@@ -3,7 +3,7 @@ import {Image, StyleSheet, View} from 'react-native';
 import {SYNC_CONFIG_KEY} from '../../../extension/src/shared/sync/client';
 import {USER_AGENT} from '../library/link-preview';
 import {useSyncStatus} from '../library/library-store';
-import {usePreferences} from '../settings/preferences';
+import {useLinkSettings} from '../library/use-link-settings';
 import {readJson} from '../platform/storage';
 import {Avatar} from './widgets';
 
@@ -27,13 +27,14 @@ async function readToken(): Promise<string | undefined> {
 }
 
 /**
-Where to get a site's icon: the sync server when one is connected, otherwise the site's own favicon when the setting
-allows asking sites. Undefined while the token is still being read, and when icons are off.
+Where to get a site's icon: the sync server when one is connected, and for a place with its own reason to show the
+icon (the save preview), otherwise the site's own favicon. Undefined while the token is still being read, and when
+the Site icons setting is on Letter tiles only.
 */
 function useIconSource(host: string, always: boolean): Source | undefined {
-	const {siteIcons} = usePreferences();
+	const {siteIcons} = useLinkSettings(true);
 	// A place with its own reason to show the icon (the save preview) may ask the site itself.
-	const mode = always ? 'direct' : siteIcons;
+	const mode = always ? 'direct' : siteIcons === 'browser' ? 'off' : 'server';
 	const {connected, url} = useSyncStatus();
 	const [token, setToken] = useState<string>();
 	useEffect(() => {
@@ -84,7 +85,7 @@ export function SiteIcon({
 	host: string;
 	size?: number;
 	/**
-	Show the icon even with the Site icons setting off, for a place that has its own reason to ask for it.
+	Show the icon even with Site icons on Letter tiles only, for a place that has its own reason to ask for it.
 	*/
 	always?: boolean;
 }) {
