@@ -16054,3 +16054,32 @@ test('a wrong password leaves waiting links and the inbox key alone', async () =
 	assert.equal(inboxEntries(owner.extraStorage).length, 1);
 	assert.ok(owner.extraStorage[INBOX_KEY]);
 });
+
+test('a failed take-in stops password removal and keeps the inbox key and the entry', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const owner = restartPrivate({
+		...privateWorker,
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: regular.extraStorage[entry],
+		},
+	});
+	owner.setStorageFailure(
+		new Error('disk full'),
+		'tablodge.private.tablodge.state',
+	);
+	const removed = await owner.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	owner.clearStorageFailure();
+	assert.equal(removed.ok, false);
+	assert.equal(inboxEntries(owner.extraStorage).length, 1);
+	assert.ok(owner.extraStorage[INBOX_KEY]);
+	assert.ok(
+		isSealedValue(owner.extraStorage['tablodge.private.sendprivate.key']),
+	);
+});
