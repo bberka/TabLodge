@@ -5,6 +5,11 @@ import {stripTrackingParameters} from '../../../../extension/src/shared/tracking
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
 import {addBookmarks} from '../../library/board-edits';
 import {
+	type SaveOutcome,
+	saveMessage,
+} from '../../../../extension/src/shared/save-feedback';
+import {bookmarkCount, counted, tabCount} from '../../library/save-outcome';
+import {
 	addSession,
 	addTabsToSession,
 	sessionsIn,
@@ -88,11 +93,19 @@ export function SaveLinksForm({
 		(mode === 'bookmarks' && choice.incomplete) ||
 		(mode === 'session' && !creating && !sessionId);
 
+	// A save that stored nothing (a skipped duplicate) is not success: the drawer stays open and says why.
+	const finish = (outcome: SaveOutcome) => {
+		if (outcome.kind === 'saved') {
+			onDone(saveMessage(outcome));
+		} else {
+			setProblem(saveMessage(outcome));
+		}
+	};
+
 	const saveLinks = async () => {
-		const count = `${links.length} links`;
 		if (mode === 'bookmarks') {
 			const column = await choice.resolve();
-			await editIn(library, (current) =>
+			const run = counted(bookmarkCount, (current) =>
 				addBookmarks(
 					current,
 					links,
@@ -102,11 +115,12 @@ export function SaveLinksForm({
 					phoneStamp(),
 				),
 			);
+			await editIn(library, run.change);
 			setPreferences({lastColumnId: column.id});
-			onDone(`${count} saved to ${column.name}`);
+			finish(run.outcome(links.length, 'link', column.name));
 		} else if (creating) {
 			const label = name.trim() || 'Shared links';
-			await editIn(library, (current) =>
+			const run = counted(tabCount, (current) =>
 				addSession(
 					current,
 					{name: label, urls: links, device: phoneStamp()},
@@ -115,13 +129,19 @@ export function SaveLinksForm({
 					Date.now(),
 				),
 			);
-			onDone(`${count} saved as the session ${label}`);
+			await editIn(library, run.change);
+			finish(run.outcome(links.length, 'link', label));
 		} else if (sessionId) {
-			await editIn(library, (current) =>
+			const run = counted(tabCount, (current) =>
 				addTabsToSession(current, sessionId, links, ids(), Date.now()),
 			);
-			onDone(
-				`${count} added to ${sessions.find((s) => s.id === sessionId)?.name ?? 'the session'}`,
+			await editIn(library, run.change);
+			finish(
+				run.outcome(
+					links.length,
+					'link',
+					sessions.find((s) => s.id === sessionId)?.name ?? 'the session',
+				),
 			);
 		}
 	};

@@ -29,6 +29,10 @@ import {
 	shownTags,
 	withTagEdits,
 } from '../../../extension/src/shared/bookmark-tags';
+import {
+	bookmarkIsDuplicate,
+	duplicateHandlingOf,
+} from '../../../extension/src/shared/save-rules';
 import {extractUrl, hostOf} from './store-shape';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
@@ -159,7 +163,8 @@ function withNotes(bookmark: Bookmark, notes: string | undefined): Bookmark {
 }
 
 /**
-Adds a bookmark at the end of its column, as the extension does. A column that does not exist falls back as it does there (the column that claims the link's site, the default column, the first). When the library has no column yet, the extension's default one is
+Adds a bookmark at the end of its column, as the extension does, unless it is a duplicate under the shared rule
+(`save-rules.ts`: the same column never holds a link twice, and the duplicate setting covers the other columns). A column that does not exist falls back as it does there (the column that claims the link's site, the default column, the first). When the library has no column yet, the extension's default one is
 created, so a first link can be saved before the first sync.
 */
 export function addBookmark(
@@ -191,6 +196,18 @@ export function addBookmark(
 	const columnId = landingColumnId(next.bookmarkColumns, input.columnId, {
 		claimedId: columnForUrl(next.bookmarkColumns, url)?.id,
 	});
+	// A duplicate (save-rules.ts) is skipped and the store comes back as it was.
+	if (
+		bookmarkIsDuplicate(
+			next.bookmarks,
+			columnId,
+			url,
+			duplicateHandlingOf(next.settings),
+		)
+	) {
+		return store;
+	}
+
 	const bookmark = withTagEdits(
 		withNotes(
 			{

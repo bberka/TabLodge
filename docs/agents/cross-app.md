@@ -23,7 +23,9 @@ When a feature touches data, sync, settings, or link handling, answer each quest
 3. **Website and docs.** Features, permissions, FAQ, and screenshots: see [Documentation](documentation.md#keep-current).
 4. **Privacy.** New stored data or network behavior goes into [PRIVACY.md](../PRIVACY.md).
 
-**Every setting syncs** in both apps. One bound to its device (appearance, device name, permissions, hints) is listed with its reason in `src/shared/local-settings.ts` and [PRIVACY.md](../PRIVACY.md#what-stays-on-each-device); a test enforces it ([ADR 10](../adr/0010-settings-sync.md)).
+**Settings.** A new feature thinks through its use cases and the settings they could call for. The triage carries a `Settings:` line: what was considered, what was added, and why the rest stays fixed. Today's behavior is the default; a setting earns its place.
+
+**Sync scope.** Every setting has one scope and a reason in `src/shared/setting-scopes.ts` ([ADR 11](../adr/0011-setting-sync-scopes.md)): `all` by default (both apps read it), `platform` (all browsers or all phones, when the other app has no use for it, such as theme), or `device`, which never syncs and is only for what cannot mean anything on another device: its name, connection, a permission only it grants, installed apps, private library, dismissals and remembered state. Two phones are two devices. Tests enforce it.
 
 The 'challenge-feature' skill helps decide whether a feature is worth building.
 
