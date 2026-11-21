@@ -17,6 +17,7 @@ import {
 	deviceStamp,
 	isDeviceKind,
 } from './device';
+import {readSharedPageData, SHARED_PAGE_DATA_FORMAT} from './shared-page-data';
 import {isSourceColumnId} from './source-columns';
 import {webUrl} from './web-url';
 import type {Bookmark} from './types';
@@ -57,7 +58,8 @@ export type ImportFormatId =
 	| 'wallabag'
 	| 'pinboard'
 	| 'mastodon'
-	| 'json-links';
+	| 'json-links'
+	| 'shared-page';
 /**
 How well a format's structure is known: checked against the tool's source or real files, or a best-effort reading.
 */
@@ -124,6 +126,10 @@ export type ParsedImport = {
 	For native backups: the parsed JSON, sent to the importer as is (keeps everything).
 	*/
 	native?: {data: unknown; sessions: boolean; bookmarks: boolean};
+	/**
+	The kind the file was made as, which the review opens on: a TabLodge shared page of columns or of sessions.
+	*/
+	kind?: ImportKind;
 };
 
 export class ImportFormatError extends Error {}
@@ -1607,6 +1613,48 @@ function parseMastodonBookmarks(lines: string[]): ParsedImport | null {
 }
 
 /**
+A TabLodge shared page, read from its data block (shared-page-data.ts). Undefined when the page has none, so the
+caller falls back to reading its links as any web page.
+*/
+function parseSharedPage(html: string): ParsedImport | undefined {
+	const data = readSharedPageData(html);
+	if (!isObject(data) || data.format !== SHARED_PAGE_DATA_FORMAT) {
+		return undefined;
+	}
+
+	const collector = new Collector();
+	const groups = asArray(data.groups).map((entry) => {
+		const record = isObject(entry) ? entry : {};
+		return group(
+			record.name,
+			collector.links(
+				asArray(record.links).map((link) =>
+					isObject(link)
+						? collector.link(link.url, link.title, {
+								pinned: link.pinned === true,
+							})
+						: collector.skip(),
+				),
+			),
+			{
+				description: text(record.description),
+				createdAt: toTimestamp(record.createdAt),
+			},
+		);
+	});
+	return result(
+		'shared-page',
+		'TabLodge shared page',
+		'verified',
+		groups,
+		collector,
+		{
+			kind: data.kind === 'sessions' ? 'sessions' : 'bookmarks',
+		},
+	);
+}
+
+/**
  Detects the format of an import file and parses it. Throws ImportFormatError with a readable
  message when the file is empty, too large, or not a supported format.
  */
@@ -1644,7 +1692,7 @@ export function parseImportFile(source: string, filename = ''): ParsedImport {
 		extension === 'html' ||
 		extension === 'htm'
 	) {
-		return withEmptyCheck(parseHtml(content));
+		return withEmptyCheck(parseSharedPage(content) ?? parseHtml(content));
 	}
 
 	const lines = content.split(/\r\n?|\n/);

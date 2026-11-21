@@ -7,9 +7,16 @@ import { DurableObject } from "cloudflare:workers";
 
 // ../extension/src/shared/sync/shared-pages.ts
 var SHARED_PAGES_FEATURE = "shared-pages";
+var SHARED_PAGE_IMPORT_FEATURE = "shared-page-import";
 var SHARED_PAGE_PREFIX = "/p/";
 var MAX_SHARED_PAGE_TITLE = 200;
+var MAX_SHARED_PAGE_SOURCE = 100;
 var SHARED_PAGE_ID = /^[\w-]{22}$/;
+var ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+var newSharedPageId = /* @__PURE__ */ __name(() => Array.from(
+  crypto.getRandomValues(new Uint8Array(22)),
+  (byte) => ID_ALPHABET[byte % 64]
+).join(""), "newSharedPageId");
 
 // ../../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/http-exception.js
 var HTTPException = class extends Error {
@@ -2919,39 +2926,52 @@ var SqlPageStore = class {
 			size INTEGER NOT NULL,
 			created INTEGER NOT NULL
 		)`);
+    try {
+      sql.all("SELECT source FROM pages LIMIT 0");
+    } catch {
+      sql.all("ALTER TABLE pages ADD COLUMN source TEXT NOT NULL DEFAULT ''");
+    }
   }
   sql;
   static {
     __name(this, "SqlPageStore");
   }
   /**
-  Adds the page unless the server already holds `maxPages` pages or the page would take the total over `maxBytes`.
+  Adds the page unless its id is taken, the server already holds `maxPages` pages, or the page would take the total
+  over `maxBytes`.
   */
   add(page, budget) {
     return this.sql.transaction(() => {
+      if (this.sql.all("SELECT 1 FROM pages WHERE id = ?", page.id).length > 0) {
+        return "taken";
+      }
       const used = this.sql.all(
         "SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM pages"
       )[0];
       if (Number(used?.n) >= budget.maxPages || Number(used?.bytes) + page.size > budget.maxBytes) {
-        return false;
+        return "full";
       }
       this.sql.all(
-        "INSERT INTO pages (id, title, html, size, created) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO pages (id, title, html, size, created, source) VALUES (?, ?, ?, ?, ?, ?)",
         page.id,
         page.title,
         page.html,
         page.size,
-        page.createdAt
+        page.createdAt,
+        page.source
       );
-      return true;
+      return "added";
     });
   }
   list() {
-    return this.sql.all("SELECT id, title, size, created FROM pages ORDER BY created DESC").map((row) => ({
+    return this.sql.all(
+      "SELECT id, title, size, created, source FROM pages ORDER BY created DESC"
+    ).map((row) => ({
       id: String(row.id),
       title: String(row.title),
       size: Number(row.size),
-      createdAt: Number(row.created)
+      createdAt: Number(row.created),
+      source: String(row.source ?? "")
     }));
   }
   html(id) {
@@ -3009,11 +3029,6 @@ var MAX_PULL = 1e3;
 var PURGE_EVERY_MS = 60 * 60 * 1e3;
 var DAY_MS = 24 * 60 * 60 * 1e3;
 var utf8Bytes = /* @__PURE__ */ __name((text) => new TextEncoder().encode(text).length, "utf8Bytes");
-var ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-var newPageId = /* @__PURE__ */ __name(() => Array.from(
-  crypto.getRandomValues(new Uint8Array(22)),
-  (byte) => ID_ALPHABET[byte % 64]
-).join(""), "newPageId");
 var problem = /* @__PURE__ */ __name((error, detail) => ({
   error,
   ...detail
@@ -3151,7 +3166,7 @@ function createApi(options) {
       cursor: log.cursor,
       records: log.size,
       limits,
-      features: options.pages ? [...FEATURES, SHARED_PAGES_FEATURE] : FEATURES
+      features: options.pages ? [...FEATURES, SHARED_PAGES_FEATURE, SHARED_PAGE_IMPORT_FEATURE] : FEATURES
     });
   });
   app.get("/v1/key", (c) => c.json({ key: options.log().key }));
@@ -3262,8 +3277,8 @@ function createApi(options) {
         } catch {
           return c.json(problem("bad_json"), 400);
         }
-        const { title, html } = body ?? {};
-        if (typeof title !== "string" || title.length > MAX_SHARED_PAGE_TITLE || typeof html !== "string" || html === "") {
+        const { title, html, id, source } = body ?? {};
+        if (typeof title !== "string" || title.length > MAX_SHARED_PAGE_TITLE || typeof html !== "string" || html === "" || id !== void 0 && (typeof id !== "string" || !SHARED_PAGE_ID.test(id)) || source !== void 0 && (typeof source !== "string" || source.length > MAX_SHARED_PAGE_SOURCE)) {
           return c.json(problem("bad_page"), 400);
         }
         const size = utf8Bytes(html);
@@ -3273,12 +3288,21 @@ function createApi(options) {
             413
           );
         }
-        const page = { id: newPageId(), title, size, createdAt: now() };
+        const page = {
+          id: typeof id === "string" ? id : newSharedPageId(),
+          title,
+          size,
+          createdAt: now(),
+          source: typeof source === "string" ? source : ""
+        };
         const added = pages().add(
           { ...page, html },
           { maxPages: limits.maxPages, maxBytes: limits.maxPageStorageBytes }
         );
-        return added ? c.json(pageRecord(page), 201) : c.json(
+        if (added === "taken") {
+          return c.json(problem("page_exists"), 409);
+        }
+        return added === "added" ? c.json(pageRecord(page), 201) : c.json(
           problem("pages_full", {
             maxPages: limits.maxPages,
             maxBytes: limits.maxPageStorageBytes

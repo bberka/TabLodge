@@ -33,6 +33,10 @@ export type StoredPage = {
 	title: string;
 	size: number;
 	createdAt: number;
+	/**
+	The column or session the page was made from, as the device named it; empty for a page sent without one.
+	*/
+	source: string;
 };
 
 export class SqlPageStore {
@@ -44,16 +48,29 @@ export class SqlPageStore {
 			size INTEGER NOT NULL,
 			created INTEGER NOT NULL
 		)`);
+		// A table made before pages kept their source gets the column; reading it is how both SQLite runtimes can tell.
+		try {
+			sql.all('SELECT source FROM pages LIMIT 0');
+		} catch {
+			sql.all("ALTER TABLE pages ADD COLUMN source TEXT NOT NULL DEFAULT ''");
+		}
 	}
 
 	/**
-	Adds the page unless the server already holds `maxPages` pages or the page would take the total over `maxBytes`.
+	Adds the page unless its id is taken, the server already holds `maxPages` pages, or the page would take the total
+	over `maxBytes`.
 	*/
 	add(
 		page: StoredPage & {html: string},
 		budget: {maxPages: number; maxBytes: number},
-	): boolean {
+	): 'added' | 'taken' | 'full' {
 		return this.sql.transaction(() => {
+			if (
+				this.sql.all('SELECT 1 FROM pages WHERE id = ?', page.id).length > 0
+			) {
+				return 'taken';
+			}
+
 			const used = this.sql.all(
 				'SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM pages',
 			)[0];
@@ -61,29 +78,33 @@ export class SqlPageStore {
 				Number(used?.n) >= budget.maxPages ||
 				Number(used?.bytes) + page.size > budget.maxBytes
 			) {
-				return false;
+				return 'full';
 			}
 
 			this.sql.all(
-				'INSERT INTO pages (id, title, html, size, created) VALUES (?, ?, ?, ?, ?)',
+				'INSERT INTO pages (id, title, html, size, created, source) VALUES (?, ?, ?, ?, ?, ?)',
 				page.id,
 				page.title,
 				page.html,
 				page.size,
 				page.createdAt,
+				page.source,
 			);
-			return true;
+			return 'added';
 		});
 	}
 
 	list(): StoredPage[] {
 		return this.sql
-			.all('SELECT id, title, size, created FROM pages ORDER BY created DESC')
+			.all(
+				'SELECT id, title, size, created, source FROM pages ORDER BY created DESC',
+			)
 			.map((row) => ({
 				id: String(row.id),
 				title: String(row.title),
 				size: Number(row.size),
 				createdAt: Number(row.created),
+				source: String(row.source ?? ''),
 			}));
 	}
 
