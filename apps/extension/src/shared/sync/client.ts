@@ -425,17 +425,22 @@ function captureExcept(
 		Object.entries(state.shadow).filter(([key]) => isLeft(key)),
 	);
 	const queued = state.outbox.filter((key) => isLeft(key));
+	const rest = {
+		...state,
+		shadow: Object.fromEntries(
+			Object.entries(state.shadow).filter(([key]) => !isLeft(key)),
+		),
+		outbox: state.outbox.filter((key) => !isLeft(key)),
+	};
 	const captured = capture(
-		{
-			...state,
-			shadow: Object.fromEntries(
-				Object.entries(state.shadow).filter(([key]) => !isLeft(key)),
-			),
-			outbox: state.outbox.filter((key) => !isLeft(key)),
-		},
+		rest,
 		new Map([...records].filter(([, record]) => !left.has(record.kind))),
 		now,
 	);
+	if (captured === rest) {
+		return state;
+	}
+
 	return {
 		...captured,
 		shadow: {...captured.shadow, ...kept},
@@ -744,13 +749,17 @@ export function createSyncClient(host: SyncHost) {
 					? await host.outsideSettings.read()
 					: {},
 			);
-			let state = await loadState();
+			const stored = parseState(await host.get(SYNC_STATE_KEY));
+			let state = stored ?? newSyncState(host.randomId());
 			if (state.joined) {
 				state = await captureLocal(state, records);
 			}
 
 			const done = await work(state, records, store);
-			await host.set(SYNC_STATE_KEY, done.state);
+			if (done.state !== stored) {
+				await host.set(SYNC_STATE_KEY, done.state);
+			}
+
 			return done.result;
 		});
 	}
@@ -887,7 +896,13 @@ export function createSyncClient(host: SyncHost) {
 						...(await captureLocal(next, finished.records)),
 						joined: true,
 					};
-			return {state: {...joined, pulled: kinds}, result: undefined};
+			const same =
+				joined.pulled?.length === kinds.length &&
+				kinds.every((kind) => joined.pulled?.includes(kind));
+			return {
+				state: same ? joined : {...joined, pulled: kinds},
+				result: undefined,
+			};
 		});
 
 		let refused = 0;

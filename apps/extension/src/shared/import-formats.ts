@@ -315,13 +315,19 @@ function mergeBookmarkFolders(entries: ImportGroup[]): ImportGroup[] {
 	for (const entry of entries) {
 		const {name} = entry;
 		if (!name) {
-			looseLinks.push(...entry.links);
+			for (const link of entry.links) {
+				looseLinks.push(link);
+			}
+
 			continue;
 		}
 
 		const existing = folders.get(name);
 		if (existing) {
-			existing.links.push(...entry.links);
+			for (const link of entry.links) {
+				existing.links.push(link);
+			}
+
 			existing.createdAt ??= entry.createdAt;
 		} else {
 			folders.set(name, {...entry, name});
@@ -331,7 +337,9 @@ function mergeBookmarkFolders(entries: ImportGroup[]): ImportGroup[] {
 	const merged = [...folders.values()];
 	if (looseLinks.length > 0) {
 		if (merged.length > 0) {
-			merged[0].links.push(...looseLinks);
+			for (const link of looseLinks) {
+				merged[0].links.push(link);
+			}
 		} else {
 			merged.push(group('Bookmarks', looseLinks));
 		}

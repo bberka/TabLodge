@@ -245,8 +245,12 @@ export function sessionFolders(store: Store): SessionFolderView[] {
 	const archivedIds = new Set(
 		store.folders.filter((folder) => isArchived(folder)).map(({id}) => id),
 	);
-	const count = (id: string) =>
-		store.groups.filter((session) => session.folderId === id).length;
+	const counts = new Map<string, number>();
+	for (const session of store.groups) {
+		counts.set(session.folderId, (counts.get(session.folderId) ?? 0) + 1);
+	}
+
+	const count = (id: string) => counts.get(id) ?? 0;
 	const views: SessionFolderView[] = [
 		{
 			id: ALL_SESSIONS_ID,
@@ -268,9 +272,10 @@ export function sessionFolders(store: Store): SessionFolderView[] {
 		});
 	}
 
-	const loose = store.groups.filter(
-		(session) => !known.has(session.folderId),
-	).length;
+	const loose = store.groups.reduce(
+		(sum, session) => sum + (known.has(session.folderId) ? 0 : 1),
+		0,
+	);
 	if (loose > 0) {
 		views.splice(1 + plain.length, 0, {
 			id: OTHER_FOLDER_ID,
@@ -819,6 +824,29 @@ export function markSessionOpened(
 	);
 }
 
+const sessionTexts = new WeakMap<
+	Session,
+	{texts: string[]; lowered: string[]}
+>();
+
+function searchableTexts(session: Session) {
+	let found = sessionTexts.get(session);
+	if (!found) {
+		const texts = [
+			session.name,
+			session.description,
+			...session.tabs.flatMap((tab) => [tab.title, tab.url]),
+		];
+		found = {
+			texts,
+			lowered: texts.map((text) => text.toLocaleLowerCase()),
+		};
+		sessionTexts.set(session, found);
+	}
+
+	return found;
+}
+
 /**
 The sessions a search matches: the plain words as one piece of a name, note, tab title or address, and the operators
 on top of that.
@@ -833,13 +861,9 @@ export function searchSessions(
 	const needle = search.text.toLocaleLowerCase();
 	const folderName = new Map(folders.map((folder) => [folder.id, folder.name]));
 	return sessions.filter((session) => {
-		const texts = [
-			session.name,
-			session.description,
-			...session.tabs.flatMap((tab) => [tab.title, tab.url]),
-		];
+		const {texts, lowered} = searchableTexts(session);
 		return (
-			texts.some((text) => text.toLocaleLowerCase().includes(needle)) &&
+			lowered.some((text) => text.includes(needle)) &&
 			(!filtering ||
 				passesOperators(
 					search,
