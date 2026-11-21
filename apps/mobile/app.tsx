@@ -43,12 +43,12 @@ import {purgeTrash} from './src/library/trash-store';
 import {startPreferencesSync} from './src/settings/preferences-sync';
 import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
 import {
+	ImportHost,
 	ImportSheet,
 	type ImportSource,
-	ImportHost,
 	openImport,
-	ShareHost,
-} from './src/screens/transfer/transfer-sheets';
+} from './src/screens/transfer/import-sheet';
+import {ShareHost} from './src/screens/transfer/transfer-sheets';
 import {OpenInHost} from './src/screens/open-in';
 import {SharedPagesHost} from './src/screens/settings/shared-pages-settings';
 import {

@@ -917,6 +917,7 @@ export function ShareDialog({
 				id && `${shared.linkBase}${id}`,
 			),
 			id,
+			linkBase: (id && shared.linkBase) ?? undefined,
 			source: id && source.pageSource,
 		});
 		setUploading(false);
@@ -955,10 +956,11 @@ export function ShareDialog({
 								}}
 							/>
 						</div>
-						{sourcePages.length > 1 && (
+						{sourcePages.some((page) => page.id !== uploaded.id) && (
 							<SourcePages
 								noun={sourceNoun}
-								pages={sourcePages}
+								// The link this view shows is left out, so it cannot be deleted from under it.
+								pages={sourcePages.filter((page) => page.id !== uploaded.id)}
 								showStatus={showStatus}
 								onDeleted={shared.reload}
 							/>
@@ -1787,172 +1789,183 @@ export function ImportDialog({
 					</form>
 				) : step === 'source' ? (
 					<>
-						<DialogBody className="-m-1 min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto p-1">
-							{kindSwitch && <div>{kindSwitch}</div>}
-							<section
-								aria-labelledby="import-file-heading"
-								className={cn(
-									'flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-5 py-6 text-center transition-colors',
-									dragging
-										? 'border-primary bg-primary/6'
-										: 'border-border bg-muted/30',
-								)}
-								onDragOver={(event) => {
-									if (!event.dataTransfer.types.includes('Files')) {
-										return;
-									}
-
-									event.preventDefault();
-									event.dataTransfer.dropEffect = 'copy';
-									setDragging(true);
-								}}
-								onDragLeave={(event) => {
-									if (
-										!event.currentTarget.contains(
-											event.relatedTarget as Node | null,
-										)
-									) {
-										setDragging(false);
-									}
-								}}
-								onDrop={onDrop}
-							>
-								<span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
-									<FileUp className="h-5 w-5" aria-hidden="true" />
-								</span>
-								<div className="min-w-0">
-									<h3
-										id="import-file-heading"
-										className="text-sm font-semibold"
-									>
-										{dragging ? 'Drop the file to read it' : 'Drop a file here'}
-									</h3>
-									<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-										{everything
-											? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Settings › Data › Export, or Share and export › Everything.`
-											: SUPPORTED_FILES}
-									</p>
-								</div>
-								<Button
-									ref={chooseButtonRef}
-									type="button"
-									variant="outline"
-									size="sm"
-									disabled={reading}
-									data-autofocus=""
-									onClick={() => fileRef.current?.click()}
-								>
-									<Upload />
-									{reading ? 'Reading' : 'Choose file'}
-								</Button>
-								<input
-									ref={fileRef}
-									type="file"
-									className="hidden"
-									tabIndex={-1}
-									aria-hidden="true"
-									accept={
-										everything
-											? '.zip,.enc,application/zip'
-											: '.zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
-									}
-									onChange={(event) => void readFile(event.target.files?.[0])}
-								/>
-							</section>
-							{kind === 'bookmarks' && !everything && (
+						<ScrollArea
+							type="auto"
+							className="-m-1 min-h-0 flex-1"
+							viewportClassName="p-1"
+						>
+							<DialogBody className="grid-cols-[minmax(0,1fr)]">
+								{kindSwitch && <div>{kindSwitch}</div>}
 								<section
-									className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
-									aria-labelledby="import-browser-heading"
+									aria-labelledby="import-file-heading"
+									className={cn(
+										'flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-5 py-6 text-center transition-colors',
+										dragging
+											? 'border-primary bg-primary/6'
+											: 'border-border bg-muted/30',
+									)}
+									onDragOver={(event) => {
+										if (!event.dataTransfer.types.includes('Files')) {
+											return;
+										}
+
+										event.preventDefault();
+										event.dataTransfer.dropEffect = 'copy';
+										setDragging(true);
+									}}
+									onDragLeave={(event) => {
+										if (
+											!event.currentTarget.contains(
+												event.relatedTarget as Node | null,
+											)
+										) {
+											setDragging(false);
+										}
+									}}
+									onDrop={onDrop}
 								>
-									<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-muted/60 text-muted-foreground">
-										<Globe className="h-4 w-4" aria-hidden="true" />
+									<span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
+										<FileUp className="h-5 w-5" aria-hidden="true" />
 									</span>
-									<div className="min-w-0 flex-1">
+									<div className="min-w-0">
 										<h3
-											id="import-browser-heading"
-											className="text-sm font-medium"
+											id="import-file-heading"
+											className="text-sm font-semibold"
 										>
-											This browser’s bookmarks
+											{dragging
+												? 'Drop the file to read it'
+												: 'Drop a file here'}
 										</h3>
-										<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-											Copies the bookmarks bar and folders. Your browser
-											bookmarks are not changed.
+										<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+											{everything
+												? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Settings › Data › Export, or Share and export › Everything.`
+												: SUPPORTED_FILES}
 										</p>
 									</div>
 									<Button
+										ref={chooseButtonRef}
 										type="button"
-										variant="secondary"
+										variant="outline"
 										size="sm"
-										disabled={reading || !chrome.bookmarks?.getTree}
-										className="shrink-0"
-										onClick={() => void readBrowserBookmarks()}
+										disabled={reading}
+										data-autofocus=""
+										onClick={() => fileRef.current?.click()}
 									>
-										<Bookmark aria-hidden="true" />
-										Read bookmarks
+										<Upload />
+										{reading ? 'Reading' : 'Choose file'}
 									</Button>
+									<input
+										ref={fileRef}
+										type="file"
+										className="hidden"
+										tabIndex={-1}
+										aria-hidden="true"
+										accept={
+											everything
+												? '.zip,.enc,application/zip'
+												: '.zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
+										}
+										onChange={(event) => void readFile(event.target.files?.[0])}
+									/>
 								</section>
-							)}
-							{!everything && (
-								<section
-									className="rounded-lg border border-border px-4 py-3"
-									aria-labelledby="import-link-heading"
-								>
-									<h3 id="import-link-heading" className="text-sm font-medium">
-										From a link
-									</h3>
-									<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-										Paste the address of a {PROJECT.name} shared page. Its
-										columns or sessions come in as they were shared.
-									</p>
-									<form
-										className="mt-2 flex flex-col gap-2 sm:flex-row"
-										onSubmit={(event) => {
-											event.preventDefault();
-											void readLink(link);
-										}}
+								{kind === 'bookmarks' && !everything && (
+									<section
+										className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
+										aria-labelledby="import-browser-heading"
 									>
-										<Label htmlFor="import-link" className="sr-only">
-											Shared page link
-										</Label>
-										<Input
-											id="import-link"
-											type="url"
-											inputMode="url"
-											autoComplete="off"
-											spellCheck={false}
-											placeholder="https://your-server/p/…"
-											value={link}
-											className="min-w-0 flex-1"
-											onChange={(event) => {
-												setLink(event.target.value);
-											}}
-										/>
+										<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-muted/60 text-muted-foreground">
+											<Globe className="h-4 w-4" aria-hidden="true" />
+										</span>
+										<div className="min-w-0 flex-1">
+											<h3
+												id="import-browser-heading"
+												className="text-sm font-medium"
+											>
+												This browser’s bookmarks
+											</h3>
+											<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+												Copies the bookmarks bar and folders. Your browser
+												bookmarks are not changed.
+											</p>
+										</div>
 										<Button
-											type="submit"
+											type="button"
 											variant="secondary"
 											size="sm"
-											className="shrink-0 self-start sm:self-auto"
-											disabled={reading || link.trim() === ''}
+											disabled={reading || !chrome.bookmarks?.getTree}
+											className="shrink-0"
+											onClick={() => void readBrowserBookmarks()}
 										>
-											<Link2 aria-hidden="true" />
-											{reading && link ? 'Reading' : 'Read link'}
+											<Bookmark aria-hidden="true" />
+											Read bookmarks
 										</Button>
-									</form>
-								</section>
-							)}
-							{error && (
-								<p
-									role="alert"
-									className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5 text-foreground"
-								>
-									<CircleAlert
-										className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
-										aria-hidden="true"
-									/>
-									<span className="min-w-0">{error}</span>
-								</p>
-							)}
-						</DialogBody>
+									</section>
+								)}
+								{!everything && (
+									<section
+										className="rounded-lg border border-border px-4 py-3"
+										aria-labelledby="import-link-heading"
+									>
+										<h3
+											id="import-link-heading"
+											className="text-sm font-medium"
+										>
+											From a link
+										</h3>
+										<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+											Paste the address of a {PROJECT.name} shared page. Its
+											columns or sessions come in as they were shared.
+										</p>
+										<form
+											className="mt-2 flex flex-col gap-2 sm:flex-row"
+											onSubmit={(event) => {
+												event.preventDefault();
+												void readLink(link);
+											}}
+										>
+											<Label htmlFor="import-link" className="sr-only">
+												Shared page link
+											</Label>
+											<Input
+												id="import-link"
+												type="url"
+												inputMode="url"
+												autoComplete="off"
+												spellCheck={false}
+												placeholder="https://your-server/p/…"
+												value={link}
+												className="min-w-0 flex-1"
+												onChange={(event) => {
+													setLink(event.target.value);
+												}}
+											/>
+											<Button
+												type="submit"
+												variant="secondary"
+												size="sm"
+												className="shrink-0 self-start sm:self-auto"
+												disabled={reading || link.trim() === ''}
+											>
+												<Link2 aria-hidden="true" />
+												{reading && link ? 'Reading' : 'Read link'}
+											</Button>
+										</form>
+									</section>
+								)}
+								{error && (
+									<p
+										role="alert"
+										className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5 text-foreground"
+									>
+										<CircleAlert
+											className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
+											aria-hidden="true"
+										/>
+										<span className="min-w-0">{error}</span>
+									</p>
+								)}
+							</DialogBody>
+						</ScrollArea>
 						<DialogFooter>
 							<Button
 								type="button"

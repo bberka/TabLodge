@@ -77,6 +77,37 @@ test('a link that cannot be read says why and imports nothing', async () => {
 	);
 });
 
+test('a body is cut off at the import size cap even without Content-Length, and a broken body is an error', async () => {
+	const chunk = new Uint8Array(1024 * 1024).fill(97);
+	let sent = 0;
+	let cancelled = false;
+	const endless = new ReadableStream<Uint8Array>({
+		pull(controller) {
+			sent += 1;
+			controller.enqueue(chunk);
+		},
+		cancel() {
+			cancelled = true;
+		},
+	});
+	await assert.rejects(
+		importFromLink(async () => new Response(endless), PAGE_URL),
+		/larger than 45 MB/,
+	);
+	assert.ok(cancelled);
+	assert.ok(sent < 50, `${sent} chunks read`);
+
+	const broken = new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.error(new TypeError('network'));
+		},
+	});
+	await assert.rejects(
+		importFromLink(async () => new Response(broken), PAGE_URL),
+		/stopped loading before it finished/,
+	);
+});
+
 test('only an address ending in /p/ and a 22 character id looks like a shared page', () => {
 	assert.ok(isSharedPageUrl(PAGE_URL));
 	assert.ok(

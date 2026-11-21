@@ -1499,6 +1499,14 @@ async function handleSharedPagesMessage(
 		return {ok: false, error: 'Nothing to upload.'};
 	}
 
+	// A page that carries its own link must go to the server that link names.
+	if (message.id && message.linkBase !== sharedPageUrl(target.url, '')) {
+		return {
+			ok: false,
+			error: 'The sync server changed while you were sharing. Share again.',
+		};
+	}
+
 	return {
 		ok: true,
 		page: await uploadSharedPage(fetch, target, message.title, message.html, {

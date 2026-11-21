@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useId, useState} from 'react';
+import {useCallback, useEffect, useId, useRef, useState} from 'react';
 import {Copy, ExternalLink, Trash2, X} from 'lucide-react';
 import type {SharedPage} from '../shared/sync/shared-pages-client';
 import type {SharedPagesServer} from '../shared/types';
@@ -41,13 +41,20 @@ export function useSharedPages(open: boolean, list = false): SharedPagesState {
 	const [server, setServer] = useState<SharedPagesServer>();
 	const [pages, setPages] = useState<SharedPage[]>([]);
 	const [linkBase, setLinkBase] = useState<string | null>(null);
+	// Only the latest request's answer is applied, so one started before a delete cannot bring the page back.
+	const latestRef = useRef(0);
 	const reload = useCallback(async () => {
 		if (privateWindow()) {
 			setServer('none');
 			return;
 		}
 
+		const request = ++latestRef.current;
 		const result = await send('GET_SHARED_PAGES', {list});
+		if (request !== latestRef.current) {
+			return;
+		}
+
 		if (result.ok) {
 			setServer(result.server);
 			setPages(result.pages);

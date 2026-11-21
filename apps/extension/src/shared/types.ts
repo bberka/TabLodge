@@ -979,6 +979,10 @@ export type TabLodgeMessages = {
 		title: string;
 		html: string;
 		id?: string;
+		/**
+		The `linkBase` the page's own link was built from; the upload is refused when the sync server changed since.
+		*/
+		linkBase?: string;
 		source?: string;
 	};
 	DELETE_SHARED_PAGE: {id: string};

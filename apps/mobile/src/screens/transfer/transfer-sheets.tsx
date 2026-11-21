@@ -1,13 +1,5 @@
-import {useEffect, useMemo, useState, useSyncExternalStore} from 'react';
+import {useMemo, useState, useSyncExternalStore} from 'react';
 import {Share, StyleSheet, Text, View} from 'react-native';
-import {
-	ImportFormatError,
-	type ImportKind,
-	parseImportFile,
-	type ParsedImport,
-} from '../../../../extension/src/shared/import-formats';
-import {importFromLink} from '../../../../extension/src/shared/import-link';
-import {isSharedPageUrl} from '../../../../extension/src/shared/sync/shared-pages';
 import {
 	buildExport,
 	type ExportData,
@@ -27,20 +19,14 @@ import {notify, showDialog} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
 import {backupPasswordNote} from '../../transfer/backup-password';
 import {useView} from '../../library/view';
-import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
-import {edit, newId, useLibrary} from '../../library/library-store';
-import {showSnack} from '../../ui/snackbar';
+import {useLibrary} from '../../library/library-store';
 import {uploadPage, useSharedPagesServer} from '../../library/shared-pages';
 import {copyLink} from '../../platform/copy-link';
 import {openLink} from '../../platform/open-links';
 import {useColors} from '../../ui/theme';
-import {
-	importIntoStore,
-	previewFor,
-	shareGroupsOf,
-} from '../../transfer/transfer';
-import {Button, Chips, Field, Switch} from '../../ui/widgets';
+import {shareGroupsOf} from '../../transfer/transfer';
+import {Button, Chips, Field} from '../../ui/widgets';
 import {allCopies} from '../../library/page-copies';
 import {
 	SharedPageRows,
@@ -49,7 +35,7 @@ import {
 
 const APP_NAME = 'TabLodge';
 
-function Title({children}: {children: string}) {
+export function Title({children}: {children: string}) {
 	const colors = useColors();
 	return (
 		<Text
@@ -58,291 +44,6 @@ function Title({children}: {children: string}) {
 		>
 			{children}
 		</Text>
-	);
-}
-
-export type ImportSource =
-	| {mode: 'file'; name: string; text: string}
-	| {mode: 'paste'}
-	/**
-	A shared page's address, typed in or handed over by the `tablodge://import?url=` link, read as soon as it is given.
-	*/
-	| {mode: 'link'; url?: string};
-
-type Reading =
-	{ok: true; parsed: ParsedImport} | {ok: false; message: string} | undefined;
-
-function read(text: string, name: string): Reading {
-	if (text.trim() === '') {
-		return undefined;
-	}
-
-	try {
-		return {ok: true, parsed: parseImportFile(text, name)};
-	} catch (error) {
-		return {
-			ok: false,
-			message:
-				error instanceof ImportFormatError
-					? error.message
-					: 'That could not be read as a list of links.',
-		};
-	}
-}
-
-const hasLinks = (groups: ParsedImport['sessions']) =>
-	groups.some((group) => group.links.length > 0);
-
-/**
-What a file or pasted text would add, and the button that adds it. Skips links that are already saved or in the trash, adds nothing
-else, and removes nothing.
-*/
-export function ImportSheet({
-	source,
-	onClose,
-}: {
-	source: ImportSource | undefined;
-	onClose: () => void;
-}) {
-	const colors = useColors();
-	const store = useLibrary();
-	const trash = useTrash(useView());
-	const [pasted, setPasted] = useState('');
-	const [skip, setSkip] = useState(true);
-	const [picked, setPicked] = useState<ImportKind>();
-	const [busy, setBusy] = useState(false);
-	const [link, setLink] = useState('');
-	const [linked, setLinked] = useState<Reading>();
-	const [fetching, setFetching] = useState(false);
-	const text = source?.mode === 'file' ? source.text : pasted;
-	const name = source?.mode === 'file' ? source.name : '';
-	const typed = useMemo(() => read(text, name), [text, name]);
-	const reading = source?.mode === 'link' ? linked : typed;
-	const parsed = reading?.ok ? reading.parsed : undefined;
-	const sessions = parsed ? hasLinks(parsed.sessions) : false;
-	const bookmarks = parsed ? hasLinks(parsed.bookmarks) : false;
-	const kind: ImportKind =
-		picked ?? parsed?.kind ?? (sessions ? 'sessions' : 'bookmarks');
-	const readLink = async (address: string) => {
-		setFetching(true);
-		setLinked(undefined);
-		try {
-			setLinked({ok: true, parsed: await importFromLink(fetch, address)});
-		} catch (error) {
-			setLinked({
-				ok: false,
-				message:
-					error instanceof ImportFormatError
-						? error.message
-						: 'Could not read that link.',
-			});
-		} finally {
-			setFetching(false);
-		}
-	};
-
-	const linkUrl = source?.mode === 'link' ? source.url : undefined;
-	useEffect(() => {
-		setLink(linkUrl ?? '');
-		setLinked(undefined);
-		setPicked(undefined);
-		// Any app can send this link, so only an address shaped like a shared page is fetched without a tap.
-		if (linkUrl && isSharedPageUrl(linkUrl)) {
-			void readLink(linkUrl);
-		}
-	}, [source, linkUrl]);
-	const preview = parsed ? previewFor(store, parsed, kind, trash) : undefined;
-	const addable = preview ? preview.links - (skip ? preview.duplicates : 0) : 0;
-	const run = async () => {
-		if (!parsed) {
-			return;
-		}
-
-		setBusy(true);
-		try {
-			let added = 0;
-			await edit((current) => {
-				const result = importIntoStore(current, parsed, {
-					kind,
-					now: Date.now(),
-					newId,
-					skipDuplicates: skip,
-					trash,
-				});
-				added = result.links;
-				return result.store;
-			});
-			showSnack(
-				added === 0
-					? 'Nothing new to import'
-					: `Imported ${added} ${added === 1 ? 'link' : 'links'}`,
-			);
-			onClose();
-		} catch {
-			notify('Could not import', 'Try again.');
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	return (
-		<BottomSheet
-			visible={source !== undefined}
-			label="Import links"
-			onClose={onClose}
-		>
-			<View style={styles.body}>
-				<Title>
-					{source?.mode === 'file'
-						? 'Import a file'
-						: source?.mode === 'link'
-							? 'Import from a link'
-							: 'Import links'}
-				</Title>
-				{source?.mode === 'link' && (
-					<>
-						<Field
-							autoFocus={!linkUrl}
-							label="Shared page link"
-							value={link}
-							placeholder="https://your-server/p/…"
-							keyboardType="url"
-							autoCapitalize="none"
-							autoCorrect={false}
-							onChangeText={setLink}
-							onSubmitEditing={() => void readLink(link)}
-						/>
-						{!parsed && (
-							<Button
-								label="Read link"
-								icon="link-outline"
-								kind="plain"
-								disabled={link.trim() === ''}
-								loading={fetching}
-								onPress={() => void readLink(link)}
-							/>
-						)}
-					</>
-				)}
-				{source?.mode === 'paste' && (
-					<Field
-						multiline
-						autoFocus
-						label="Links, a list, or an export"
-						value={pasted}
-						placeholder="Paste addresses, Markdown, or what another app exported"
-						autoCapitalize="none"
-						autoCorrect={false}
-						onChangeText={setPasted}
-					/>
-				)}
-				{reading?.ok === false && (
-					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
-						{reading.message}
-					</Text>
-				)}
-				{parsed && sessions && bookmarks && (
-					<Chips
-						items={[
-							{id: 'sessions', name: 'As sessions'},
-							{id: 'bookmarks', name: 'As bookmarks'},
-						]}
-						selected={kind}
-						onSelect={(id) => {
-							setPicked(id as ImportKind);
-						}}
-					/>
-				)}
-				{parsed && preview && (
-					<View style={styles.summary}>
-						<Text style={{color: colors.text, fontWeight: '600'}}>
-							{parsed.label}
-						</Text>
-						<Text style={{color: colors.muted}}>
-							{preview.links} {preview.links === 1 ? 'link' : 'links'} in{' '}
-							{preview.groups}{' '}
-							{kind === 'sessions'
-								? preview.groups === 1
-									? 'session'
-									: 'sessions'
-								: preview.groups === 1
-									? 'column'
-									: 'columns'}
-							{preview.duplicates > 0
-								? `, ${preview.duplicates} already saved or in the trash`
-								: ''}
-							{preview.invalid > 0 ? `, ${preview.invalid} skipped` : ''}
-						</Text>
-						{parsed.warnings.map((warning) => (
-							<Text key={warning} style={{color: colors.warn}}>
-								{warning}
-							</Text>
-						))}
-						{preview.sample.slice(0, 4).map((sample) => (
-							<Text
-								key={`${sample.group}-${sample.url}`}
-								numberOfLines={1}
-								style={{color: colors.muted}}
-							>
-								{sample.title}
-							</Text>
-						))}
-					</View>
-				)}
-				{preview && preview.duplicates > 0 && (
-					<Switch
-						label="Skip links I already have"
-						value={skip}
-						onValueChange={setSkip}
-					/>
-				)}
-				<Button
-					label={
-						addable > 0
-							? `Import ${addable} ${addable === 1 ? 'link' : 'links'}`
-							: 'Import'
-					}
-					icon="download-outline"
-					disabled={addable === 0}
-					loading={busy}
-					onPress={() => void run()}
-				/>
-			</View>
-		</BottomSheet>
-	);
-}
-
-let openSource: ImportSource | undefined;
-const importListeners = new Set<() => void>();
-
-/**
-Opens the import sheet from anywhere, as the `tablodge://import?url=` link does. `ImportHost`, mounted once near the
-root, draws it.
-*/
-export function openImport(source: ImportSource | undefined): void {
-	openSource = source;
-	for (const listener of importListeners) {
-		listener();
-	}
-}
-
-export function ImportHost() {
-	const source = useSyncExternalStore(
-		(listener) => {
-			importListeners.add(listener);
-			return () => {
-				importListeners.delete(listener);
-			};
-		},
-		() => openSource,
-	);
-	return (
-		<ImportSheet
-			source={source}
-			onClose={() => {
-				openImport(undefined);
-			}}
-		/>
 	);
 }
 
@@ -663,5 +364,4 @@ const styles = StyleSheet.create({
 	body: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	title: {fontSize: 20, fontWeight: '700'},
 	subtitle: {fontSize: 16, fontWeight: '600'},
-	summary: {gap: 4},
 });

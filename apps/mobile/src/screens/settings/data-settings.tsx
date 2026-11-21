@@ -17,11 +17,8 @@ import {
 	undoRestore,
 } from '../transfer/restore-sheet';
 import {StatisticsSheet} from '../transfer/statistics-sheet';
-import {
-	ShareSheet,
-	ImportSheet,
-	type ImportSource,
-} from '../transfer/transfer-sheets';
+import {ShareSheet} from '../transfer/transfer-sheets';
+import {ImportSheet, type ImportSource} from '../transfer/import-sheet';
 import {SettingsCard} from './settings-card';
 import {SECTIONS} from './settings-index';
 
