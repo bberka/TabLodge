@@ -185,7 +185,6 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	keepLodgePinned: false,
 	browserBookmarkAction: 'off',
 	browserBookmarkColumn: '',
-	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
@@ -1055,16 +1054,6 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.browserBookmarkAction
 			: 'off',
 		browserBookmarkColumn: cleanText(raw.browserBookmarkColumn, '', 120),
-		copyFormat: isOneOf(
-			['rich', 'title-url', 'url-title', 'url', 'markdown'],
-			raw.copyFormat,
-		)
-			? raw.copyFormat
-			: raw.copyFormat === 'html'
-				? 'rich'
-				: raw.copyFormat === 'plain'
-					? 'title-url'
-					: 'markdown',
 		dashboardBehavior: raw.dashboardBehavior === 'move' ? 'move' : 'switch',
 		removeTrackingParameters: raw.removeTrackingParameters === true,
 		simplifyUrls: raw.simplifyUrls !== false,

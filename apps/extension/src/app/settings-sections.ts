@@ -46,7 +46,8 @@ const sections = (appName: string, firefox: boolean): Section[] => [
 		keywords: [
 			'layout',
 			'view',
-			'quotes',
+			'links',
+			'addresses',
 			'toast',
 			'toast position',
 			'messages',
@@ -56,7 +57,7 @@ const sections = (appName: string, firefox: boolean): Section[] => [
 	},
 	{
 		title: 'When saving',
-		keywords: ['save tabs', 'duplicates', 'tracking parameters', 'close tabs'],
+		keywords: ['save tabs', 'duplicates', 'close tabs'],
 	},
 	{title: 'Right-click menus', keywords: ['context menu']},
 	{title: 'When restoring', keywords: ['restore session', 'open', 'window']},

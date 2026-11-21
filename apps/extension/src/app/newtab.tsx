@@ -3100,6 +3100,7 @@ function NewTab() {
 					bookmarks={bookmarks}
 					columns={columns}
 					showStatus={showStatus}
+					simplifyUrls={settings.simplifyUrls !== false}
 					onOpenChange={setDuplicatesOpen}
 					onChanged={reload}
 				/>

@@ -247,7 +247,10 @@ describe('a backup the extension makes, read by the phone', () => {
 	const extensionParts = () => ({
 		state: {
 			...phoneLibrary(2, 3, 4),
-			settings: {copyFormat: 'url', excludedOrigins: ['skip.example']} as never,
+			settings: {
+				sessionSort: 'oldest',
+				excludedOrigins: ['skip.example'],
+			} as never,
 		},
 		preferences: {uiTheme: 'dark', uiAccent: 'rose'},
 		snapshots: {
@@ -435,7 +438,7 @@ describe('restoring replaces the library, with a safety copy first', () => {
 	test('the backup’s items replace the library’s, its settings stay, and the safety copy brings it all back', async () => {
 		const current = {
 			...phoneLibrary(2, 2, 2),
-			settings: {copyFormat: 'url'} as never,
+			settings: {sessionSort: 'oldest'} as never,
 		};
 		const backup = phoneLibrary(1, 1, 1);
 		await keepSafetyCopy('regular', current, NOW, {look: 'ios'});
