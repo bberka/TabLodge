@@ -46,7 +46,11 @@ function close(): void {
 
 export function showSnack(
 	message: string,
-	action?: {label: string; run: () => void; closed?: () => void},
+	action?: {
+		label: string;
+		run: () => void | Promise<void>;
+		closed?: () => void;
+	},
 ): void {
 	counter += 1;
 	close();

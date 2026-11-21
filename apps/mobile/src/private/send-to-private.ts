@@ -14,7 +14,7 @@ import {
 	withdrawSent,
 } from './private-library';
 
-export const SEND_TO_PRIVATE_LABEL = 'Send to private storage';
+export {SEND_TO_PRIVATE_LABEL} from '../../../extension/src/shared/send-to-private';
 
 export const canSendToPrivate = (
 	view: 'regular' | 'private',
@@ -93,18 +93,16 @@ export async function sendToPrivate(targets: SendTarget[]): Promise<boolean> {
 		`${count} ${count === 1 ? 'link' : 'links'} sent to private storage`,
 		{
 			label: 'Undo',
-			run() {
+			async run() {
 				undone = true;
-				void withdrawSent(id).then(async (withdrawn) => {
-					if (!withdrawn) {
-						showSnack('It is already in the private library');
-						return;
-					}
+				if (!(await withdrawSent(id))) {
+					showSnack('It is already in the private library');
+					return;
+				}
 
-					await editRegular((current) =>
-						putBack(current, before, targets, Date.now()),
-					);
-				});
+				await editRegular((current) =>
+					putBack(current, before, targets, Date.now()),
+				);
 			},
 			closed() {
 				if (!undone) {

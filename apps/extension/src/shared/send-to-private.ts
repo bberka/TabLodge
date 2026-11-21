@@ -1,10 +1,11 @@
-import {bookmarkTags, hiddenKinds} from './bookmark-tags';
+import {tagFields} from './bookmark-tags';
 import {bookmarkNotes, makeId, normalizeUrl} from './library-normalize';
 import {isRecord} from './library-values';
 import type {Bookmark, BookmarkColumn, SavedTab, Store} from './types';
 
 export const SENT_COLUMN_ID = 'sent-from-regular-windows';
 export const SENT_COLUMN_NAME = 'Sent from regular windows';
+export const SEND_TO_PRIVATE_LABEL = 'Send to private storage';
 export const MAX_SENT_LINKS = 500;
 const MAX_TITLE = 500;
 
@@ -137,8 +138,6 @@ export function parseSentLinks(value: unknown): SentLink[] {
 		}
 
 		const notes = bookmarkNotes(raw.notes);
-		const tags = bookmarkTags(raw.tags);
-		const hidden = hiddenKinds(raw.hiddenKinds);
 		const createdAt = Number(raw.createdAt);
 		return [
 			{
@@ -146,8 +145,7 @@ export function parseSentLinks(value: unknown): SentLink[] {
 					typeof raw.title === 'string' ? raw.title.slice(0, MAX_TITLE) : '',
 				url,
 				...(notes && {notes}),
-				...(tags && {tags}),
-				...(hidden && {hiddenKinds: hidden}),
+				...tagFields(raw),
 				createdAt:
 					Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now(),
 			},

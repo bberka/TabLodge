@@ -17,7 +17,11 @@ import {
 
 type Snack = {
 	message: string;
-	action?: {label: string; run: () => void; closed?: () => void};
+	action?: {
+		label: string;
+		run: () => void | Promise<void>;
+		closed?: () => void;
+	};
 };
 const snacks = vi.hoisted(() => [] as Snack[]);
 vi.mock('../src/ui/snackbar', () => ({
@@ -236,12 +240,10 @@ describe('Send to private storage on the phone', () => {
 			false,
 		);
 
-		lastSnack()?.action?.run();
+		const undone = lastSnack()?.action?.run();
 		lastSnack()?.action?.closed?.();
+		await undone;
 		await app.privateLibrary.takeInSent();
-		await new Promise((resolve) => {
-			setTimeout(resolve, 20);
-		});
 		assert.equal(pending(), undefined);
 		assert.deepEqual(
 			app.regular
@@ -266,10 +268,7 @@ describe('Send to private storage on the phone', () => {
 				.getPrivateStore()
 				.bookmarks.some((entry) => entry.url === 'https://tab-one.example/'),
 		);
-		lastSnack()?.action?.run();
-		await new Promise((resolve) => {
-			setTimeout(resolve, 20);
-		});
+		await lastSnack()?.action?.run();
 		assert.equal(lastSnack()?.message, 'It is already in the private library');
 		assert.equal(
 			app.regular

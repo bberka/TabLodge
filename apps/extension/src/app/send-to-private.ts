@@ -7,7 +7,7 @@ import {send} from './message-client';
 import {plural} from './plural';
 import {inPrivateWindow, PRIVATE_CONFIG_KEY} from './private-config';
 
-export const SEND_TO_PRIVATE_LABEL = 'Send to private storage';
+export {SEND_TO_PRIVATE_LABEL} from '../shared/send-to-private';
 
 let sendState: SendToPrivateState = 'hidden';
 const stateListeners = new Set<() => void>();
