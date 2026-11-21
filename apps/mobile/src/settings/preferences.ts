@@ -85,6 +85,9 @@ export function clearLegacySiteIcons(): void {
 	void writeJson(KEY, current);
 }
 
+const withLegacySiteIcons = (prefs: Preferences) =>
+	legacySiteIcons ? {...prefs, siteIcons: 'off'} : prefs;
+
 let onLocalChange: ((change: Partial<Preferences>) => void) | undefined;
 
 /**
@@ -106,7 +109,7 @@ function apply(change: Partial<Preferences>): void {
 		listener();
 	}
 
-	void writeJson(KEY, current);
+	void writeJson(KEY, withLegacySiteIcons(current));
 	void writeJson(CHANGED_AT_KEY, changedAt);
 }
 
