@@ -141,7 +141,6 @@ export type Preferences = {
 	/**
 	Remove tracking parameters (utm_source and the like) from a link when it is saved.
 	*/
-	cleanOnSave: boolean;
 	/**
 	Share the synced preferences through sync, so phones that use one library behave alike. On by default, like the
 	extension's Sync settings.
@@ -264,7 +263,6 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 		'open',
 		oneOf(SESSION_ACTIONS.filter((action) => action !== 'none')),
 	),
-	cleanOnSave: field(true, bool),
 	syncSettings: field(true, bool),
 	syncPrivate: field(true, bool),
 	backgroundSync: field(true, bool),
