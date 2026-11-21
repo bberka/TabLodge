@@ -49,7 +49,6 @@ import type {
 	Session,
 	Settings,
 } from '../shared/types';
-import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {siteName, webUrl} from '../shared/web-url';
 import {archivedFolderId} from '../shared/session-folders';
 import {inPrivateWindow} from './private-config';
@@ -74,6 +73,7 @@ import {BookmarkIcon, Favicon} from './favicon';
 import {
 	canOpenPrivateWindow,
 	openInPrivateWindow,
+	linkDestination,
 	resolveLinkTarget,
 } from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
@@ -112,10 +112,8 @@ async function openSavedLink(
 		throw new Error('This item does not contain a valid web address.');
 	}
 
-	const destination = settings.removeTrackingParameters
-		? stripTrackingParameters(safe)
-		: safe;
-	const action = resolveLinkTarget(kind, settings, {requested});
+	const destination = linkDestination(safe, settings);
+	const action = resolveLinkTarget(kind, settings, {requested, canMenu: false});
 	if (action === 'none') {
 		return;
 	}
@@ -435,7 +433,7 @@ function SidePanel() {
 	async function copy(url: string) {
 		await attempt(async () => {
 			await navigator.clipboard.writeText(
-				settings?.removeTrackingParameters ? stripTrackingParameters(url) : url,
+				settings ? linkDestination(url, settings) : url,
 			);
 			showStatus('Link copied.', false, {toast: true});
 		}, 'Could not copy the link.');
@@ -569,11 +567,7 @@ function SidePanel() {
 			>
 				{(openMenu) => (
 					<a
-						href={
-							settings?.removeTrackingParameters
-								? stripTrackingParameters(url)
-								: url
-						}
+						href={settings ? linkDestination(url, settings) : url}
 						target="_blank"
 						rel="noopener noreferrer"
 						title={`${title}\n${url}`}
