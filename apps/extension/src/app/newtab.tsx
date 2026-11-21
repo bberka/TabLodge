@@ -1047,32 +1047,11 @@ function NewTab() {
 			const removed =
 				bookmarkEdit.tagsTouched && before && removedByEdit(before, tagged);
 			if (before && removed) {
-				// Taking a tag away is done at once, with Undo, as every removal on the board is.
-				showStatus(
+				offerUndo(
 					`Removed ${removed.length === 1 ? `tag ${removed[0]}` : plural(removed.length, 'tag')}.`,
-					false,
-					{
-						action: {
-							label: 'Undo',
-							async onClick() {
-								const undone = await send('UPDATE_BOOKMARK', {
-									bookmarkId: before.id,
-									fields: {
-										tags: before.tags ?? [],
-										hiddenKinds: before.hiddenKinds ?? [],
-									},
-								});
-								if (!undone?.ok) {
-									showStatus(
-										undone?.error || 'Could not undo that edit.',
-										true,
-									);
-								}
-
-								await reload();
-							},
-						},
-					},
+					result.undoId,
+					showStatus,
+					reload,
 				);
 			}
 		} finally {
@@ -1377,26 +1356,25 @@ function NewTab() {
 				targetBookmarkId && position === 'after'
 					? bookmarkIds.toReversed()
 					: bookmarkIds;
-			for (const bookmarkId of ordered) {
-				const result = await send('REORDER_BOOKMARK', {
-					bookmarkId,
-					targetColumnId,
-					targetBookmarkId,
-					position,
-				});
-				if (!result?.ok) {
-					showStatus(
-						result?.error ||
-							'Could not move all bookmarks. Some may have moved.',
-						true,
-					);
-					return false;
-				}
+			const result = await send('REORDER_BOOKMARK', {
+				bookmarkId: ordered[0],
+				bookmarkIds: ordered,
+				targetColumnId,
+				targetBookmarkId,
+				position,
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not move these bookmarks.', true);
+				return false;
 			}
 
-			// The selection was only there to pick what to move.
 			clearBookmarkSelection();
-			showStatus(`Moved ${plural(bookmarkIds.length, 'bookmark')}.`);
+			offerUndo(
+				`Moved ${plural(bookmarkIds.length, 'bookmark')}.`,
+				result.undoId,
+				showStatus,
+				reload,
+			);
 			// The selection bar (and the dialog opened from it) is gone, so keep focus on the page.
 			keepFocusAfterMove();
 			return true;
@@ -1567,8 +1545,11 @@ function NewTab() {
 
 		await reload();
 		const position = siblings.findIndex((entry) => entry.id === target) + 1;
-		showStatus(
+		offerUndo(
 			`Moved “${bookmark.title || siteName(bookmark.url)}” to position ${position} of ${siblings.length}.`,
+			result.undoId,
+			showStatus,
+			reload,
 		);
 		focusAfterMove(
 			`[data-bookmark-id="${CSS.escape(bookmark.id)}"] [data-move-focus]`,
@@ -1601,8 +1582,11 @@ function NewTab() {
 
 		await reload();
 		const position = columns.findIndex((entry) => entry.id === target) + 1;
-		showStatus(
+		offerUndo(
 			`Moved column “${column.name}” to position ${position} of ${columns.length}.`,
+			result.undoId,
+			showStatus,
+			reload,
 		);
 		focusAfterMove(
 			`section[data-column-id="${CSS.escape(column.id)}"] header [data-move-focus]`,

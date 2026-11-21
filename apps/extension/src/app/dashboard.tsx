@@ -131,6 +131,7 @@ import {
 	plural,
 	showSaveFailure,
 } from './common';
+import {claimUndo} from './message-client';
 import {defaultBookmarkColumnId} from './default-column';
 import {ImportDialog, useShareDialog} from './lazy-dialogs';
 import {
@@ -977,27 +978,6 @@ export function SessionManager({
 		}
 
 		setEditingTab(null);
-		if (url !== tab.url) {
-			// Undo puts the link's address, title and notes back; only this one saved link is touched.
-			showStatus('Link updated.', false, {
-				action: {
-					label: 'Undo',
-					async onClick() {
-						const undone = await send('UPDATE_TAB', {
-							groupId: group.id,
-							tabId: tab.id,
-							fields: {url: tab.url, title: tab.title, notes: tab.notes},
-						});
-						if (!undone?.ok) {
-							showStatus(undone?.error || 'Could not undo that edit.', true);
-						}
-
-						await reload();
-					},
-				},
-			});
-		}
-
 		await reload();
 	}
 
@@ -1127,7 +1107,10 @@ export function SessionManager({
 		});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not move this link.', true);
-		} else if (!copy && fromGroupId !== toGroupId && sourceIndex !== -1) {
+		} else if (copy) {
+			offerUndo('Link copied.', result.undoId, showStatus, reload);
+		} else if (fromGroupId !== toGroupId && sourceIndex !== -1) {
+			claimUndo(result.undoId);
 			showStatus(
 				`Moved the link to “${targetName ?? 'another session'}”.`,
 				false,
@@ -1596,29 +1579,6 @@ export function SessionManager({
 		);
 	}
 
-	function offerFolderMoveUndo(
-		message: string,
-		groupId: string,
-		previousFolderId: string,
-	) {
-		showStatus(message, false, {
-			action: {
-				label: 'Undo',
-				async onClick() {
-					const undone = await send('UPDATE_GROUP', {
-						groupId,
-						fields: {folderId: previousFolderId},
-					});
-					if (!undone?.ok) {
-						showStatus(undone?.error || 'Could not undo that move.', true);
-					}
-
-					await reload();
-				},
-			},
-		});
-	}
-
 	async function moveGroupToFolder(
 		opened: Session,
 		targetId: string,
@@ -1633,7 +1593,6 @@ export function SessionManager({
 		const leavesCurrentView =
 			folderId === group.folderId ||
 			(folderId === ALL && targetId === archivedId);
-		const previous = group.folderId;
 		const result = await send('UPDATE_GROUP', {
 			groupId: group.id,
 			fields: {folderId: targetId},
@@ -1645,10 +1604,11 @@ export function SessionManager({
 
 		const name =
 			targetName ?? folders.find((folder) => folder.id === targetId)?.name;
-		offerFolderMoveUndo(
+		offerUndo(
 			`Moved to ${name ?? 'the folder'}.`,
-			group.id,
-			previous,
+			result.undoId,
+			showStatus,
+			reload,
 		);
 		await reload();
 		if (leavesCurrentView) {
@@ -1657,17 +1617,17 @@ export function SessionManager({
 	}
 
 	async function archiveGroup(group: Session) {
-		const previousFolderId = group.folderId;
 		const result = await send('ARCHIVE_GROUP', {groupId: group.id});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not archive this session.', true);
 			return;
 		}
 
-		offerFolderMoveUndo(
+		offerUndo(
 			`Moved “${group.name}” to ${ARCHIVED_FOLDER_NAME}.`,
-			group.id,
-			previousFolderId,
+			result.undoId,
+			showStatus,
+			reload,
 		);
 		await reload();
 		focusAfterMove(

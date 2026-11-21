@@ -16,6 +16,7 @@ import {
 } from '../../library/board-edits';
 import {showSnack} from '../../ui/snackbar';
 import {edit, newId, useLibrary} from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {trashDeleted} from '../../library/trash-store';
 import {useColors} from '../../ui/theme';
 import {Button, Field, IconButton} from '../../ui/widgets';
@@ -113,13 +114,16 @@ function ColumnForm({
 		setProblem('');
 		try {
 			const id = column?.id ?? newId();
-			await edit((current) => {
-				const now = Date.now();
-				const saved = column
-					? updateColumn(current, id, {name, icon, color}, now)
-					: addColumn(current, name, id, now, icon, color);
-				return setColumnSites(saved, id, sites, now);
-			});
+			await editWithUndo(
+				editDone(column ? 'UPDATE_BOOKMARK_COLUMN' : 'CREATE_BOOKMARK_COLUMN'),
+				(current) => {
+					const now = Date.now();
+					const saved = column
+						? updateColumn(current, id, {name, icon, color}, now)
+						: addColumn(current, name, id, now, icon, color);
+					return setColumnSites(saved, id, sites, now);
+				},
+			);
 			onDone(id);
 		} catch {
 			setProblem('Could not save. Try again.');

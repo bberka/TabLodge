@@ -9,6 +9,7 @@ import {
 	send,
 	type ShowStatus,
 } from './common';
+import {claimUndo} from './message-client';
 
 /**
 A date and time in the user's locale, such as "Oct 25, 2026, 2:32 PM".
@@ -151,6 +152,7 @@ export function offerUndo(
 	showStatus: ShowStatus,
 	reload: () => unknown,
 ) {
+	claimUndo(undoId);
 	showStatus(
 		message,
 		false,
