@@ -60,7 +60,7 @@ export function ImportSheet({
 	onClose,
 }: {
 	source: ImportSource | undefined;
-	onClose: () => void;
+	onClose: (finished?: ImportSource) => void;
 }) {
 	const colors = useColors();
 	const store = useLibrary();
@@ -137,8 +137,6 @@ export function ImportSheet({
 	}, [source, linkUrl]);
 	const preview = parsed ? previewFor(store, parsed, kind, trash) : undefined;
 	const addable = preview ? preview.links - (skip ? preview.duplicates : 0) : 0;
-	const sourceRef = useRef(source);
-	sourceRef.current = source;
 	const run = async () => {
 		if (!parsed) {
 			return;
@@ -164,9 +162,7 @@ export function ImportSheet({
 					? 'Nothing new to import'
 					: `Imported ${added} ${added === 1 ? 'link' : 'links'}`,
 			);
-			if (sourceRef.current === opened) {
-				onClose();
-			}
+			onClose(opened);
 		} catch {
 			notify('Could not import', 'Try again.');
 		} finally {
@@ -178,7 +174,9 @@ export function ImportSheet({
 		<BottomSheet
 			visible={source !== undefined}
 			label="Import links"
-			onClose={onClose}
+			onClose={() => {
+				onClose();
+			}}
 		>
 			<View style={styles.body}>
 				<Title>
@@ -332,8 +330,10 @@ export function ImportHost() {
 	return (
 		<ImportSheet
 			source={source}
-			onClose={() => {
-				openImport(undefined);
+			onClose={(finished) => {
+				if (finished === undefined || openSource === finished) {
+					openImport(undefined);
+				}
 			}}
 		/>
 	);

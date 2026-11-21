@@ -482,7 +482,14 @@ function Main() {
 			<ImportSheet
 				key={`import-${fileKey}`}
 				source={sharedFile?.kind === 'import' ? sharedFile.source : undefined}
-				onClose={closeSharedFile}
+				onClose={(finished) => {
+					setSharedFile((current) =>
+						finished === undefined ||
+						(current?.kind === 'import' && current.source === finished)
+							? undefined
+							: current,
+					);
+				}}
 			/>
 			<RestoreSheet
 				key={`backup-${fileKey}`}

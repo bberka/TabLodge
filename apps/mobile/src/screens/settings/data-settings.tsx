@@ -263,8 +263,12 @@ export function DataCard() {
 			/>
 			<ImportSheet
 				source={source}
-				onClose={() => {
-					setSource(undefined);
+				onClose={(finished) => {
+					setSource((current) =>
+						finished === undefined || current === finished
+							? undefined
+							: current,
+					);
 				}}
 			/>
 			<ShareSheet
