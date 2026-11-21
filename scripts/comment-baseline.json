@@ -170,7 +170,7 @@
 	"apps/extension/src/shared/global-search.ts": 28,
 	"apps/extension/src/shared/icon-ids.ts": 3,
 	"apps/extension/src/shared/icon-meta.ts": 2,
-	"apps/extension/src/shared/import-formats.ts": 101,
+	"apps/extension/src/shared/import-formats.ts": 100,
 	"apps/extension/src/shared/library-index.ts": 10,
 	"apps/extension/src/shared/library-normalize.ts": 41,
 	"apps/extension/src/shared/library-state.ts": 33,
