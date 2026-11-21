@@ -220,9 +220,16 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	items.push(
-		...cachedBookmarkItems(sources.bookmarks, sources.columns, columnName),
-	);
+	// Not `push(...list)`: the list can hold tens of thousands of items, and spreading that many arguments throws a
+	// RangeError (Hermes on the phone, V8 in the extension).
+	for (const item of cachedBookmarkItems(
+		sources.bookmarks,
+		sources.columns,
+		columnName,
+	)) {
+		items.push(item);
+	}
+
 	for (const column of sources.columns) {
 		items.push(
 			prepared({
@@ -249,7 +256,9 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	items.push(...cachedSessionItems(sources.groups, sources.folders));
+	for (const item of cachedSessionItems(sources.groups, sources.folders)) {
+		items.push(item);
+	}
 
 	return items;
 }

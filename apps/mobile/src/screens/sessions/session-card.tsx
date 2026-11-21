@@ -1,8 +1,13 @@
-import {memo} from 'react';
+import {memo, useState} from 'react';
 import {useColorScheme, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {Session} from '../../../../extension/src/shared/types';
 import {columnTint} from '../../ui/column-icons';
 import {hostOf} from '../../library/store-shape';
+import {
+	nextTabWindow,
+	TAB_WINDOW,
+	visibleTabCount,
+} from '../../library/tab-window';
 import {linkActionLook, sessionActionLook} from '../../library/row-actions';
 import {SwipeRow} from '../../ui/swipe-row';
 import {
@@ -120,6 +125,9 @@ function SessionCardView({
 	onMenu: (session: Session) => void;
 }) {
 	const colors = useColors();
+	// How many links an expanded card draws; a long session gets a button for the rest.
+	const [asked, setAsked] = useState(TAB_WINDOW);
+	const drawn = visibleTabCount(asked, session.tabs.length);
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	const tint = columnTint(session.color, scheme) ?? folderTint;
 	const links = useLinkSettings();
@@ -268,7 +276,7 @@ function SessionCardView({
 					</View>
 					{expanded && !selecting && (
 						<View style={[styles.tabs, {borderColor: colors.border}]}>
-							{session.tabs.map((tab) => {
+							{session.tabs.slice(0, drawn).map((tab) => {
 								const text = rowText(
 									{title: tab.title || tab.url, url: tab.url},
 									links,
@@ -366,6 +374,15 @@ function SessionCardView({
 									</SwipeRow>
 								);
 							})}
+							{drawn < session.tabs.length && (
+								<Button
+									kind="plain"
+									label={`Show ${Math.min(TAB_WINDOW, session.tabs.length - drawn)} more of ${session.tabs.length - drawn} links`}
+									onPress={() => {
+										setAsked(nextTabWindow(drawn));
+									}}
+								/>
+							)}
 							<View style={styles.footer}>
 								<View style={styles.footerButton}>
 									<Button

@@ -52,6 +52,28 @@ export function columnViews(store: Store): ColumnView[] {
 	return views;
 }
 
+/**
+Every bookmark under its column's id, in the library's order; a bookmark whose column does not exist goes under the
+Unfiled id. One pass over the bookmarks, for what shows many columns at once.
+*/
+export function bookmarksByColumn(store: Store): Map<string, Bookmark[]> {
+	const known = new Set(store.bookmarkColumns.map((column) => column.id));
+	const groups = new Map<string, Bookmark[]>();
+	for (const bookmark of store.bookmarks) {
+		const id = known.has(bookmark.columnId)
+			? bookmark.columnId
+			: BOOKMARK_UNFILED_ID;
+		const list = groups.get(id);
+		if (list) {
+			list.push(bookmark);
+		} else {
+			groups.set(id, [bookmark]);
+		}
+	}
+
+	return groups;
+}
+
 export function bookmarksIn(store: Store, columnId: string): Bookmark[] {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
 	return store.bookmarks.filter((bookmark) =>
@@ -70,7 +92,28 @@ export const ALL_BOOKMARKS_ID = 'all-bookmarks';
 Every bookmark, column by column in the columns' order and the Unfiled bucket last, each column in its own order.
 */
 export function allBookmarks(store: Store): Bookmark[] {
-	return columnViews(store).flatMap((column) => bookmarksIn(store, column.id));
+	const groups = bookmarksByColumn(store);
+	return columnViews(store).flatMap((column) => groups.get(column.id) ?? []);
+}
+
+/*
+The lowercased text a search looks through, made once per bookmark object. A search runs on every key, and an edit
+makes new objects only for what it changed, so the rest of a large library is not lowercased again.
+*/
+const searchText = new WeakMap<Bookmark, {tags: string; text: string}>();
+
+function searchableText(bookmark: Bookmark) {
+	let found = searchText.get(bookmark);
+	if (!found) {
+		const tags = shownTags(bookmark).join(' ');
+		found = {
+			tags,
+			text: `${bookmark.title} ${bookmark.url} ${bookmark.notes ?? ''} ${tags}`.toLowerCase(),
+		};
+		searchText.set(bookmark, found);
+	}
+
+	return found;
 }
 
 export function searchBookmarks(store: Store, query: string): Bookmark[] {
@@ -81,9 +124,7 @@ export function searchBookmarks(store: Store, query: string): Bookmark[] {
 		store.bookmarkColumns.map((column) => [column.id, column.name]),
 	);
 	return store.bookmarks.filter((bookmark) => {
-		const tags = shownTags(bookmark).join(' ');
-		const text =
-			`${bookmark.title} ${bookmark.url} ${bookmark.notes ?? ''} ${tags}`.toLowerCase();
+		const {tags, text} = searchableText(bookmark);
 		return (
 			words.every((word) => text.includes(word)) &&
 			(!filtering ||

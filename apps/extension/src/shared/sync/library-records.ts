@@ -210,6 +210,54 @@ One site's Sources choices as they sync: present while the site is on, with a va
 */
 export type SyncedSource = {id: string; value: Record<string, unknown>};
 
+/*
+The records of one session or bookmark, kept for as long as that object lives. A phone edits its library by making new
+objects, so what an edit did not touch gives the same record objects on every read, and their hashes are known (see
+`hashOf` in engine.ts). Nothing may change a library object in place.
+*/
+const sessionCache = new WeakMap<Session, LibraryRecord[]>();
+const bookmarkCache = new WeakMap<Bookmark, LibraryRecord[]>();
+
+function sessionRecords(session: Session): LibraryRecord[] {
+	let records = sessionCache.get(session);
+	if (!records) {
+		const {tabs, sourceWindowId, windowBounds, lastOpenedAt, ...value} =
+			session;
+		records = [
+			{kind: 'session', id: session.id, value},
+			...tabs.map((tab): LibraryRecord => ({
+				kind: 'tab',
+				id: tab.id,
+				parentId: session.id,
+				value: tab,
+			})),
+		];
+		sessionCache.set(session, records);
+	}
+
+	return records;
+}
+
+function bookmarkRecords(source: Bookmark): LibraryRecord[] {
+	let records = bookmarkCache.get(source);
+	if (!records) {
+		const {notes, tags, hiddenKinds, ...bookmark} = source;
+		records = [{kind: 'bookmark', id: bookmark.id, value: bookmark}];
+		if (notes) {
+			records.push({kind: 'note', id: bookmark.id, value: {notes}});
+		}
+
+		const tagged = tagFields({tags, hiddenKinds});
+		if (tagged.tags || tagged.hiddenKinds) {
+			records.push({kind: 'tag', id: bookmark.id, value: tagged});
+		}
+
+		bookmarkCache.set(source, records);
+	}
+
+	return records;
+}
+
 /**
 The library's records in display order, keyed by `recordKey`, the trash entries small enough to send, the Sources
 choices, and the settings the host keeps outside the library.
@@ -227,12 +275,8 @@ export function splitLibrary(
 	}
 
 	for (const session of store.groups) {
-		const {tabs, sourceWindowId, windowBounds, lastOpenedAt, ...value} =
-			session;
-
-		add({kind: 'session', id: session.id, value});
-		for (const tab of tabs) {
-			add({kind: 'tab', id: tab.id, parentId: session.id, value: tab});
+		for (const record of sessionRecords(session)) {
+			add(record);
 		}
 	}
 
@@ -240,15 +284,9 @@ export function splitLibrary(
 		add({kind: 'column', id: column.id, value: column});
 	}
 
-	for (const {notes, tags, hiddenKinds, ...bookmark} of store.bookmarks) {
-		add({kind: 'bookmark', id: bookmark.id, value: bookmark});
-		if (notes) {
-			add({kind: 'note', id: bookmark.id, value: {notes}});
-		}
-
-		const tagged = tagFields({tags, hiddenKinds});
-		if (tagged.tags || tagged.hiddenKinds) {
-			add({kind: 'tag', id: bookmark.id, value: tagged});
+	for (const bookmark of store.bookmarks) {
+		for (const record of bookmarkRecords(bookmark)) {
+			add(record);
 		}
 	}
 

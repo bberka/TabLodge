@@ -84,7 +84,25 @@ export const newSyncState = (device: string): SyncState => ({
 	outbox: [],
 });
 
-const hashOf = (value: unknown) => hashText(canonicalJson(value));
+/*
+A record's hash is worked out once per value object. A round reads the whole library several times, and on a phone
+the library's own objects do not change between reads (an edit makes new ones), so the unchanged records, nearly all
+of them, are not hashed again. A new object, as a read from storage makes, is hashed as before.
+*/
+const hashes = new WeakMap<object, string>();
+const hashOf = (value: unknown) => {
+	if (typeof value !== 'object' || value === null) {
+		return hashText(canonicalJson(value));
+	}
+
+	let hash = hashes.get(value);
+	if (hash === undefined) {
+		hash = hashText(canonicalJson(value));
+		hashes.set(value, hash);
+	}
+
+	return hash;
+};
 
 const without = (shadow: SyncState['shadow'], keys: ReadonlySet<string>) =>
 	keys.size === 0
@@ -160,8 +178,15 @@ function orderKeys(
 	const groups = new Map<string, string[]>();
 	for (const [key, record] of records) {
 		const group = orderGroup(record.kind, record.parentId);
-		if (group !== undefined) {
-			groups.set(group, [...(groups.get(group) ?? []), key]);
+		if (group === undefined) {
+			continue;
+		}
+
+		const list = groups.get(group);
+		if (list) {
+			list.push(key);
+		} else {
+			groups.set(group, [key]);
 		}
 	}
 
@@ -195,6 +220,7 @@ export function capture(
 		return next.h;
 	};
 
+	let changed = false;
 	const order = orderKeys(records, shadow);
 	for (const [key, record] of records) {
 		const hash = hashOf(record.value);
@@ -204,6 +230,7 @@ export function capture(
 			continue;
 		}
 
+		changed = true;
 		shadow[key] = {
 			kind: record.kind,
 			id: record.id,
@@ -224,6 +251,7 @@ export function capture(
 		}
 
 		if (!entry.deleted) {
+			changed = true;
 			shadow[key] = {
 				kind: entry.kind,
 				id: entry.id,
@@ -237,6 +265,11 @@ export function capture(
 		} else if (entry.h < forgetBefore && !outbox.has(key)) {
 			forgotten.add(key);
 		}
+	}
+
+	// Nothing stamped, deleted, or forgotten: the same state, so a caller can tell that there is nothing to save.
+	if (!changed && forgotten.size === 0) {
+		return state;
 	}
 
 	return {
@@ -317,6 +350,17 @@ export function receive(
 	page: {changes: readonly SyncChange[]; cursor: number; purged: number},
 	now: number,
 ): {state: SyncState; records: Records; changed: boolean} {
+	// An empty page that moves nothing: the same state, so the caller can tell that there is nothing to save.
+	if (
+		page.changes.length === 0 &&
+		page.cursor === state.cursor &&
+		page.purged === state.purged &&
+		!state.unseen &&
+		!state.held?.length
+	) {
+		return {state, records, changed: false};
+	}
+
 	const shadow = {...state.shadow};
 	const next = new Map(records);
 	const outbox = new Set(state.outbox);
