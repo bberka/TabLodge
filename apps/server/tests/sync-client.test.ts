@@ -1318,7 +1318,15 @@ test('a server without some features keeps syncing and lists what stays on the d
 	// This test server keeps no shared pages either.
 	assert.deepEqual(
 		compat.missing.map(({name}) => name),
-		['notes', 'tags', 'sources', 'settings', 'trash', 'shared-pages'],
+		[
+			'notes',
+			'tags',
+			'sources',
+			'settings',
+			'trash',
+			'shared-pages',
+			'shared-page-import',
+		],
 	);
 	assert.equal(problemBanner(compat)?.stopped, false);
 

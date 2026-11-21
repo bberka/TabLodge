@@ -989,9 +989,16 @@ export type TabLodgeMessages = {
 	*/
 	GET_SHARED_PAGES: {list?: boolean};
 	/**
-	Uploads a page made by `shareHtmlPage` to the sync server and answers with its public link.
+	Uploads a page made by `shareHtmlPage` to the sync server and answers with its public link. `id` and `source` go
+	only to a server that keeps them (GET_SHARED_PAGES gave a `linkBase`).
 	*/
-	UPLOAD_SHARED_PAGE: {title: string; html: string};
+	UPLOAD_SHARED_PAGE: {
+		title: string;
+		html: string;
+		id?: string;
+		linkBase?: string;
+		source?: string;
+	};
 	DELETE_SHARED_PAGE: {id: string};
 	GET_SITE_SOURCES: {};
 	/**
@@ -1423,7 +1430,11 @@ export type TabLodgeResponses = {
 	PRIVATE_SYNC_DISABLE: {privateSync: PrivateSyncInfo};
 	PRIVATE_SYNC_NOW: {privateSync: PrivateSyncInfo};
 	OPEN_PRIVATE_SYNC: {};
-	GET_SHARED_PAGES: {server: SharedPagesServer; pages: SharedPage[]};
+	GET_SHARED_PAGES: {
+		server: SharedPagesServer;
+		pages: SharedPage[];
+		linkBase: string | null;
+	};
 	UPLOAD_SHARED_PAGE: {page: SharedPage};
 	DELETE_SHARED_PAGE: {};
 	GET_SITE_SOURCES: {sources: SiteSourceStatus[]};

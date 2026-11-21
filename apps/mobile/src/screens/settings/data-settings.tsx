@@ -17,11 +17,8 @@ import {
 	undoRestore,
 } from '../transfer/restore-sheet';
 import {StatisticsSheet} from '../transfer/statistics-sheet';
-import {
-	ShareSheet,
-	ImportSheet,
-	type ImportSource,
-} from '../transfer/transfer-sheets';
+import {ShareSheet} from '../transfer/transfer-sheets';
+import {ImportSheet, type ImportSource} from '../transfer/import-sheet';
 import {SettingsCard} from './settings-card';
 import {SECTIONS} from './settings-index';
 
@@ -146,6 +143,14 @@ export function DataCard() {
 						},
 					},
 					{
+						icon: 'link-outline',
+						label: 'Import from a link',
+						hint: 'A TabLodge shared page',
+						onPress() {
+							setSource({mode: 'link'});
+						},
+					},
+					{
 						icon: 'globe-outline',
 						label: 'From another browser',
 						hint: 'Open tabs and bookmarks',
@@ -258,8 +263,12 @@ export function DataCard() {
 			/>
 			<ImportSheet
 				source={source}
-				onClose={() => {
-					setSource(undefined);
+				onClose={(finished) => {
+					setSource((current) =>
+						finished === undefined || current === finished
+							? undefined
+							: current,
+					);
 				}}
 			/>
 			<ShareSheet

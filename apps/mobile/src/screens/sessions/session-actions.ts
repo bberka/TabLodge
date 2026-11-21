@@ -24,6 +24,7 @@ import {
 	SEND_TO_PRIVATE_LABEL,
 	sendToPrivate,
 } from '../../private/send-to-private';
+import {sharedPageSource} from '../../../../extension/src/shared/sync/shared-pages-client';
 import {type BookmarkLinks} from './session-link-sheets';
 
 /**
@@ -90,6 +91,7 @@ export function runSessionAction(
 		case 'share': {
 			openShare({
 				title: session.name,
+				source: sharedPageSource('session', session.id),
 				data: {kind: 'sessions', groups: [session], folders},
 			});
 			break;

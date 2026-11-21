@@ -11885,6 +11885,46 @@ function privateValues(log: ChangeLog): unknown[] {
 		: page.changes.flatMap((change) => (change.deleted ? [] : [change.value]));
 }
 
+test('a page with its own link goes only to the server that link names', async () => {
+	const sql = sqlite(':memory:');
+	const pages = new SqlPageStore(sql);
+	const log = new SqlChangeLog(sql);
+	const app = createApi({
+		token: SYNC_TOKEN,
+		log: () => log,
+		pages: () => pages,
+	});
+	const regular = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: async (url: string, init: RequestInit) => app.request(url, init),
+		storage: regularSync,
+	});
+	const ready = await regular.sendMessage({type: 'GET_SHARED_PAGES'});
+	assert.equal(ready.linkBase, `${SYNC_URL}/p/`);
+
+	const moved = await regular.sendMessage({
+		type: 'UPLOAD_SHARED_PAGE',
+		title: 'Reading',
+		html: '<p>Reading</p>',
+		id: 'AAAAAAAAAAAAAAAAAAAAAA',
+		linkBase: 'https://old-server.example.test/p/',
+	});
+	assert.equal(moved.ok, false);
+	assert.match(String(moved.error), /sync server changed/);
+	assert.deepEqual(pages.list(), []);
+
+	const kept = await regular.sendMessage({
+		type: 'UPLOAD_SHARED_PAGE',
+		title: 'Reading',
+		html: '<p>Reading</p>',
+		id: 'AAAAAAAAAAAAAAAAAAAAAA',
+		linkBase: ready.linkBase,
+		source: 'column:c1',
+	});
+	assert.equal(kept.ok, true, kept.error);
+	assert.equal(kept.page?.url, `${SYNC_URL}/p/AAAAAAAAAAAAAAAAAAAAAA`);
+	assert.equal(kept.page?.source, 'column:c1');
+});
+
 test('a regular window uploads, lists, and deletes shared pages; a private window cannot', async () => {
 	const sql = sqlite(':memory:');
 	const pages = new SqlPageStore(sql);

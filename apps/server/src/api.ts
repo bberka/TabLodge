@@ -18,8 +18,11 @@ import {
 	type SyncChange,
 } from '../../extension/src/shared/sync/changes';
 import {
+	MAX_SHARED_PAGE_SOURCE,
 	MAX_SHARED_PAGE_TITLE,
+	newSharedPageId,
 	SHARED_PAGE_ID,
+	SHARED_PAGE_IMPORT_FEATURE,
 	SHARED_PAGE_PREFIX,
 	SHARED_PAGES_FEATURE,
 } from '../../extension/src/shared/sync/shared-pages';
@@ -93,7 +96,7 @@ const MAX_KEY_CHARS = 4096;
 /**
 Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
 second library at /private for private windows; `key` is /v1/key; `shared-pages` is /v1/pages and /p/<id>, on the
-main library only; `page-source` is /v1/page-source, which hands a device a whole page so it can keep a readable copy.
+main library only, and `shared-page-import` says a page keeps the id and source its device sent; `page-source` is /v1/page-source, which hands a device a whole page so it can keep a readable copy.
 */
 const FEATURES = [
 	'private',
@@ -139,18 +142,6 @@ export type ApiOptions = {
 };
 
 const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
-
-const ID_ALPHABET =
-	'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-
-/**
-22 characters with 6 random bits each.
-*/
-const newPageId = () =>
-	Array.from(
-		crypto.getRandomValues(new Uint8Array(22)),
-		(byte) => ID_ALPHABET[byte % 64],
-	).join('');
 
 const problem = (error: string, detail?: Record<string, unknown>) => ({
 	error,
@@ -326,7 +317,9 @@ export function createApi(options: ApiOptions) {
 			cursor: log.cursor,
 			records: log.size,
 			limits,
-			features: options.pages ? [...FEATURES, SHARED_PAGES_FEATURE] : FEATURES,
+			features: options.pages
+				? [...FEATURES, SHARED_PAGES_FEATURE, SHARED_PAGE_IMPORT_FEATURE]
+				: FEATURES,
 		});
 	});
 
@@ -454,6 +447,7 @@ export function createApi(options: ApiOptions) {
 			title: string;
 			size: number;
 			createdAt: number;
+			source: string;
 		}) => ({...page, path: `${SHARED_PAGE_PREFIX}${page.id}`});
 
 		app.get('/v1/pages', (c) =>
@@ -483,12 +477,22 @@ export function createApi(options: ApiOptions) {
 					return c.json(problem('bad_json'), 400);
 				}
 
-				const {title, html} = (body ?? {}) as {title?: unknown; html?: unknown};
+				const {title, html, id, source} = (body ?? {}) as {
+					title?: unknown;
+					html?: unknown;
+					id?: unknown;
+					source?: unknown;
+				};
 				if (
 					typeof title !== 'string' ||
 					title.length > MAX_SHARED_PAGE_TITLE ||
 					typeof html !== 'string' ||
-					html === ''
+					html === '' ||
+					(id !== undefined &&
+						(typeof id !== 'string' || !SHARED_PAGE_ID.test(id))) ||
+					(source !== undefined &&
+						(typeof source !== 'string' ||
+							source.length > MAX_SHARED_PAGE_SOURCE))
 				) {
 					return c.json(problem('bad_page'), 400);
 				}
@@ -501,12 +505,22 @@ export function createApi(options: ApiOptions) {
 					);
 				}
 
-				const page = {id: newPageId(), title, size, createdAt: now()};
+				const page = {
+					id: typeof id === 'string' ? id : newSharedPageId(),
+					title,
+					size,
+					createdAt: now(),
+					source: typeof source === 'string' ? source : '',
+				};
 				const added = pages().add(
 					{...page, html},
 					{maxPages: limits.maxPages, maxBytes: limits.maxPageStorageBytes},
 				);
-				return added
+				if (added === 'taken') {
+					return c.json(problem('page_exists'), 409);
+				}
+
+				return added === 'added'
 					? c.json(pageRecord(page), 201)
 					: c.json(
 							problem('pages_full', {

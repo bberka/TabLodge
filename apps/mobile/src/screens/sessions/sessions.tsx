@@ -49,6 +49,7 @@ import {copyActions, withCopyActions} from '../copy/copy-actions';
 import {useCopyUrls} from '../../library/page-copies';
 import {canSendToPrivate} from '../../private/send-to-private';
 import {usePrivateState} from '../../private/private-library';
+import {useSharedPagesAction} from '../settings/shared-pages-settings';
 import {FolderEditSheet} from './folder-sheet';
 import {FolderChips, folderMenuFor, useFolderLook} from './folder-chips';
 import {
@@ -91,6 +92,7 @@ export function SessionsScreen({
 	const insets = useSafeAreaInsets();
 	const space = useRoomBelow(useBarSpace());
 	const store = useLibrary();
+	const sharedPagesAction = useSharedPagesAction();
 	const links = useLinkSettings();
 	const view = useView();
 	const privateState = usePrivateState();
@@ -202,6 +204,7 @@ export function SessionsScreen({
 				setEditingFolder({});
 			},
 		},
+		...sharedPagesAction,
 	];
 	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
 	const look = useFolderLook();

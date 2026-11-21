@@ -37,3 +37,21 @@ export function parseColumnRoute(
 		return undefined;
 	}
 }
+
+export function parseImportRoute(
+	url: string | null | undefined,
+): string | undefined {
+	const match = /^tablodge:\/\/import\/?\?(?:[^#]*&)?url=([^#&]*)/i.exec(
+		url?.trim() ?? '',
+	);
+	if (!match) {
+		return undefined;
+	}
+
+	try {
+		const page = decodeURIComponent(match[1].replaceAll('+', ' '));
+		return /^https?:\/\/\S+$/i.test(page) ? page : undefined;
+	} catch {
+		return undefined;
+	}
+}

@@ -85,6 +85,95 @@ export async function importScopeCheck(env: Env, theme: Theme) {
 	);
 }
 
+const LINK_A = 'https://shared.test/p/AAAAAAAAAAAAAAAAAAAAAA';
+const LINK_B = 'https://shared.test/p/BBBBBBBBBBBBBBBBBBBBBB';
+const SHARED_PAGE = `<!doctype html><title>Trip</title><script type="application/json" id="tablodge-shared-page">${JSON.stringify(
+	{
+		format: 'tablodge-shared-page',
+		version: 1,
+		kind: 'bookmarks',
+		title: 'Trip',
+		groups: [
+			{name: 'Trip', links: [{title: 'Map', url: 'https://maps.test/'}]},
+		],
+	},
+)}</script>`;
+
+async function nextFrames(page: Page) {
+	await page.evaluate(async () => {
+		const {requestAnimationFrame} = globalThis as typeof globalThis & {
+			requestAnimationFrame(callback: () => void): number;
+		};
+		await new Promise<void>((resolve) => {
+			requestAnimationFrame(() => {
+				requestAnimationFrame(resolve);
+			});
+		});
+	});
+}
+
+export async function importLinkEditCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(
+		`editing the link cancels a pending link read (${theme})`,
+		async () => {
+			const held: Array<{release: () => void; answered: Promise<void>}> = [];
+			await context.route('https://shared.test/**', async (route) => {
+				const {promise: waiting, resolve: release} =
+					Promise.withResolvers<void>();
+				const answered = waiting.then(async () =>
+					route
+						.fulfill({
+							status: 200,
+							contentType: 'text/html',
+							headers: {'Access-Control-Allow-Origin': '*'},
+							body: SHARED_PAGE,
+						})
+						.catch(() => undefined),
+				);
+				held.push({release, answered});
+				await answered;
+			});
+			try {
+				const page = await openPage(context, extensionId, 'options');
+				await setTheme(page, theme);
+				await page.getByRole('button', {name: 'Import', exact: true}).click();
+				const dialog = page.getByRole('dialog');
+				await pickImportKind(page, 'Bookmarks');
+				const field = dialog.getByLabel('Shared page link');
+				const read = dialog.getByRole('button', {name: /Read link|Reading/});
+				const review = dialog.getByRole('heading', {name: /^Review/});
+
+				await field.fill(LINK_A);
+				await read.click();
+				await until(async () => held.length === 1, 'the read of A started');
+				await field.fill(LINK_B);
+				held[0].release();
+				await held[0].answered;
+				await nextFrames(page);
+				assert.equal(
+					await review.count(),
+					0,
+					'A answered after the edit and opened its review',
+				);
+				assert.equal(await field.inputValue(), LINK_B);
+
+				await field.fill(LINK_A);
+				await read.click();
+				await until(
+					async () => held.length === 2,
+					'the second read of A started',
+				);
+				held[1].release();
+				await review.waitFor({timeout: 5000});
+				await page.close();
+			} finally {
+				await context.unroute('https://shared.test/**');
+			}
+		},
+	);
+}
+
 export async function protectedBackupCheck(env: Env, theme: Theme) {
 	const {context, extensionId, axeSource} = env;
 	await check(

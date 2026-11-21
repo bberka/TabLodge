@@ -223,6 +223,7 @@ import {
 	deleteSharedPage,
 	listSharedPages,
 	sharedPagesSupport,
+	sharedPageUrl,
 	uploadSharedPage,
 } from '../src/shared/sync/shared-pages-client';
 import {
@@ -1435,12 +1436,16 @@ async function handleSharedPagesMessage(
 ): Promise<ActionResult> {
 	const target = privateContext ? undefined : await regularSyncConfig();
 	if (message.type === 'GET_SHARED_PAGES') {
-		const server = target ? await sharedPagesSupport(fetch, target) : 'none';
+		const support = target
+			? await sharedPagesSupport(fetch, target)
+			: {server: 'none' as const, keepsIds: false};
 		return {
 			ok: true,
-			server,
+			server: support.server,
+			linkBase:
+				target && support.keepsIds ? sharedPageUrl(target.url, '') : null,
 			pages:
-				target && server === 'ready' && message.list
+				target && support.server === 'ready' && message.list
 					? await listSharedPages(fetch, target)
 					: [],
 		};
@@ -1464,9 +1469,19 @@ async function handleSharedPagesMessage(
 		return {ok: false, error: 'Nothing to upload.'};
 	}
 
+	if (message.id && message.linkBase !== sharedPageUrl(target.url, '')) {
+		return {
+			ok: false,
+			error: 'The sync server changed while you were sharing. Share again.',
+		};
+	}
+
 	return {
 		ok: true,
-		page: await uploadSharedPage(fetch, target, message.title, message.html),
+		page: await uploadSharedPage(fetch, target, message.title, message.html, {
+			id: typeof message.id === 'string' ? message.id : undefined,
+			source: typeof message.source === 'string' ? message.source : undefined,
+		}),
 	};
 }
 

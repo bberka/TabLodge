@@ -25,6 +25,7 @@ import {
 	AppWindow,
 	CopyMinus,
 	FileDown,
+	Download,
 	X,
 } from 'lucide-react';
 import {
@@ -59,6 +60,7 @@ import {ThemeProvider} from '../shared/theme';
 import type {ActionResult, SaveScope, Session} from '../shared/types';
 import {columnForUrl} from '../shared/column-sites';
 import {webUrl} from '../shared/web-url';
+import {isSharedPageUrl} from '../shared/sync/shared-pages';
 import {archivedFolderId} from '../shared/session-folders';
 import {defaultTargetSession} from '../shared/save-rules';
 import {PrivateWindowMark} from './private-window-appearance';
@@ -146,6 +148,7 @@ function Popup() {
 	const [windowId, setWindowId] = useState<number | undefined>();
 	// False on pages that cannot be saved (new tab, browser pages); stays true until the active tab is read.
 	const [pageSavable, setPageSavable] = useState(true);
+	const [sharedPageUrl, setSharedPageUrl] = useState<string>();
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(
 		state?.settings,
 	);
@@ -321,6 +324,10 @@ function Popup() {
 					lastFocusedWindow: true,
 				});
 				const url = webUrl(tab?.url);
+				if (active && url && isSharedPageUrl(url)) {
+					setSharedPageUrl(url);
+				}
+
 				const result = url
 					? await send('GET_BOOKMARK_PROMPT', {url})
 					: undefined;
@@ -747,6 +754,33 @@ function Popup() {
 				</div>
 			</header>
 			<ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
+				{sharedPageUrl && (
+					<section
+						aria-labelledby="popup-shared-page"
+						className="mb-4 rounded-lg border border-primary/30 bg-primary/6 p-3"
+					>
+						<h2 id="popup-shared-page" className="text-sm font-medium">
+							A shared page of links
+						</h2>
+						<p className="mt-0.5 text-xs text-muted-foreground">
+							Review its columns or sessions, then add them to {PROJECT.name}.
+						</p>
+						<Button
+							size="sm"
+							className="mt-2"
+							onClick={() =>
+								void openPage(
+									chrome.runtime.getURL(
+										`newtab.html?importLink=${encodeURIComponent(sharedPageUrl)}`,
+									),
+								)
+							}
+						>
+							<Download aria-hidden="true" />
+							Add this shared page
+						</Button>
+					</section>
+				)}
 				{stats.length > 0 && (
 					<dl
 						className={cn(

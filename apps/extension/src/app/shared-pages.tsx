@@ -1,35 +1,67 @@
-import {useEffect, useId, useState} from 'react';
-import {Copy, ExternalLink, Trash2} from 'lucide-react';
+import {useCallback, useEffect, useId, useRef, useState} from 'react';
+import {Copy, ExternalLink, Trash2, X} from 'lucide-react';
 import type {SharedPage} from '../shared/sync/shared-pages-client';
 import type {SharedPagesServer} from '../shared/types';
-import {Button, ConfirmationDialog, IconTooltip} from '../shared/ui';
-import {messageOf, send, type ShowStatus} from './common';
+import {
+	Button,
+	ConfirmationDialog,
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	IconTooltip,
+	ScrollArea,
+} from '../shared/ui';
+import {send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
 
 const privateWindow = () => Boolean(chrome.extension?.inIncognitoContext);
 
+export type SharedPagesState = {
+	server: SharedPagesServer | undefined;
+	pages: SharedPage[];
+	linkBase: string | null;
+	reload: () => Promise<void>;
+};
+
 /**
-Whether the connected sync server takes shared pages, asked each time `open` turns true. Always `none` in a private
-window, whose libraries are never shared.
+What the connected sync server says about shared pages, asked each time `open` turns true, with its pages when
+`list` is set. Always `none` in a private window, whose libraries are never shared.
 */
-export function useSharedPagesServer(open: boolean) {
-	const [server, setServer] = useState<SharedPagesServer>('none');
-	useEffect(() => {
-		if (!open || privateWindow()) {
+export function useSharedPages(open: boolean, list = false): SharedPagesState {
+	const [server, setServer] = useState<SharedPagesServer>();
+	const [pages, setPages] = useState<SharedPage[]>([]);
+	const [linkBase, setLinkBase] = useState<string | null>(null);
+	const latestRef = useRef(0);
+	const reload = useCallback(async () => {
+		if (privateWindow()) {
+			setServer('none');
 			return;
 		}
 
-		let live = true;
-		void send('GET_SHARED_PAGES').then((result) => {
-			if (live) {
-				setServer(result.ok ? result.server : 'none');
-			}
-		});
-		return () => {
-			live = false;
-		};
-	}, [open]);
-	return server;
+		const request = ++latestRef.current;
+		const result = await send('GET_SHARED_PAGES', {list});
+		if (request !== latestRef.current) {
+			return;
+		}
+
+		if (result.ok) {
+			setServer(result.server);
+			setPages(result.pages);
+			setLinkBase(result.linkBase);
+		} else {
+			setServer('offline');
+		}
+	}, [list]);
+	useEffect(() => {
+		if (open) {
+			void reload();
+		}
+	}, [open, reload]);
+	return {server, pages, linkBase, reload};
 }
 
 export async function copyPageLink(url: string, showStatus: ShowStatus) {
@@ -45,34 +77,22 @@ const sizeLabel = (bytes: number) =>
 	bytes < 1000 ? `${bytes} B` : `${Math.ceil(bytes / 1000)} kB`;
 
 /**
-Settings › Sync › Shared pages: every page on the server, with its link, and Delete, which takes the link down.
+Shared pages with their links: open, copy, and Delete, which asks first because the server cannot bring a page
+back.
 */
-export function SharedPagesSettings({showStatus}: {showStatus: ShowStatus}) {
-	const headingId = useId();
-	const [server, setServer] = useState<SharedPagesServer>();
-	const [pages, setPages] = useState<SharedPage[]>([]);
+export function SharedPagesList({
+	pages,
+	showStatus,
+	onDeleted,
+	empty = 'No pages shared yet.',
+}: {
+	pages: readonly SharedPage[];
+	showStatus: ShowStatus;
+	onDeleted: () => void | Promise<void>;
+	empty?: string;
+}) {
 	const [deleting, setDeleting] = useState<SharedPage>();
 	const [busy, setBusy] = useState(false);
-
-	const load = async () => {
-		const result = await send('GET_SHARED_PAGES', {list: true});
-		if (result.ok) {
-			setServer(result.server);
-			setPages(result.pages);
-		} else {
-			setServer('offline');
-		}
-	};
-
-	useEffect(() => {
-		if (!privateWindow()) {
-			void load();
-		}
-	}, []);
-
-	if (server === undefined || server === 'none') {
-		return null;
-	}
 
 	const remove = async (page: SharedPage) => {
 		setBusy(true);
@@ -83,27 +103,16 @@ export function SharedPagesSettings({showStatus}: {showStatus: ShowStatus}) {
 			showStatus(`Deleted ${page.title}. Its link no longer opens.`, false, {
 				toast: true,
 			});
-			await load();
+			await onDeleted();
 		} else {
-			showStatus(messageOf(result.error) || 'Could not delete the page.', true);
+			showStatus(result.error || 'Could not delete the page.', true);
 		}
 	};
 
 	return (
-		<section aria-labelledby={headingId} className="space-y-2">
-			<h3 id={headingId} className="text-sm font-semibold">
-				Shared pages
-			</h3>
-			{server === 'old' ? (
-				<p className="text-sm text-muted-foreground">
-					Update your sync server to share pages by link.
-				</p>
-			) : server === 'offline' ? (
-				<p className="text-sm text-muted-foreground">
-					Cannot reach the server to list shared pages.
-				</p>
-			) : pages.length === 0 ? (
-				<p className="text-sm text-muted-foreground">No pages shared yet.</p>
+		<>
+			{pages.length === 0 ? (
+				<p className="text-sm text-muted-foreground">{empty}</p>
 			) : (
 				<ul className="divide-y divide-border rounded-lg border border-border">
 					{pages.map((page) => (
@@ -189,6 +198,87 @@ export function SharedPagesSettings({showStatus}: {showStatus: ShowStatus}) {
 					}
 				}}
 			/>
+		</>
+	);
+}
+
+function SharedPagesBody({
+	state: {server, pages, reload},
+	showStatus,
+}: {
+	state: SharedPagesState;
+	showStatus: ShowStatus;
+}) {
+	return server === undefined ? (
+		<p className="text-sm text-muted-foreground" role="status">
+			Asking your server…
+		</p>
+	) : server === 'none' ? (
+		<p className="text-sm text-muted-foreground">
+			Connect a sync server in Settings › Sync to share pages by link.
+		</p>
+	) : server === 'old' ? (
+		<p className="text-sm text-muted-foreground">
+			Update your sync server to share pages by link.
+		</p>
+	) : server === 'offline' ? (
+		<p className="text-sm text-muted-foreground">
+			Cannot reach the server to list shared pages.
+		</p>
+	) : (
+		<SharedPagesList pages={pages} showStatus={showStatus} onDeleted={reload} />
+	);
+}
+
+export function SharedPagesSettings({showStatus}: {showStatus: ShowStatus}) {
+	const headingId = useId();
+	const state = useSharedPages(true, true);
+	if (state.server === undefined || state.server === 'none') {
+		return null;
+	}
+
+	return (
+		<section aria-labelledby={headingId} className="space-y-2">
+			<h3 id={headingId} className="text-sm font-semibold">
+				Shared pages
+			</h3>
+			<SharedPagesBody state={state} showStatus={showStatus} />
 		</section>
+	);
+}
+
+export function SharedPagesDialog({
+	open,
+	onOpenChange,
+	showStatus,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	showStatus: ShowStatus;
+}) {
+	const state = useSharedPages(open, true);
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent size="lg">
+				<DialogHeader>
+					<DialogTitle>Shared pages</DialogTitle>
+					<DialogDescription>
+						Pages you shared by link. Anyone with a link can open its page until
+						you delete it.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogBody>
+					<ScrollArea type="auto" viewportClassName="max-h-[60dvh]">
+						<SharedPagesBody state={state} showStatus={showStatus} />
+					</ScrollArea>
+				</DialogBody>
+				<DialogFooter>
+					<Button type="button" onClick={() => onOpenChange(false)}>
+						<X aria-hidden="true" />
+						Close
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
