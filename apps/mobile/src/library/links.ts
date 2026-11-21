@@ -23,6 +23,7 @@ export type LinkSettings = Pick<
 	| 'sessionSort'
 	| 'showSessionFaviconPreviews'
 	| 'expandSessionsByDefault'
+	| 'toastDuration'
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
@@ -38,6 +39,7 @@ export const DEFAULTS: LinkSettings = {
 	sessionSort: 'newest',
 	showSessionFaviconPreviews: true,
 	expandSessionsByDefault: false,
+	toastDuration: 'default',
 };
 
 /**

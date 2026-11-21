@@ -5,6 +5,7 @@ import {
 	useState,
 	type ComponentPropsWithoutRef,
 	type ComponentType,
+	type CSSProperties,
 	type ReactNode,
 } from 'react';
 import {Bookmark, CircleAlert, CircleCheck, Info, X} from 'lucide-react';
@@ -30,6 +31,13 @@ import {
 } from '../shared/save-feedback';
 import {webUrl} from '../shared/web-url';
 import {hostIsExcluded} from '../shared/excluded-sites';
+import {
+	toastEdges,
+	toastMs,
+	toastPlace,
+	type ToastDuration,
+	type ToastPosition,
+} from '../shared/toast-prefs';
 import {PrivateWindowMark} from './private-window-appearance';
 import {PrivateLockButton} from './private-lock-ui';
 import {
@@ -685,11 +693,40 @@ export function useStatus(): [Status | null, ShowStatus] {
 
 const TOAST_TIMEOUT_MS = {success: 4000, error: 10_000, action: 6000};
 
+/**
+Where toasts appear and how long they stay, asked of the worker when the page opens and again for each toast, so a
+change in Settings reaches an open page.
+*/
+function useToastPrefs(toastId: string | undefined) {
+	const [prefs, setPrefs] = useState<{
+		position: ToastPosition;
+		duration: ToastDuration;
+	}>({position: 'default', duration: 'default'});
+	useEffect(() => {
+		void send('TOAST_PREFS').then((result) => {
+			if (result.ok) {
+				setPrefs({position: result.position, duration: result.duration});
+			}
+		});
+	}, [toastId]);
+	return prefs;
+}
+
+function toastStyle(position: ToastPosition): CSSProperties {
+	const {top, bottom, left, right, transform} = toastEdges(
+		toastPlace(position, 'bottom'),
+		20,
+	);
+	return {top, bottom, left, right, transform};
+}
+
 // Routine success messages are only announced to screen readers. Errors and success messages
-// marked `toast` appear as a small dismissible toast at the bottom center. Toasts from showStatus
-// fade after 4s (success), 6s (with an action such as Undo) or 10s (error); errors passed in directly (such as a failed initial
-// load) stay until dismissed.
+// marked `toast` appear as a small dismissible toast, at the bottom center unless Settings moves it. Toasts from
+// showStatus fade after 4s (success), 6s (with an action such as Undo) or 10s (error), twice as long under Messages
+// stay: Longer, and never under Until dismissed; errors passed in directly (such as a failed initial load) stay until
+// dismissed.
 export function StatusLine({status}: {status: Status | null | undefined}) {
+	const prefs = useToastPrefs(status?.id);
 	const [dismissed, setDismissed] = useState<string | null>(null);
 	// The timeout stops while the pointer or keyboard focus is on the toast, so Undo can always be reached.
 	const [paused, setPaused] = useState(false);
@@ -702,16 +739,28 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 			return undefined;
 		}
 
-		const timer = setTimeout(
-			() => setDismissed(key),
+		const ms = toastMs(
 			visible.error
 				? TOAST_TIMEOUT_MS.error
 				: visible.action
 					? TOAST_TIMEOUT_MS.action
 					: TOAST_TIMEOUT_MS.success,
+			prefs.duration,
 		);
+		if (ms === undefined) {
+			return undefined;
+		}
+
+		const timer = setTimeout(() => setDismissed(key), ms);
 		return () => clearTimeout(timer);
-	}, [key, visible?.id, visible?.error, visible?.action, paused]);
+	}, [
+		key,
+		visible?.id,
+		visible?.error,
+		visible?.action,
+		paused,
+		prefs.duration,
+	]);
 	useEffect(() => {
 		if (!shown) {
 			setPaused(false);
@@ -760,8 +809,9 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 				<div
 					key={key}
 					role={visible.error ? 'alert' : undefined}
+					style={toastStyle(prefs.position)}
 					className={cn(
-						'fixed bottom-5 left-1/2 z-100 flex w-max max-w-[min(92vw,28rem)] -translate-x-1/2 animate-[pop-in_160ms_ease-out] motion-reduce:animate-none items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg',
+						'fixed z-100 flex w-max max-w-[min(92vw,28rem)] animate-[pop-in_160ms_ease-out] motion-reduce:animate-none items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg',
 						visible.error ? 'border-destructive/40' : 'border-border',
 					)}
 					onMouseEnter={() => setPaused(true)}

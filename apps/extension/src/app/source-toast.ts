@@ -19,11 +19,20 @@ import {
 	SYSTEM_ACCENT,
 } from '../shared/accent-colors';
 import {resolvePrivateAccent, systemAccentColor} from '../shared/accents';
+import type {ActionResult} from '../shared/types';
 import {isRecord} from '../shared/library-values';
+import {
+	toastEdges,
+	toastMs,
+	toastPlace,
+	type ToastDuration,
+	type ToastPosition,
+} from '../shared/toast-prefs';
 
 const HOST_ID = 'tablodge-source-toast';
 const VISIBLE_MS = 8000;
 const MAX_TOASTS = 3;
+// Settings › Messages stay: Longer doubles these, Until dismissed never closes a notice by itself.
 // A notice that asks something stays longer, so there is time to read it and decide.
 const ASKING_VISIBLE_MS = 20_000;
 const SVG = 'http://www.w3.org/2000/svg';
@@ -161,6 +170,47 @@ async function readAppearance() {
 	}
 }
 
+type ToastPrefs = {position: ToastPosition; duration: ToastDuration};
+
+/**
+Where notices appear and how long they stay, as the worker keeps them in Settings: a site's page cannot read the
+settings itself. Without an answer (a script left behind by an update, or a worker that is asleep) the defaults apply.
+*/
+async function readPrefs(): Promise<ToastPrefs> {
+	try {
+		const result = await chrome.runtime.sendMessage<
+			{type: string},
+			ActionResult<'TOAST_PREFS'> | undefined
+		>({type: 'TOAST_PREFS'});
+		if (result?.ok) {
+			return {position: result.position, duration: result.duration};
+		}
+	} catch {
+		// Not reachable: the default place and times.
+	}
+
+	return {position: 'default', duration: 'default'};
+}
+
+/**
+Puts the stack at the chosen place: the bottom right of the page unless Settings says otherwise. The newest notice
+sits nearest the edge, so a stack at the top lists them in reverse.
+*/
+function place(current: Stack, position: ToastPosition) {
+	const edges = toastEdges(toastPlace(position, 'bottom-right'), 16);
+	set(current.host, {
+		top: edges.top ?? 'auto',
+		bottom: edges.bottom ?? 'auto',
+		left: edges.left ?? 'auto',
+		right: edges.right ?? 'auto',
+		transform: edges.transform ?? 'none',
+	});
+	set(current.list, {
+		'flex-direction': edges.reverse ? 'column-reverse' : 'column',
+		'align-items': edges.align,
+	});
+}
+
 function set(element: HTMLElement | SVGElement, rules: Record<string, string>) {
 	for (const [name, value] of Object.entries(rules)) {
 		element.style.setProperty(name, value, 'important');
@@ -219,8 +269,6 @@ function createStack(theme: Theme): Stack {
 	set(host, {
 		all: 'initial',
 		position: 'fixed',
-		right: '16px',
-		bottom: '16px',
 		'z-index': '2147483647',
 		display: 'block',
 		width: 'min(448px, calc(100vw - 32px))',
@@ -237,13 +285,8 @@ function createStack(theme: Theme): Stack {
 
 	const root = host.attachShadow({mode: 'closed'});
 	const list = document.createElement('div');
-	// Newest last, so it sits nearest the corner.
-	set(list, {
-		display: 'flex',
-		'flex-direction': 'column',
-		'align-items': 'flex-end',
-		gap: '8px',
-	});
+	// Newest last, so it sits nearest the edge; place() sets the direction and the alignment.
+	set(list, {display: 'flex', gap: '8px'});
 	root.append(list);
 	document.documentElement.append(host);
 	return {host, root, list, closers: []};
@@ -263,14 +306,15 @@ export function showSourceToast(
 	}: {actions?: ToastAction[]; error?: boolean; asking?: boolean} = {},
 ) {
 	queue = queue
-		.then(async () => readAppearance())
-		.then(({theme, accent}) => {
+		.then(async () => Promise.all([readAppearance(), readPrefs()]))
+		.then(([{theme, accent}, prefs]) => {
 			render(text, {
 				actions,
 				error,
 				asking,
 				theme,
 				accent,
+				prefs,
 			});
 		});
 }
@@ -278,17 +322,19 @@ export function showSourceToast(
 function render(
 	text: string,
 	{
-		actions,
+		actions: given,
 		error,
 		asking,
 		theme,
 		accent,
+		prefs,
 	}: {
 		actions: ToastAction[];
 		error: boolean;
 		asking: boolean;
 		theme: Theme;
 		accent: string;
+		prefs: ToastPrefs;
 	},
 ) {
 	// The host is gone when the page removed it (or a later copy of this script did); start a new one.
@@ -302,7 +348,15 @@ function render(
 	}
 
 	const {host, root, list} = current;
+	// Until dismissed closes nothing by itself, so a notice with no button of its own gets one (a button that answers
+	// with nothing closes the notice).
+	const actions: ToastAction[] =
+		prefs.duration === 'dismiss' && given.length === 0
+			? [{label: 'Close', run: async () => undefined}]
+			: given;
+
 	set(host, {'color-scheme': theme});
+	place(current, prefs.position);
 	const colors = toastColors(
 		theme,
 		accent === SYSTEM_ACCENT ? systemAccentColor(root) : presetColor(accent),
@@ -434,8 +488,9 @@ function render(
 	current.closers.push(close);
 	const schedule = () => {
 		clearTimeout(timer);
-		if (!held && !closed) {
-			timer = setTimeout(close, asking ? ASKING_VISIBLE_MS : VISIBLE_MS);
+		const ms = toastMs(asking ? ASKING_VISIBLE_MS : VISIBLE_MS, prefs.duration);
+		if (!held && !closed && ms !== undefined) {
+			timer = setTimeout(close, ms);
 		}
 	};
 

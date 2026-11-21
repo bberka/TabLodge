@@ -41,7 +41,19 @@ const sections = (appName: string, firefox: boolean): Section[] => [
 		title: `Opening ${appName}`,
 		keywords: ['new tab', 'startup', 'pinned tab', 'palette', 'toolbar button'],
 	},
-	{title: 'Dashboard', keywords: ['layout', 'view', 'quotes']},
+	{
+		title: 'Dashboard',
+		keywords: [
+			'layout',
+			'view',
+			'quotes',
+			'toast',
+			'toast position',
+			'messages',
+			'notifications',
+			'undo',
+		],
+	},
 	{
 		title: 'When saving',
 		keywords: ['save tabs', 'duplicates', 'tracking parameters', 'close tabs'],
