@@ -1540,9 +1540,9 @@ test('a local change waits 2.5 s after the last write, and a steady stream still
 	const device = makeDevice(server);
 	await device.client.connect(URL_BASE, TOKEN);
 	const sent = () => server.pushes.length;
-	// The round's requests are real async work, which fake timers do not wait for.
-	const letRoundFinish = async () => {
-		for (let turn = 0; turn < 20; turn += 1) {
+	// The round's requests are real async work, which fake timers do not wait for: give it turns until the push lands.
+	const letRoundFinish = async (pushes: number) => {
+		for (let turn = 0; turn < 5000 && sent() < pushes; turn += 1) {
 			await new Promise((resolve) => {
 				setImmediate(resolve);
 			});
@@ -1567,8 +1567,13 @@ test('a local change waits 2.5 s after the last write, and a steady stream still
 		await vi.advanceTimersByTimeAsync(2400);
 		assert.equal(sent(), before, 'restarted by the second write');
 		await vi.advanceTimersByTimeAsync(1000);
-		await letRoundFinish();
+		await letRoundFinish(before + 1);
 		assert.equal(sent(), before + 1, 'sent 2.5 s after the last write');
+
+		// The round that just ended can queue a follow-up; let it finish before counting the steady stream.
+		await vi.advanceTimersByTimeAsync(500);
+		await letRoundFinish(Infinity);
+		const settled = sent();
 
 		// A write every 2 s never lets the quiet period pass, so the round starts 10 s after the first write.
 		edit('steady-0');
@@ -1577,12 +1582,12 @@ test('a local change waits 2.5 s after the last write, and a steady stream still
 			edit(`steady-${index}`);
 		}
 
-		assert.equal(sent(), before + 1, 'held at 8 s');
-		await vi.advanceTimersByTimeAsync(2000);
-		assert.equal(sent(), before + 1, 'held until 10 s');
-		await vi.advanceTimersByTimeAsync(1000);
-		await letRoundFinish();
-		assert.equal(sent(), before + 2, 'sent at 10 s');
+		assert.equal(sent(), settled, 'held at 8 s');
+		await vi.advanceTimersByTimeAsync(1900);
+		assert.equal(sent(), settled, 'held until 10 s');
+		await vi.advanceTimersByTimeAsync(200);
+		await letRoundFinish(settled + 1);
+		assert.equal(sent(), settled + 1, 'sent at 10 s');
 	} finally {
 		vi.useRealTimers();
 	}
