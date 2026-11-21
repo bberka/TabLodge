@@ -423,7 +423,7 @@
 	"apps/server/src/worker.ts": 7,
 	"apps/server/tests/cloudflare-deploy.test.ts": 2,
 	"apps/server/tests/shared-pages.test.ts": 11,
-	"apps/server/tests/sync-client.test.ts": 53,
+	"apps/server/tests/sync-client.test.ts": 52,
 	"apps/server/tests/sync-protocol.test.ts": 6,
 	"apps/server/tests/sync-server.test.ts": 1,
 	"apps/server/vite.config.ts": 1,

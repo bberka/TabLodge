@@ -33,13 +33,18 @@ export function LoadMore({
 			return undefined;
 		}
 
+		let root: Element | null = element.parentElement;
+		while (root && !/auto|scroll/.test(getComputedStyle(root).overflowY)) {
+			root = root.parentElement;
+		}
+
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) {
 					onMoreRef.current();
 				}
 			},
-			{rootMargin: '800px 0px'},
+			{root, rootMargin: '800px 0px'},
 		);
 		observer.observe(element);
 		return () => observer.disconnect();

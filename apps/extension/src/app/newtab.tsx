@@ -577,8 +577,12 @@ function NewTab() {
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
-	const quickActions = (settings.bookmarkQuickActions ?? ['open-new']).filter(
-		(action) => canOpenPrivateWindow || action !== 'open-private',
+	const quickActions = useMemo(
+		() =>
+			(settings.bookmarkQuickActions ?? ['open-new']).filter(
+				(action) => canOpenPrivateWindow || action !== 'open-private',
+			),
+		[settings.bookmarkQuickActions],
 	);
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
@@ -3881,6 +3885,8 @@ type BookmarkColumnProps = {
 Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
 */
 const COLUMN_PAGE = 60;
+const SCROLL_WINDOW = 48;
+
 const sortLabel = (sort: BookmarkSort) =>
 	BOOKMARK_SORT_OPTIONS.find(([value]) => value === sort)?.[1] ?? sort;
 
@@ -3914,15 +3920,15 @@ const BookmarkColumn = memo(
 		ariaLabel,
 		emptyMessage,
 	}: BookmarkColumnProps) => {
+		const windowSize = renderAll
+			? Math.max(pageSize * 3, SCROLL_WINDOW)
+			: pageSize;
 		const [limit, loadMore] = usePagedLimit(
-			`${column.id}:${pageSize}`,
-			pageSize,
+			`${column.id}:${windowSize}`,
+			windowSize,
 		);
-		const shown = renderAll
-			? bookmarks
-			: bookmarks.length > limit
-				? bookmarks.slice(0, limit)
-				: bookmarks;
+		const shown =
+			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
 		const lastSibling = siblings.at(-1)?.id;
 		const firstSibling = siblings[0]?.id;
 		const onDropOver = actions.dropOver;
@@ -4068,11 +4074,11 @@ const BookmarkColumn = memo(
 								/>
 							);
 						})}
-						{!renderAll && bookmarks.length > shown.length && (
+						{bookmarks.length > shown.length && (
 							<LoadMore
 								compact
 								remaining={bookmarks.length - shown.length}
-								step={pageSize}
+								step={windowSize}
 								noun="bookmarks"
 								autoLoad={autoLoadMore}
 								onMore={loadMore}
