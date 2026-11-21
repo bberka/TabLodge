@@ -94,23 +94,34 @@ export function acceptsDrop(
 	return Boolean(kind) && (allowColumn || kind !== 'column');
 }
 
+/**
+The id of the Focus view's All item. It lists every column's bookmarks but is not a column and keeps no order of its
+own, so nothing can be dropped on it.
+*/
+export const ALL_BOOKMARKS_ID = 'bookmark-all';
+
+/**
+`manualOrder` is false while the column is sorted by something else: the stored order is not shown, so no slot next to
+a card is offered and a drop goes to the end of its column.
+*/
 export function previewBookmarkDrop(
 	event: DragEvent<HTMLElement>,
 	columnId: string,
 	onDropOver: (indicator: DropIndicator | null) => void,
 	allowColumn: boolean,
+	manualOrder = true,
 ) {
 	if (!acceptsDrop(event, allowColumn)) {
 		return;
 	}
 
-	event.preventDefault();
 	const kind = dragPayloadKind(event.dataTransfer.types);
 	if (!kind) {
 		return;
 	}
 
 	if (kind === 'column') {
+		event.preventDefault();
 		const rect = event.currentTarget.getBoundingClientRect();
 		onDropOver({
 			kind,
@@ -120,6 +131,13 @@ export function previewBookmarkDrop(
 		return;
 	}
 
+	// All is a view, not a place to drop: no line, and the browser shows that the drop is refused.
+	if (columnId === ALL_BOOKMARKS_ID) {
+		onDropOver(null);
+		return;
+	}
+
+	event.preventDefault();
 	event.dataTransfer.dropEffect = kind === 'bookmark' ? 'move' : 'copy';
 	const targetCard = (event.target as Element).closest<HTMLElement>(
 		'[data-bookmark-id]',
@@ -128,9 +146,14 @@ export function previewBookmarkDrop(
 	onDropOver({
 		kind,
 		columnId,
-		targetBookmarkId: targetCard?.dataset.bookmarkId || null,
+		targetBookmarkId: manualOrder
+			? targetCard?.dataset.bookmarkId || null
+			: null,
 		position:
-			targetCard && rect && event.clientY < rect.top + rect.height / 2
+			manualOrder &&
+			targetCard &&
+			rect &&
+			event.clientY < rect.top + rect.height / 2
 				? 'before'
 				: 'after',
 	});
