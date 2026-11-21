@@ -869,6 +869,16 @@ function Help() {
 					searchText:
 						'private incognito storage shared separate saved temporary restart dashboard first setup new tab redirect lock unlock pin password encrypt idle erase reset forgot',
 				},
+				...(isFirefox
+					? []
+					: [
+							{
+								title: 'Send to private storage',
+								body: 'When private windows use a separate saved library, a link’s menu in a session or a bookmark column, and the bar above selected links, offer Send to private storage. It moves the link out of the regular library into the private library’s Sent from regular windows column, with its title, address, note, and tags; a saved tab’s pinned state, tab group, and split view are not kept, and a session left empty goes too. It skips the trash, which syncs, so your other devices see only a delete. The private library does not need to be unlocked: the link is encrypted on the way so that only the private library can read it, waits on this device, and arrives the next time a private window unlocks it, then syncs with the private library if that syncs. Undo in the toast brings it back until the toast closes. A library set up before this version has to be unlocked in a private window once before regular windows can send to it. Snapshots and backups made before the send still hold the link. Erase private data also drops links still on their way.',
+								searchText:
+									'send to private storage move incognito separate saved library sent from regular windows column hide link',
+							},
+						]),
 				{
 					title: 'Where data is stored',
 					body: `${PROJECT.name} uses this browser’s extension storage. There are no accounts and no ${PROJECT.name} servers. Nothing leaves the browser unless you turn on sync with a server you run yourself. Exported files can contain page addresses, titles, and notes, so keep them private.`,

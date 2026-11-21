@@ -146,6 +146,13 @@ const COMMANDS = [
 		icon: Lock,
 	},
 	{
+		id: 'send-to-private-help',
+		title: 'Send links to private storage',
+		keywords: ['incognito', 'move', 'hide', 'separate saved library'],
+		icon: Lock,
+		opens: 'help.html#data-and-recovery',
+	},
+	{
 		id: 'change-private-password',
 		title: 'Change the private library password',
 		keywords: ['private', 'incognito', 'lock', 'passcode'],
@@ -198,6 +205,7 @@ const NOT_ON_FIREFOX = new Set<FinderCommandId>([
 	// Firefox keeps the add-on out of private windows, so there is no private library to manage.
 	'lock-private',
 	'change-private-password',
+	'send-to-private-help',
 ]);
 
 export function finderActions(

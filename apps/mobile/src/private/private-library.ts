@@ -22,6 +22,11 @@ import {isRecord} from '../../../extension/src/shared/library-values';
 import type {Store} from '../../../extension/src/shared/types';
 import {recordKey} from '../../../extension/src/shared/sync/changes';
 import {
+	addSentLinks,
+	parseSentLinks,
+	type SentLink,
+} from '../../../extension/src/shared/send-to-private';
+import {
 	createSyncClient,
 	SYNC_CONFIG_KEY,
 	SYNC_OFF,
@@ -58,6 +63,7 @@ const LOCK_KEY = 'tablodge.private.lock';
 const KEPT_KEY = 'tablodge.private.keptKey';
 // Written before an erase deletes anything and removed when it is done, so an erase that stops part way is finished later.
 const ERASING_KEY = 'tablodge.private.erasing';
+const SENT_PENDING_KEY = 'tablodge.sendprivate.pending';
 const prefix = (key: string) => `tablodge.private.${key}`;
 
 /**
@@ -142,6 +148,9 @@ const refreshState = () => {
 	}
 
 	notify();
+	if (isPrivateOpen()) {
+		void takeInSent();
+	}
 };
 
 const parseKept = (value: unknown): Kept | undefined =>
@@ -707,6 +716,7 @@ async function eraseSteps(): Promise<void> {
 		PRIVATE_TRASH_KEY,
 		PRIVATE_KEY_KEY,
 		KEPT_KEY,
+		SENT_PENDING_KEY,
 	]);
 	await dropSafetyCopy('private');
 	await removeKeys([LIBRARY_KEY]);
@@ -1029,6 +1039,84 @@ export async function wakePrivate(): Promise<void> {
 	runClient();
 	await client?.wake().catch(() => undefined);
 	await refreshPrivateStatus();
+}
+
+type PendingSend = {id: string; links: SentLink[]};
+
+const heldSends = new Set<string>();
+let sendQueue: Promise<unknown> = Promise.resolve();
+const serialSend = async <T>(step: () => Promise<T>): Promise<T> => {
+	const run = sendQueue.then(step, step);
+	sendQueue = run.catch(() => undefined);
+	return run;
+};
+
+async function readPending(): Promise<PendingSend[]> {
+	const saved = await readJson(SENT_PENDING_KEY);
+	return Array.isArray(saved)
+		? saved.flatMap((entry): PendingSend[] =>
+				isRecord(entry) && typeof entry.id === 'string'
+					? [{id: entry.id, links: parseSentLinks(entry.links)}]
+					: [],
+			)
+		: [];
+}
+
+const writePending = async (pending: PendingSend[]) =>
+	pending.length > 0
+		? writeJson(SENT_PENDING_KEY, pending)
+		: removeKeys([SENT_PENDING_KEY]);
+
+export const canReceiveSent = (): boolean => exists && lock !== undefined;
+
+export async function queueSentLinks(links: SentLink[]): Promise<string> {
+	return serialSend(async () => {
+		const id = randomUUID();
+		heldSends.add(id);
+		await writePending([...(await readPending()), {id, links}]);
+		return id;
+	});
+}
+
+export async function withdrawSent(id: string): Promise<boolean> {
+	return serialSend(async () => {
+		heldSends.delete(id);
+		const pending = await readPending();
+		if (pending.every((entry) => entry.id !== id)) {
+			return false;
+		}
+
+		await writePending(pending.filter((entry) => entry.id !== id));
+		return true;
+	});
+}
+
+export async function releaseSent(id: string): Promise<void> {
+	heldSends.delete(id);
+	await takeInSent();
+}
+
+export async function takeInSent(): Promise<void> {
+	await serialSend(async () => {
+		if (!isPrivateOpen()) {
+			return;
+		}
+
+		const pending = await readPending();
+		const ready = pending.filter((entry) => !heldSends.has(entry.id));
+		if (ready.length === 0) {
+			return;
+		}
+
+		await editPrivate(
+			(current) =>
+				addSentLinks(
+					current,
+					ready.flatMap((entry) => entry.links),
+				).store,
+		);
+		await writePending(pending.filter((entry) => heldSends.has(entry.id)));
+	});
 }
 
 export const getPrivateStore = (): Store => core.store;

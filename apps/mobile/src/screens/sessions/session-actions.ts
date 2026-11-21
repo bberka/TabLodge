@@ -20,6 +20,10 @@ import {showSnack} from '../../ui/snackbar';
 import {type Colors} from '../../ui/theme';
 import {openShare} from '../transfer/transfer-sheets';
 import {linkOpenActions, openIn} from '../open-in';
+import {
+	SEND_TO_PRIVATE_LABEL,
+	sendToPrivate,
+} from '../../private/send-to-private';
 import {type BookmarkLinks} from './session-link-sheets';
 
 /**
@@ -308,11 +312,13 @@ export function tabMenuActions(
 		links,
 		edit: startEdit,
 		bookmark,
+		canSendToPrivate = false,
 	}: {
 		colors: Colors;
 		links: LinkSettings;
 		edit: (target: {session: Session; tabId: string}) => void;
 		bookmark: (target: BookmarkLinks) => void;
+		canSendToPrivate?: boolean;
 	},
 ): SheetAction[] {
 	return [
@@ -343,6 +349,19 @@ export function tabMenuActions(
 				});
 			},
 		},
+		...(canSendToPrivate
+			? [
+					{
+						icon: 'lock-closed-outline' as const,
+						label: SEND_TO_PRIVATE_LABEL,
+						onPress() {
+							void sendToPrivate([
+								{kind: 'tab', sessionId: session.id, tabId: tab.id},
+							]);
+						},
+					},
+				]
+			: []),
 		{
 			icon: 'trash-outline',
 			label: 'Delete',

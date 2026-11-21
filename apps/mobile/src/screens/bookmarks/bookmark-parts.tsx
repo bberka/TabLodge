@@ -289,6 +289,7 @@ export function SelectionBar({
 	onEdit,
 	onShare,
 	onMove,
+	onSendToPrivate,
 	onDelete,
 }: {
 	count: number;
@@ -297,6 +298,7 @@ export function SelectionBar({
 	onEdit: () => void;
 	onShare: () => void;
 	onMove: () => void;
+	onSendToPrivate?: () => void;
 	onDelete: () => void;
 }) {
 	const colors = useColors();
@@ -328,6 +330,16 @@ export function SelectionBar({
 					disabled: isNone || !canMove,
 					onPress: onMove,
 				},
+				...(onSendToPrivate
+					? [
+							{
+								icon: 'lock-closed-outline' as const,
+								label: 'To private',
+								disabled: isNone,
+								onPress: onSendToPrivate,
+							},
+						]
+					: []),
 				{
 					icon: 'trash-outline',
 					label: 'Delete',

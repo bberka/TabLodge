@@ -15392,8 +15392,12 @@ test('a link sent from a regular window leaves no readable copy behind and arriv
 		),
 		[['Saved page', SENT_URL]],
 	);
+	const privateStored = JSON.stringify(
+		privateDataKeys(locked.extraStorage).map((key) => locked.extraStorage[key]),
+	);
+	assert.ok(privateStored.length > 0);
 	assert.equal(
-		JSON.stringify(locked.extraStorage).includes('saved.example'),
+		privateStored.includes('saved.example'),
 		false,
 		'the private library holds it sealed',
 	);

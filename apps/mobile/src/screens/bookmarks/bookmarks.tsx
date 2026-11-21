@@ -56,6 +56,12 @@ import {trackScroll} from '../../ui/scroll-state';
 import {useScrollTop} from '../../ui/scroll-top';
 import {bookmarkSortName} from '../../library/bookmark-sort';
 import {useView} from '../../library/view';
+import {usePrivateState} from '../../private/private-library';
+import {
+	canSendToPrivate,
+	SEND_TO_PRIVATE_LABEL,
+	sendToPrivate,
+} from '../../private/send-to-private';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
 import {SearchTipsSheet} from '../search-tips';
@@ -119,6 +125,7 @@ export function BookmarksScreen({
 	const store = useLibrary();
 	const selection = useSelection();
 	const view = useView();
+	const sendable = canSendToPrivate(view, usePrivateState());
 	const copyUrls = useCopyUrls();
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
@@ -316,6 +323,19 @@ export function BookmarksScreen({
 					hasCopy: copyUrls.has(rowMenuBookmark.url),
 					isPrivate: view === 'private',
 				}),
+				...(sendable
+					? [
+							{
+								icon: 'lock-closed-outline' as const,
+								label: SEND_TO_PRIVATE_LABEL,
+								onPress() {
+									void sendToPrivate([
+										{kind: 'bookmark', bookmarkId: rowMenuBookmark.id},
+									]);
+								},
+							},
+						]
+					: []),
 				{
 					icon: 'trash-outline',
 					label: 'Delete',
@@ -939,6 +959,20 @@ export function BookmarksScreen({
 					onMove={() => {
 						setSheet({kind: 'move'});
 					}}
+					onSendToPrivate={
+						sendable
+							? () => {
+									const ids = [...selection.ids];
+									void sendToPrivate(
+										ids.map((bookmarkId) => ({kind: 'bookmark', bookmarkId})),
+									).then((sent) => {
+										if (sent) {
+											selection.stop();
+										}
+									});
+								}
+							: undefined
+					}
 					onDelete={() => {
 						remove(selection.ids);
 					}}

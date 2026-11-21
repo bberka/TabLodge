@@ -140,6 +140,8 @@ const DATA_KEYS = new Set([
 	'tablodge.privatelock.attempts',
 	'tablodge.privatelock.key',
 	'tablodge.privatelock.windows',
+	'tablodge.sendprivate.entry.',
+	'tablodge.sendprivate.key',
 	'tablodge.locked',
 	'tablodge.locked.attempts',
 	'tablodge.locked.flag',

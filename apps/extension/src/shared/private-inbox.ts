@@ -7,7 +7,7 @@ export const INBOX_ENTRY_PREFIX = 'tablodge.sendprivate.entry.';
 export const INBOX_PRIVATE_KEY_NAME = 'sendprivate.key';
 
 const CURVE = {name: 'ECDH', namedCurve: 'P-256'} as const;
-const HKDF_INFO = new TextEncoder().encode('TabLodge send to private v1');
+const HKDF_INFO = 'TabLodge send to private v1';
 
 export type InboxKeyPair = {v: 1; publicKey: string; privateKey: string};
 
@@ -68,7 +68,12 @@ async function entryKey(
 		'deriveKey',
 	]);
 	return crypto.subtle.deriveKey(
-		{name: 'HKDF', hash: 'SHA-256', salt, info: HKDF_INFO},
+		{
+			name: 'HKDF',
+			hash: 'SHA-256',
+			salt,
+			info: new TextEncoder().encode(HKDF_INFO),
+		},
 		material,
 		{name: 'AES-GCM', length: 256},
 		false,
