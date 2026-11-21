@@ -206,8 +206,7 @@ function RestoreForm({
 					{result.skipped > 0 && (
 						<Text style={{color: colors.warn}}>
 							{plural(result.skipped, 'item')} in the file cannot be kept and
-							are left out: damaged ones, and any past the limits the extension
-							has too.
+							are left out because they are damaged.
 						</Text>
 					)}
 					<Button
