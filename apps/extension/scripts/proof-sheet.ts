@@ -19,7 +19,7 @@ const LABEL_HEIGHT = 30;
 
 export type Size = {width: number; height: number};
 export type Tile = Size & {x: number; y: number};
-export type Sheet = Size & {tiles: Tile[]};
+type Sheet = Size & {tiles: Tile[]};
 
 const usage =
 	'Usage: vp run proof:sheet [--out <file.png>] <screenshot.png | folder>...';
@@ -40,20 +40,16 @@ function splitIntoRows(aspects: number[], rowCount: number): number[][] {
 	return rows.filter((row) => row.length > 0);
 }
 
-function placeRows(
-	sizes: Size[],
-	rows: number[][],
-	maxEdge: number,
-): Sheet | undefined {
+function placeRows(sizes: Size[], rows: number[][]): Sheet | undefined {
 	const aspects = sizes.map(({width, height}) => width / height);
 	const heights = rows.map((row) => {
 		const aspectSum = row.reduce((sum, index) => sum + aspects[index], 0);
-		const fullWidth = (maxEdge - (row.length + 1) * GAP) / aspectSum;
+		const fullWidth = (MAX_EDGE - (row.length + 1) * GAP) / aspectSum;
 		return Math.min(fullWidth, ...row.map((index) => sizes[index].height));
 	});
 	const fixed = rows.length * LABEL_HEIGHT + (rows.length + 1) * GAP;
 	const imageHeight = heights.reduce((sum, height) => sum + height, 0);
-	const scale = Math.min(1, (maxEdge - fixed) / imageHeight);
+	const scale = Math.min(1, (MAX_EDGE - fixed) / imageHeight);
 	if (scale <= 0) {
 		return undefined;
 	}
@@ -77,7 +73,7 @@ function placeRows(
 	return {width, height: y, tiles};
 }
 
-export function layoutSheet(sizes: Size[], maxEdge = MAX_EDGE): Sheet {
+export function layoutSheet(sizes: Size[]): Sheet {
 	if (sizes.length === 0) {
 		throw new Error('A contact sheet needs at least one image.');
 	}
@@ -86,7 +82,7 @@ export function layoutSheet(sizes: Size[], maxEdge = MAX_EDGE): Sheet {
 	let best: Sheet | undefined;
 	let bestArea = 0;
 	for (let rowCount = 1; rowCount <= sizes.length; rowCount++) {
-		const sheet = placeRows(sizes, splitIntoRows(aspects, rowCount), maxEdge);
+		const sheet = placeRows(sizes, splitIntoRows(aspects, rowCount));
 		const area =
 			sheet?.tiles.reduce((sum, tile) => sum + tile.width * tile.height, 0) ??
 			0;
@@ -100,21 +96,21 @@ export function layoutSheet(sizes: Size[], maxEdge = MAX_EDGE): Sheet {
 
 	if (!best) {
 		throw new Error(
-			`${sizes.length} images do not fit in ${maxEdge} px; pass fewer.`,
+			`${sizes.length} images do not fit in ${MAX_EDGE} px; pass fewer.`,
 		);
 	}
 
 	return best;
 }
 
-export function pngSize(bytes: Uint8Array): Size {
+async function pngSize(path: string): Promise<Size> {
+	const bytes = await readFile(path);
 	const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 	if (bytes.length < 24 || signature.some((byte, i) => bytes[i] !== byte)) {
-		throw new Error('Not a PNG file.');
+		throw new Error(`${path} is not a PNG file.`);
 	}
 
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	return {width: view.getUint32(16), height: view.getUint32(20)};
+	return {width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20)};
 }
 
 type Shot = {path: string; label: string};
@@ -184,17 +180,7 @@ async function main(argv: string[]) {
 		throw new Error(`No PNG files found. ${usage}`);
 	}
 
-	const sizes = await Promise.all(
-		shots.map(async (shot) => {
-			try {
-				return pngSize(await readFile(shot.path));
-			} catch (error) {
-				throw new Error(`${shot.path}: ${(error as Error).message}`, {
-					cause: error,
-				});
-			}
-		}),
-	);
+	const sizes = await Promise.all(shots.map(({path}) => pngSize(path)));
 	const sheet = layoutSheet(sizes);
 	const folder = await mkdtemp(join(tmpdir(), 'tablodge-proof-sheet-'));
 	const browser = await chromium.launch({headless: true});
@@ -212,7 +198,7 @@ async function main(argv: string[]) {
 		await rm(folder, {recursive: true, force: true});
 	}
 
-	const written = pngSize(await readFile(out));
+	const written = await pngSize(out);
 	console.log(
 		`${out} (${written.width}x${written.height}, ${shots.length} screenshots)`,
 	);
