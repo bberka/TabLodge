@@ -108,6 +108,21 @@ test('a body is cut off at the import size cap even without Content-Length, and 
 	);
 });
 
+test('a response turned away for its declared size is aborted, not left downloading', async () => {
+	let signal: AbortSignal | undefined;
+	const open = new ReadableStream<Uint8Array>();
+	await assert.rejects(
+		importFromLink(async (_url, init) => {
+			signal = init?.signal ?? undefined;
+			return new Response(open, {
+				headers: {'Content-Length': String(46 * 1024 * 1024)},
+			});
+		}, PAGE_URL),
+		/larger than 45 MB/,
+	);
+	assert.equal(signal?.aborted, true);
+});
+
 test('without a body stream the cap counts UTF-8 bytes, not characters', async () => {
 	const wide = '界'.repeat(16 * 1024 * 1024);
 	const noStream = {

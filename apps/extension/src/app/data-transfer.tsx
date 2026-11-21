@@ -1221,6 +1221,7 @@ export function ImportDialog({
 	useEffect(() => {
 		readGenerationRef.current += 1;
 		if (!open) {
+			cancelLinkRead();
 			return;
 		}
 

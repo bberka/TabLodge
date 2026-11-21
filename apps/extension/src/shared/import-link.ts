@@ -66,6 +66,7 @@ export async function importFromLink(
 
 		return parseImportFile(await readCapped(response));
 	} finally {
+		controller.abort();
 		clearTimeout(timer);
 		signal?.removeEventListener('abort', stopWithCaller);
 	}
