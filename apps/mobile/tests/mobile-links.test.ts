@@ -75,3 +75,10 @@ describe('row text', () => {
 		);
 	});
 });
+
+test('a link is stored as it came and cleaned only on the way out, as in the extension (#424)', () => {
+	const saved = 'https://example.com/a?utm_source=x&id=7';
+	const on = linkSettings({removeTrackingParameters: true});
+	assert.equal(linkToOpen(saved, on), 'https://example.com/a?id=7');
+	assert.equal(linkToOpen(saved, linkSettings({})), saved);
+});
