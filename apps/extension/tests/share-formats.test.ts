@@ -291,3 +291,10 @@ test("a page of 623 links in 11 columns stays well under the server's 1 MB page 
 		623,
 	);
 });
+
+test('a malformed page with many data ids in one tag is read in linear time', () => {
+	const attack = `<p>x</p><script ${'id="tablodge-shared-page" '.repeat(50_000)}`;
+	const started = performance.now();
+	assert.throws(() => parseImportFile(attack, 'page.html'), /no links/);
+	assert.ok(performance.now() - started < 500, 'took too long');
+});

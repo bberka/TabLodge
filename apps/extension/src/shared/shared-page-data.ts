@@ -23,19 +23,46 @@ export function sharedPageDataBlock(data: SharedPageData): string {
 	return `<script type="application/json" id="${SHARED_PAGE_DATA_ID}">${json}</script>`;
 }
 
-const BLOCK = new RegExp(
-	String.raw`<script\b[^>]*\bid=["']?${SHARED_PAGE_DATA_ID}\b[^>]*>([\s\S]*?)</script\s*>`,
-	'i',
-);
+const DATA_ID_ATTRIBUTES = [
+	`id="${SHARED_PAGE_DATA_ID}"`,
+	`id='${SHARED_PAGE_DATA_ID}'`,
+	`id=${SHARED_PAGE_DATA_ID}>`,
+	`id=${SHARED_PAGE_DATA_ID} `,
+];
+
+function dataBlockText(html: string): string | undefined {
+	const lower = html.toLowerCase();
+	let at = lower.indexOf('<script');
+	while (at !== -1) {
+		const tagEnd = lower.indexOf('>', at);
+		if (tagEnd === -1) {
+			return undefined;
+		}
+
+		const close = lower.indexOf('</script', tagEnd);
+		if (close === -1) {
+			return undefined;
+		}
+
+		const tag = `${lower.slice(at, tagEnd)}>`;
+		if (DATA_ID_ATTRIBUTES.some((attribute) => tag.includes(attribute))) {
+			return html.slice(tagEnd + 1, close);
+		}
+
+		at = lower.indexOf('<script', close);
+	}
+
+	return undefined;
+}
 
 export function readSharedPageData(html: string): unknown {
-	const match = BLOCK.exec(html);
-	if (!match) {
+	const text = dataBlockText(html);
+	if (text === undefined) {
 		return undefined;
 	}
 
 	try {
-		return JSON.parse(match[1]) as unknown;
+		return JSON.parse(text) as unknown;
 	} catch {
 		return undefined;
 	}

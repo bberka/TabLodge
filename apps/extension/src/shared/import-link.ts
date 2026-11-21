@@ -76,7 +76,7 @@ async function readCapped(response: Response): Promise<string> {
 		const reader = response.body?.getReader();
 		if (!reader) {
 			const text = await response.text();
-			if (text.length > MAX_IMPORT_BYTES) {
+			if (utf8Bytes(text) > MAX_IMPORT_BYTES) {
 				throw new ImportFormatError(IMPORT_TOO_LARGE);
 			}
 
@@ -107,4 +107,14 @@ async function readCapped(response: Response): Promise<string> {
 					'Could not read that link. The page stopped loading before it finished.',
 				);
 	}
+}
+
+function utf8Bytes(text: string): number {
+	let bytes = 0;
+	for (const char of text) {
+		const code = char.codePointAt(0)!;
+		bytes += code < 0x80 ? 1 : code < 0x8_00 ? 2 : code < 0x1_00_00 ? 3 : 4;
+	}
+
+	return bytes;
 }

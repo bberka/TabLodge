@@ -108,6 +108,21 @@ test('a body is cut off at the import size cap even without Content-Length, and 
 	);
 });
 
+test('without a body stream the cap counts UTF-8 bytes, not characters', async () => {
+	const wide = '界'.repeat(16 * 1024 * 1024);
+	const noStream = {
+		ok: true,
+		status: 200,
+		headers: new Headers(),
+		body: null,
+		text: async () => wide,
+	} as unknown as Response;
+	await assert.rejects(
+		importFromLink(async () => noStream, PAGE_URL),
+		/larger than 45 MB/,
+	);
+});
+
 test('only an address ending in /p/ and a 22 character id looks like a shared page', () => {
 	assert.ok(isSharedPageUrl(PAGE_URL));
 	assert.ok(

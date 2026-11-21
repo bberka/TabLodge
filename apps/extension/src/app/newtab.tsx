@@ -368,6 +368,9 @@ function NewTab() {
 	const [busy, setBusy] = useState('');
 	// `?q=` (from the "Search … in TabLodge" selection menu) prefills both searches once, then leaves the URL.
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
+	const [openedToImport] = useState(() =>
+		Boolean(webUrl(new URLSearchParams(location.search).get('importLink'))),
+	);
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
@@ -586,7 +589,10 @@ function NewTab() {
 		(action) => canOpenPrivateWindow || action !== 'open-private',
 	);
 	const autoOpenFinder =
-		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
+		newTabOn &&
+		settings.autoFocusSearchOnNewTab === true &&
+		!initialQuery &&
+		!openedToImport;
 	const sessionsOnTop = settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
 		const search = parseSearchQuery(bookmarkSearch.trim());

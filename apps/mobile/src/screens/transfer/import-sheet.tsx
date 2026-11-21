@@ -127,6 +127,7 @@ export function ImportSheet({
 	useEffect(() => {
 		cancelRead();
 		setLink(linkUrl ?? '');
+		setPasted('');
 		setLinked(undefined);
 		setPicked(undefined);
 		setSkip(true);
