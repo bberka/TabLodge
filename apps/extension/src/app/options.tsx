@@ -827,7 +827,7 @@ const settingsGroups: Array<{
 					['copy', 'Copy link'],
 					['edit', 'Edit'],
 					['delete', 'Delete'],
-					['move', 'Move to'],
+					['move', 'Move to column…'],
 					['move-up', 'Move up'],
 					['move-down', 'Move down'],
 				],

@@ -292,13 +292,9 @@ export async function sessionCardQuickActionsCheck(env: Env, theme: Theme) {
 			const menuTrigger = card.locator('[data-move-focus]');
 			await menuTrigger.focus();
 			await page.keyboard.press('Enter');
-			await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
-			await page.keyboard.press('ArrowRight');
-			const workFolder = page.getByRole('menuitem', {
-				name: 'Work',
-				exact: true,
-			});
-			await workFolder.focus();
+			await page.getByRole('menuitem', {name: 'Move to folder…'}).focus();
+			await page.keyboard.press('Enter');
+			await page.keyboard.type('Work');
 			await page.keyboard.press('Enter');
 			await until(
 				async () =>
