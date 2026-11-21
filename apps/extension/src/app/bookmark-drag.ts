@@ -95,21 +95,10 @@ export function acceptsDrop(
 }
 
 /**
-The id of the Focus view's All item. It lists every column's bookmarks but is not a column, so a drop on it has no
-column of its own.
+The id of the Focus view's All item. It lists every column's bookmarks but is not a column and keeps no order of its
+own, so nothing can be dropped on it.
 */
 export const ALL_BOOKMARKS_ID = 'bookmark-all';
-
-/**
-The column a bookmark, session, or link drop lands in. A real column takes it itself; All takes it into the column of
-the card it landed on, and a drop on All away from every card goes nowhere (null).
-*/
-export function dropColumnId(
-	columnId: string,
-	cardColumnId: string | undefined | null,
-): string | null {
-	return columnId === ALL_BOOKMARKS_ID ? cardColumnId || null : columnId;
-}
 
 /**
 `manualOrder` is false while the column is sorted by something else: the stored order is not shown, so no slot next to
@@ -142,17 +131,17 @@ export function previewBookmarkDrop(
 		return;
 	}
 
-	const targetCard = (event.target as Element).closest<HTMLElement>(
-		'[data-bookmark-id]',
-	);
-	// Not a drop target: no line, and the browser shows that the drop is refused.
-	if (dropColumnId(columnId, targetCard?.dataset.columnId) === null) {
+	// All is a view, not a place to drop: no line, and the browser shows that the drop is refused.
+	if (columnId === ALL_BOOKMARKS_ID) {
 		onDropOver(null);
 		return;
 	}
 
 	event.preventDefault();
 	event.dataTransfer.dropEffect = kind === 'bookmark' ? 'move' : 'copy';
+	const targetCard = (event.target as Element).closest<HTMLElement>(
+		'[data-bookmark-id]',
+	);
 	const rect = targetCard?.getBoundingClientRect();
 	onDropOver({
 		kind,

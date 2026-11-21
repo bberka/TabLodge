@@ -170,7 +170,6 @@ import {
 	handleInternalDragStart,
 	acceptsDrop,
 	ALL_BOOKMARKS_ID,
-	dropColumnId,
 	parseDraggedBookmark,
 	parsePastedLinks,
 	previewBookmarkDrop,
@@ -1873,19 +1872,14 @@ function NewTab() {
 			return;
 		}
 
-		const targetCard = (event.target as Element).closest<HTMLElement>(
-			'[data-bookmark-id]',
-		);
-		// All is not a column: a drop there goes into the column of the card it landed on.
-		const dropColumn = dropColumnId(column.id, targetCard?.dataset.columnId);
-		if (!dropColumn) {
+		// All is a view of every column: nothing is dropped on it.
+		if (column.id === ALL_BOOKMARKS_ID) {
 			return;
 		}
 
-		const target =
-			dropColumn === column.id
-				? column
-				: (columns.find((entry) => entry.id === dropColumn) ?? UNFILED_COLUMN);
+		const targetCard = (event.target as Element).closest<HTMLElement>(
+			'[data-bookmark-id]',
+		);
 		// A sorted column shows no slots, so a drop goes to its end.
 		const targetBookmarkId = manualOrder
 			? targetCard?.dataset.bookmarkId || null
@@ -1911,7 +1905,7 @@ function NewTab() {
 				!manualOrder &&
 				ids.every(
 					(id) =>
-						bookmarks.find((entry) => entry.id === id)?.columnId === target.id,
+						bookmarks.find((entry) => entry.id === id)?.columnId === column.id,
 				)
 			) {
 				showStatus(
@@ -1920,7 +1914,7 @@ function NewTab() {
 				return;
 			}
 
-			await moveBookmarks(ids, target.id, targetBookmarkId, position);
+			await moveBookmarks(ids, column.id, targetBookmarkId, position);
 
 			return;
 		}
@@ -1938,13 +1932,13 @@ function NewTab() {
 			try {
 				const result = await addDroppedLinks(
 					session.links,
-					target.id,
+					column.id,
 					targetBookmarkId,
 					position,
 					true,
 				);
 				offerUndo(
-					`Added ${plural(result.count, 'link')} to “${target.name}”.${skippedNote(result.skipped)}`,
+					`Added ${plural(result.count, 'link')} to “${column.name}”.${skippedNote(result.skipped)}`,
 					result.undoId,
 					showStatus,
 					reload,
@@ -1967,7 +1961,7 @@ function NewTab() {
 		}
 
 		try {
-			await addDroppedLinks([parsed], target.id, targetBookmarkId, position);
+			await addDroppedLinks([parsed], column.id, targetBookmarkId, position);
 		} catch (reason) {
 			showStatus((reason as Error).message, true);
 		}
@@ -2886,7 +2880,7 @@ function NewTab() {
 								autoLoadMore
 								scrollBody={settings.limitBookmarksPerColumn === true}
 								renderAll={settings.limitBookmarksPerColumn === true}
-								manualOrder={manualOrder}
+								manualOrder={manualOrder && !activeFocus.all}
 								bodyMaxHeight={cappedColumnBodyHeight}
 								compact={compactBoard}
 								column={activeFocus.column}
@@ -4021,22 +4015,8 @@ const BookmarkColumn = memo(
 			: bookmarks.length > limit
 				? bookmarks.slice(0, limit)
 				: bookmarks;
-		// The first and last bookmark of each column: All lists several columns, and a bookmark moves only inside its own.
-		const edges = useMemo(() => {
-			const first = new Set<string>();
-			const last = new Set<string>();
-			for (const [index, entry] of siblings.entries()) {
-				if (siblings[index - 1]?.columnId !== entry.columnId) {
-					first.add(entry.id);
-				}
-
-				if (siblings[index + 1]?.columnId !== entry.columnId) {
-					last.add(entry.id);
-				}
-			}
-
-			return {first, last};
-		}, [siblings]);
+		const lastSibling = siblings.at(-1)?.id;
+		const firstSibling = siblings[0]?.id;
 		const onDropOver = actions.dropOver;
 		function leaveColumn(event: DragEvent<HTMLElement>) {
 			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -4168,8 +4148,8 @@ const BookmarkColumn = memo(
 									dropBefore={targeted && bookmarkDrop.position === 'before'}
 									dropAfter={targeted && bookmarkDrop.position === 'after'}
 									dropActive={targeted}
-									canMoveEarlier={manualOrder && !edges.first.has(bookmark.id)}
-									canMoveLater={manualOrder && !edges.last.has(bookmark.id)}
+									canMoveEarlier={manualOrder && bookmark.id !== firstSibling}
+									canMoveLater={manualOrder && bookmark.id !== lastSibling}
 									urlMode={urlMode}
 									clickOpensMenu={clickOpensMenu}
 									urlSettings={urlSettings}
