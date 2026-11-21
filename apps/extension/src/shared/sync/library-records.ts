@@ -97,7 +97,6 @@ const PORTABLE_PREFERENCES = [
 	'sessionLinkClickAction',
 	'bookmarkQuickActions',
 	'sessionsOnTop',
-	'copyFormat',
 	'removeTrackingParameters',
 	'simplifyUrls',
 	'markInsecureLinks',

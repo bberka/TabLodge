@@ -199,12 +199,13 @@ export async function addBookmarkNewColumnCheck(env: Env, theme: Theme) {
 				await page.screenshot({
 					path: `.dev/evidence/${entry}-new-column-${theme}.png`,
 				});
-				await page
-					.getByRole('button', {
-						name: entry === 'dashboard' ? 'Create column and save' : 'Save',
-						exact: true,
-					})
-					.press('Enter');
+				const saveButton = page.getByRole('button', {
+					name: entry === 'dashboard' ? 'Create column and save' : 'Save',
+					exact: true,
+				});
+				await (entry === 'prompt'
+					? Promise.all([page.waitForEvent('close'), saveButton.press('Enter')])
+					: saveButton.press('Enter'));
 				const board = await openPage(context, extensionId, 'newtab');
 				const column = board
 					.locator('section[data-column-id]')
@@ -213,6 +214,7 @@ export async function addBookmarkNewColumnCheck(env: Env, theme: Theme) {
 				const card = column
 					.locator('[data-bookmark-id]')
 					.filter({has: board.locator(`a[href="${url}"]`)});
+				await card.waitFor();
 				assert.equal(await card.count(), 1);
 				assert.match(await card.innerText(), new RegExp(note));
 				await board.close();

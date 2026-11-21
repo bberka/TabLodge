@@ -49,6 +49,7 @@
 		"cf:delete": "pnpm --filter tablodge-sync-server cf:delete",
 		"cf:bundle": "pnpm --filter tablodge-sync-server run cf:bundle",
 		"evidence": "node scripts/publish-evidence.ts",
+		"proof:sheet": "pnpm --filter tablodge-extension run proof:sheet",
 		"version:next": "node scripts/release-version.ts next",
 		"test": "vp test run",
 		"test:watch": "vp test",

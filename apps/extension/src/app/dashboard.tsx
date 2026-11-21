@@ -116,6 +116,7 @@ import {
 } from '../shared/session-folders';
 import {sharedPageSource} from '../shared/sync/shared-pages-client';
 import {duplicatesNote, saveMessage} from '../shared/save-feedback';
+import {VirtualRows} from './virtual-rows';
 import {SortMenu} from './sort-menu';
 import {inPrivateWindow} from './private-config';
 import {
@@ -132,6 +133,7 @@ import {
 	plural,
 	showSaveFailure,
 } from './common';
+import {claimUndo} from './message-client';
 import {defaultBookmarkColumnId} from './default-column';
 import {ImportDialog, SharedPagesDialog, useShareDialog} from './lazy-dialogs';
 import {
@@ -277,6 +279,8 @@ const NO_SELECTION = new Set<string>();
 Sessions rendered at first; more are added as the list is scrolled (thousands of cards at once are slow).
 */
 const SESSION_PAGE = 40;
+
+const SESSION_LINKS_MAX_HEIGHT = '44rem';
 const SESSION_SORT_OPTIONS = [
 	['newest', 'Newest first'],
 	['oldest', 'Oldest first'],
@@ -971,27 +975,6 @@ export function SessionManager({
 		}
 
 		setEditingTab(null);
-		if (url !== tab.url) {
-			// Undo puts the link's address, title and notes back; only this one saved link is touched.
-			showStatus('Link updated.', false, {
-				action: {
-					label: 'Undo',
-					async onClick() {
-						const undone = await send('UPDATE_TAB', {
-							groupId: group.id,
-							tabId: tab.id,
-							fields: {url: tab.url, title: tab.title, notes: tab.notes},
-						});
-						if (!undone?.ok) {
-							showStatus(undone?.error || 'Could not undo that edit.', true);
-						}
-
-						await reload();
-					},
-				},
-			});
-		}
-
 		await reload();
 	}
 
@@ -1121,7 +1104,10 @@ export function SessionManager({
 		});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not move this link.', true);
-		} else if (!copy && fromGroupId !== toGroupId && sourceIndex !== -1) {
+		} else if (copy) {
+			offerUndo('Link copied.', result.undoId, showStatus, reload);
+		} else if (fromGroupId !== toGroupId && sourceIndex !== -1) {
+			claimUndo(result.undoId);
 			showStatus(
 				`Moved the link to “${targetName ?? 'another session'}”.`,
 				false,
@@ -1584,29 +1570,6 @@ export function SessionManager({
 		);
 	}
 
-	function offerFolderMoveUndo(
-		message: string,
-		groupId: string,
-		previousFolderId: string,
-	) {
-		showStatus(message, false, {
-			action: {
-				label: 'Undo',
-				async onClick() {
-					const undone = await send('UPDATE_GROUP', {
-						groupId,
-						fields: {folderId: previousFolderId},
-					});
-					if (!undone?.ok) {
-						showStatus(undone?.error || 'Could not undo that move.', true);
-					}
-
-					await reload();
-				},
-			},
-		});
-	}
-
 	async function moveGroupToFolder(
 		opened: Session,
 		targetId: string,
@@ -1621,7 +1584,6 @@ export function SessionManager({
 		const leavesCurrentView =
 			folderId === group.folderId ||
 			(folderId === ALL && targetId === archivedId);
-		const previous = group.folderId;
 		const result = await send('UPDATE_GROUP', {
 			groupId: group.id,
 			fields: {folderId: targetId},
@@ -1633,10 +1595,11 @@ export function SessionManager({
 
 		const name =
 			targetName ?? folders.find((folder) => folder.id === targetId)?.name;
-		offerFolderMoveUndo(
+		offerUndo(
 			`Moved to ${name ?? 'the folder'}.`,
-			group.id,
-			previous,
+			result.undoId,
+			showStatus,
+			reload,
 		);
 		await reload();
 		if (leavesCurrentView) {
@@ -1645,17 +1608,17 @@ export function SessionManager({
 	}
 
 	async function archiveGroup(group: Session) {
-		const previousFolderId = group.folderId;
 		const result = await send('ARCHIVE_GROUP', {groupId: group.id});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not archive this session.', true);
 			return;
 		}
 
-		offerFolderMoveUndo(
+		offerUndo(
 			`Moved “${group.name}” to ${ARCHIVED_FOLDER_NAME}.`,
-			group.id,
-			previousFolderId,
+			result.undoId,
+			showStatus,
+			reload,
 		);
 		await reload();
 		focusAfterMove(
@@ -3066,6 +3029,47 @@ const GroupCard = memo(
 		// Screen readers read these names; a session saved without a name still needs one.
 		const name = group.name.trim() || 'Untitled session';
 		const previewTabs = group.tabs.slice(0, 6);
+		const runs = useMemo(() => tabRuns(group.tabs), [group.tabs]);
+		const [linksElement, setLinksElement] = useState<HTMLDivElement | null>(
+			null,
+		);
+		const renderRow = (tab: SavedTabRecord, splitBadge = false) => (
+			<SavedTab
+				key={tab.id}
+				tab={tab}
+				group={group}
+				settings={settings}
+				splitBadge={splitBadge}
+				selected={selectedTabs.has(tab.id)}
+				selectionActive={selectionActive}
+				selectedTabsForDrag={selectedTabsForDrag}
+				displayMode={displayMode}
+				actions={handlers}
+				dragStore={dragStore}
+			/>
+		);
+		const renderRun = (run: SavedTabRecord[]) =>
+			run.length === 1 ? (
+				renderRow(run[0])
+			) : (
+				<div
+					role="listitem"
+					className="relative my-0.5 rounded-lg bg-muted/40 ring-1 ring-inset ring-border/70"
+				>
+					<span
+						aria-hidden="true"
+						className="pointer-events-none absolute bottom-3.5 left-[3px] top-3.5 w-[3px] rounded-full bg-primary/35"
+					/>
+					<div
+						role="list"
+						className="m-0 p-0"
+						aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostOf(tab.url)).join(' and ')}`}
+					>
+						{renderRow(run[0], true)}
+						{renderRow(run[1])}
+					</div>
+				</div>
+			);
 		const mark = useDragSlice(dragStore, (store) =>
 			store.mark?.kind !== 'tab' && store.mark?.groupId === group.id
 				? store.mark
@@ -3619,48 +3623,27 @@ const GroupCard = memo(
 									</p>
 								</div>
 							)}
-							<ol className="m-0 list-none p-1 sm:p-1.5">
-								{tabRuns(group.tabs).map((run) => {
-									const row = (tab: SavedTabRecord, splitBadge = false) => (
-										<SavedTab
-											key={tab.id}
-											tab={tab}
-											group={group}
-											settings={settings}
-											splitBadge={splitBadge}
-											selected={selectedTabs.has(tab.id)}
-											selectionActive={selectionActive}
-											selectedTabsForDrag={selectedTabsForDrag}
-											displayMode={displayMode}
-											actions={handlers}
-											dragStore={dragStore}
-										/>
-									);
-									if (run.length === 1) {
-										return row(run[0]);
-									}
-
-									// A split view: both rows share a tinted background, joined by a bracket in the left gutter.
-									return (
-										<li
-											key={`split-${run[0].id}`}
-											className="relative my-0.5 rounded-lg bg-muted/40 ring-1 ring-inset ring-border/70"
-										>
-											<span
-												aria-hidden="true"
-												className="pointer-events-none absolute bottom-3.5 left-[3px] top-3.5 w-[3px] rounded-full bg-primary/35"
-											/>
-											<ol
-												className="m-0 list-none p-0"
-												aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostOf(tab.url)).join(' and ')}`}
-											>
-												{row(run[0], true)}
-												{row(run[1])}
-											</ol>
-										</li>
-									);
-								})}
-							</ol>
+							<div
+								ref={setLinksElement}
+								role="region"
+								// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex -- Keyboard users scroll this region on its own, as the bookmark column bodies.
+								tabIndex={0}
+								aria-label={`Links in ${name}`}
+								style={{maxHeight: SESSION_LINKS_MAX_HEIGHT}}
+								className="overflow-y-auto p-1 sm:p-1.5"
+							>
+								<div role="list" aria-label={`${name} links`}>
+									<VirtualRows
+										count={runs.length}
+										scrollElement={linksElement}
+										estimate={52}
+										gap={0}
+										itemKey={(index) => runs[index][0].id}
+									>
+										{(index) => renderRun(runs[index])}
+									</VirtualRows>
+								</div>
+							</div>
 						</div>
 					)}
 				</article>
@@ -3803,7 +3786,7 @@ const SavedTab = memo(
 				onSelect: onDelete,
 			},
 		];
-		function handleRowClick(event: MouseEvent<HTMLLIElement>) {
+		function handleRowClick(event: MouseEvent<HTMLElement>) {
 			if (
 				(event.target as Element).closest(
 					'button, input, [role="checkbox"], [role="menu"], [role="menuitem"]',
@@ -3830,8 +3813,9 @@ const SavedTab = memo(
 
 		return (
 			<ActionContextMenu actions={actions}>
-				<li
+				<div
 					draggable
+					role="listitem"
 					data-tab-id={tab.id}
 					className={cn(
 						'group/tab flex min-w-0',
@@ -4013,7 +3997,7 @@ const SavedTab = memo(
 							}
 						/>
 					</div>
-				</li>
+				</div>
 			</ActionContextMenu>
 		);
 	},

@@ -59,6 +59,8 @@ const noComments: RuleDefinition = {
 const xoConfig: XoConfigItem[] = [
 	{
 		ignores: [
+			'apps/extension/scripts/browser/perf-profile.ts',
+			'apps/extension/scripts/browser/perf-matrix.ts',
 			'dist/**',
 			'release/**',
 			'docs/**',
