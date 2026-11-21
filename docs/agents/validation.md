@@ -32,7 +32,7 @@ The pull request and your final reply list each check with its result. A check y
 
 ## Guards say why
 
-A guard is a hook, lint rule, CI check, skipped test, or lint suppression. When you add one, write what it prevents next to it: a comment, or the line in the doc that names it. When one looks removable, read that reason first, and change it only when the reason no longer holds. A guard with no reason gets its reason found before it is removed.
+A guard is a hook, lint rule, CI check, skipped test, or lint suppression. When you add one, write what it prevents where it is configured or in the doc that names it, and put a suppression's reason in the directive ([Code comments](comments.md)). When one looks removable, read that reason first, and change it only when the reason no longer holds. A guard with no reason gets its reason found before it is removed.
 
 ## Unslop the diff
 
@@ -48,7 +48,7 @@ Run the `unslop-*` skills that match those files, scoped to that list and nothin
 | --- | --- |
 | `.ts` and `.tsx` code | `unslop-typescript`, which continues into `unslop-react` and `unslop-ui` for React |
 | `apps/*/tests/` | `unslop-tests` |
-| Markdown, Help copy, website copy, code comments | `unslop-text` |
+| Markdown, Help copy, website copy | `unslop-text` |
 | Commit messages on the branch | `unslop-git` |
 
 Fix every finding that is in your diff. Leave code you did not change alone, even when it has slop, and mention it in the pull request only if it blocks the change. Then rerun `vp run check` and `vp run build`, commit the fixes, and continue. The skills write a ledger to `.unslop/`, which git ignores. The pull request does not need a report. Say in the pull request that the pass ran.

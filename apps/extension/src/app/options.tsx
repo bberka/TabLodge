@@ -62,6 +62,7 @@ import {
 	PopoverContent,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
+import {BOOKMARK_SORT_OPTIONS} from '../shared/bookmark-rules';
 import {ACCENTS, DEFAULT_ACCENT} from '../shared/accents';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {
@@ -406,6 +407,32 @@ const settingsGroups: Array<{
 				label: 'Show Trash bin button in the header',
 				help: 'Hide this shortcut to keep the header compact. The Trash bin remains in the Sessions menu, Bookmarks menu, side panel, and search palette.',
 				type: 'switch',
+			},
+			{
+				name: 'toastPosition',
+				label: 'Toast position',
+				help: 'Where messages with an Undo button appear: on TabLodge pages, in the Sources notice on a site, and after Save quote. Default is the bottom center, and the bottom right on a site.',
+				type: 'select',
+				options: [
+					['default', 'Default'],
+					['top-left', 'Top left'],
+					['top', 'Top center'],
+					['top-right', 'Top right'],
+					['bottom-left', 'Bottom left'],
+					['bottom', 'Bottom center'],
+					['bottom-right', 'Bottom right'],
+				],
+			},
+			{
+				name: 'toastDuration',
+				label: 'Messages stay',
+				help: 'How long a toast stays before it closes. Longer is twice the usual time. Until dismissed keeps it until you close it. It always stays while the pointer or focus is on it.',
+				type: 'select',
+				options: [
+					['default', 'Default'],
+					['longer', 'Longer'],
+					['dismiss', 'Until dismissed'],
+				],
 			},
 			{
 				name: 'urlDisplayMode',
@@ -783,6 +810,13 @@ const settingsGroups: Array<{
 					['focus', 'Focus'],
 					['board', 'Board'],
 				],
+			},
+			{
+				name: 'bookmarkSort',
+				label: 'Sort bookmarks',
+				help: 'Manual order is your own order and the only one you can rearrange by dragging. The other sorts change only what is shown. The sort button in the bookmarks toolbar changes this too.',
+				type: 'select',
+				options: BOOKMARK_SORT_OPTIONS.map(([value, label]) => [value, label]),
 			},
 			{
 				name: 'showAllBookmarks',
