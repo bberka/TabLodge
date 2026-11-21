@@ -5,6 +5,7 @@ import type {SyncStatus} from './sync/client';
 import type {SharedPage} from './sync/shared-pages-client';
 import type {PageCopy} from './page-copy';
 import type {LinkKind} from './link-kind';
+import type {ToastDuration, ToastPosition} from './toast-prefs';
 
 export type ActionMode =
 	| 'popup'
@@ -219,6 +220,15 @@ export type Settings = {
 	Show the sessions section above the bookmark board (default off).
 	*/
 	sessionsOnTop: boolean;
+	/**
+	Where toasts appear, on TabLodge's pages, in the Sources toast on site pages, and for the quote toast. `default` is
+	each one's own place (bottom center, and bottom right on site pages).
+	*/
+	toastPosition: ToastPosition;
+	/**
+	How long toasts stay: as today (`default`), twice as long, or until dismissed.
+	*/
+	toastDuration: ToastDuration;
 	/**
 	Show the Save this window shortcut in the dashboard header (default on).
 	*/
@@ -1012,6 +1022,11 @@ export type TabLodgeMessages = {
 	*/
 	SITE_SOURCE_PENDING: {source: string};
 	/**
+	Sent by a toast on a page that cannot read the settings (the Sources toast on a site): asks where toasts appear and
+	how long they stay.
+	*/
+	TOAST_PREFS: {};
+	/**
 	Sent by the site content script on the site's saved page: the items listed there. The worker answers how many
 	TabLodge lacks and whether to ask about them; it never says which.
 	*/
@@ -1416,6 +1431,7 @@ export type TabLodgeResponses = {
 	SITE_SOURCE_PENDING: {
 		saved?: {outcome: SiteSourceOutcome; column?: string} & Undoable;
 	};
+	TOAST_PREFS: {position: ToastPosition; duration: ToastDuration};
 	/**
 	`missing`: how many listed items TabLodge lacks. `ask`: some of them were never answered Not now.
 	*/
