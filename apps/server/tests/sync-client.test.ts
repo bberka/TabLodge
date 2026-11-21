@@ -405,7 +405,10 @@ function makeDevice(
 	return device;
 }
 
-async function until(check: () => boolean, ms = 3000) {
+// A local change waits 2.5 s before its round, so tests that wait for one need more than the default 5 s.
+vi.setConfig({testTimeout: 15_000});
+
+async function until(check: () => boolean, ms = 8000) {
 	const end = Date.now() + ms;
 	while (!check()) {
 		if (Date.now() > end) {
@@ -532,7 +535,7 @@ test('a value that changes on every read cannot keep sync pushing', async () => 
 		},
 		set() {},
 	});
-	// A local change waits 1.5 s for its round, so the fake clock runs a minute of rounds by hand.
+	// A local change waits 2.5 s for its round, so the fake clock runs a minute of rounds by hand.
 	vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
 	try {
 		await device.client.connect(URL_BASE, TOKEN);
@@ -1530,4 +1533,57 @@ test('a browser that updates from 0.3.0 still drops a record deleted elsewhere w
 	}
 
 	assert.deepEqual(ids(a.store).toSorted(), ['b2', 'mine']);
+});
+
+test('a local change waits 2.5 s after the last write, and a steady stream still syncs within 10 s', async () => {
+	const server = makeServer();
+	const device = makeDevice(server);
+	await device.client.connect(URL_BASE, TOKEN);
+	const sent = () => server.pushes.length;
+	// The round's requests are real async work, which fake timers do not wait for.
+	const letRoundFinish = async () => {
+		for (let turn = 0; turn < 20; turn += 1) {
+			await new Promise((resolve) => {
+				setImmediate(resolve);
+			});
+		}
+	};
+
+	const before = sent();
+	const edit = (id: string) => {
+		device.edit((store) => ({
+			...store,
+			bookmarks: [...store.bookmarks, bookmark(id)],
+		}));
+	};
+
+	vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+	try {
+		edit('first');
+		await vi.advanceTimersByTimeAsync(2400);
+		assert.equal(sent(), before, 'still waiting at 2.4 s');
+		// A write restarts the wait.
+		edit('second');
+		await vi.advanceTimersByTimeAsync(2400);
+		assert.equal(sent(), before, 'restarted by the second write');
+		await vi.advanceTimersByTimeAsync(1000);
+		await letRoundFinish();
+		assert.equal(sent(), before + 1, 'sent 2.5 s after the last write');
+
+		// A write every 2 s never lets the quiet period pass, so the round starts 10 s after the first write.
+		edit('steady-0');
+		for (let index = 1; index < 5; index += 1) {
+			await vi.advanceTimersByTimeAsync(2000);
+			edit(`steady-${index}`);
+		}
+
+		assert.equal(sent(), before + 1, 'held at 8 s');
+		await vi.advanceTimersByTimeAsync(2000);
+		assert.equal(sent(), before + 1, 'held until 10 s');
+		await vi.advanceTimersByTimeAsync(1000);
+		await letRoundFinish();
+		assert.equal(sent(), before + 2, 'sent at 10 s');
+	} finally {
+		vi.useRealTimers();
+	}
 });
