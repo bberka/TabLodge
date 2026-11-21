@@ -174,7 +174,7 @@ export async function bulkSelectionActionsCheck(env: Env, theme: Theme) {
 
 			await bookmarks
 				.getByRole('button', {
-					name: 'Add selected bookmarks to session',
+					name: 'Add to session…',
 					exact: true,
 				})
 				.waitFor();
@@ -201,7 +201,7 @@ export async function bulkSelectionActionsCheck(env: Env, theme: Theme) {
 
 			await bookmarks
 				.getByRole('button', {
-					name: 'Add selected bookmarks to session',
+					name: 'Add to session…',
 					exact: true,
 				})
 				.press('Enter');

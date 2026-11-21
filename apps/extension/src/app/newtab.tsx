@@ -2580,7 +2580,6 @@ function NewTab() {
 								variant="outline"
 								size="sm"
 								disabled={busy === 'bookmark-batch'}
-								aria-label="Add selected bookmarks to session"
 								onClick={() =>
 									setTargetPicker({
 										title: 'Add to session',
