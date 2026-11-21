@@ -33,13 +33,20 @@ export function LoadMore({
 			return undefined;
 		}
 
+		// Inside a scrolling column the viewport margin does nothing (the column clips the button), so the
+		// column itself is the root and the next batch lands before the end is reached.
+		let root: Element | null = element.parentElement;
+		while (root && !/auto|scroll/.test(getComputedStyle(root).overflowY)) {
+			root = root.parentElement;
+		}
+
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) {
 					onMoreRef.current();
 				}
 			},
-			{rootMargin: '800px 0px'},
+			{root, rootMargin: '800px 0px'},
 		);
 		observer.observe(element);
 		return () => observer.disconnect();

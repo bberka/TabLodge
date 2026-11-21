@@ -3918,6 +3918,8 @@ const MAX_SESSION_TARGETS = 30;
 Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
 */
 const COLUMN_PAGE = 60;
+// Cards a scrolling column mounts first, and adds per step as its end nears.
+const SCROLL_WINDOW = 48;
 
 const BookmarkColumn = memo(
 	({
@@ -3948,15 +3950,17 @@ const BookmarkColumn = memo(
 		ariaLabel,
 		emptyMessage,
 	}: BookmarkColumnProps) => {
+		// A scrolling column used to mount every bookmark at once, which made a long library slow to open. It
+		// now mounts a window and extends it before the end scrolls into view; the rest stay data until then.
+		const windowSize = renderAll
+			? Math.max(pageSize * 3, SCROLL_WINDOW)
+			: pageSize;
 		const [limit, loadMore] = usePagedLimit(
-			`${column.id}:${pageSize}`,
-			pageSize,
+			`${column.id}:${windowSize}`,
+			windowSize,
 		);
-		const shown = renderAll
-			? bookmarks
-			: bookmarks.length > limit
-				? bookmarks.slice(0, limit)
-				: bookmarks;
+		const shown =
+			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
 		const lastSibling = siblings.at(-1)?.id;
 		const firstSibling = siblings[0]?.id;
 		const onDropOver = actions.dropOver;
@@ -4101,11 +4105,11 @@ const BookmarkColumn = memo(
 								/>
 							);
 						})}
-						{!renderAll && bookmarks.length > shown.length && (
+						{bookmarks.length > shown.length && (
 							<LoadMore
 								compact
 								remaining={bookmarks.length - shown.length}
-								step={pageSize}
+								step={windowSize}
 								noun="bookmarks"
 								autoLoad={autoLoadMore}
 								onMore={loadMore}
