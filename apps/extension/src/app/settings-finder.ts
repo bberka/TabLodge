@@ -1,6 +1,3 @@
-// What the finder lists from Settings: every section (settings-sections.ts) and every field in them by its own name.
-// The fields come from `settingsFieldGroups`, the same data the Settings page renders, so a new field is found without
-// a second list, and tests/settings-finder.test.ts fails for a setting that has no entry. A field leads to its section.
 import {sectionId, settingsSections} from './settings-sections';
 import {
 	SETTING_WORDS,

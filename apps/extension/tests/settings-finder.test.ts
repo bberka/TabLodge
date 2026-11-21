@@ -30,16 +30,9 @@ const settingIds = (query: string) =>
 		.filter((item) => item.kind === 'setting')
 		.map((item) => item.id);
 
-/**
-Settings in the library that have no row of their own on the Settings page, with where they are found instead. A new
-setting is a row in `settingsFieldGroups`, which the finder lists by itself; one that really has no row is added here
-with its reason, and the test checks the section it names exists.
-*/
 const NOT_A_ROW: Partial<Record<keyof typeof DEFAULT_SETTINGS, string>> = {
 	excludedOrigins: 'Excluded websites',
-	// Only the Android app reads it; the extension keeps it for sync.
 	mobileApp: '',
-	// The sync client's own bookkeeping, not something a person sets.
 	heldSettings: '',
 };
 

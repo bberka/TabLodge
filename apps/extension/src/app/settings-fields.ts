@@ -1,6 +1,4 @@
-// Every row of the Settings page that is a plain field, as data. The page renders them (options.tsx), and the finder lists
-// each one by its own name (settings-sections.ts), so a new field is found without a second list. Pure on purpose: the
-// a11y check and the tests import this file in Node, so it takes the browser facts as arguments and imports only types.
+import {BOOKMARK_SORT_OPTIONS} from '../shared/bookmark-rules';
 import type {
 	BookmarkQuickAction,
 	SessionQuickAction,
@@ -10,37 +8,19 @@ import type {
 export type FieldEnvironment = {
 	appName: string;
 	firefox: boolean;
-	/**
-	The toolbar button can open the side panel (Chromium).
-	*/
 	sidePanel: boolean;
-	/**
-	The browser can open a link in a private window.
-	*/
 	privateWindows: boolean;
 };
 
-// Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.
 export type SettingKey<V> = {
 	[K in keyof Settings]-?: Settings[K] extends V ? K : never;
 }[keyof Settings];
-// `requires`: a switch that must be on for this row to apply; the row is hidden while it is off (search shows it
-// next to its parent, disabled).
 export type SettingField = {
 	label: string;
 	help: string;
 	requires?: SettingKey<boolean>;
-	/**
-	Like `requires`, for a dependency that is not a switch (such as "backups are not off"): the row is hidden while false.
-	*/
 	enabled?: (settings: Settings) => boolean;
-	/**
-	The row an `enabled` check depends on, so search can show the two together (`requires` names it already).
-	*/
 	parent?: keyof Settings;
-	/**
-	The row only exists while this is true for the current settings; otherwise it is hidden and left out of search.
-	*/
 	when?: (settings: Settings) => boolean;
 } & (
 	| {name: SettingKey<boolean>; type: 'switch'}
@@ -49,22 +29,13 @@ export type SettingField = {
 			type: 'number';
 			min: number;
 			max: number;
-			/**
-			Text after the input, such as "tabs".
-			*/
 			suffix: string;
 	  }
 	| {name: SettingKey<string>; type: 'select'; options: Array<[string, string]>}
 	| {
 			name: SettingKey<number>;
 			type: 'number-select';
-			/**
-			Value (as text) and label of each allowed number.
-			*/
 			options: Array<[string, string]>;
-			/**
-			Adds a Custom entry at the bottom of the list that reveals a number input for any whole number in range.
-			*/
 			custom?: {min: number; max: number; suffix: string};
 	  }
 	| {
@@ -105,8 +76,6 @@ export const settingsFieldGroups = ({
 	{
 		title: `Opening ${appName}`,
 		fields: [
-			// Firefox cannot tell a new tab from the dashboard being opened, so it cannot hand a new tab on: it always keeps
-			// the page on, and these three rows do not exist there.
 			...(firefox
 				? []
 				: ([
@@ -145,7 +114,6 @@ export const settingsFieldGroups = ({
 				label: 'Focus search when opening a new tab',
 				help: 'Opens the search palette whenever a new tab opens. The browser may keep focus in the address bar until you click the page.',
 				type: 'switch',
-				// Firefox always keeps the new tab page on and hides its switch, so this row stands alone there.
 				requires: firefox ? undefined : 'newTabEnabled',
 			},
 			{
@@ -529,7 +497,6 @@ export const settingsFieldGroups = ({
 					['open', 'Open duplicates'],
 				],
 			},
-			// Firefox has no split view; saved pairs always reopen as neighboring tabs.
 			...(firefox
 				? []
 				: ([
@@ -664,6 +631,13 @@ export const settingsFieldGroups = ({
 					['focus', 'Focus'],
 					['board', 'Board'],
 				],
+			},
+			{
+				name: 'bookmarkSort',
+				label: 'Sort bookmarks',
+				help: 'Manual order is your own order and the only one you can rearrange by dragging. The other sorts change only what is shown. The sort button in the bookmarks toolbar changes this too.',
+				type: 'select',
+				options: BOOKMARK_SORT_OPTIONS.map(([value, label]) => [value, label]),
 			},
 			{
 				name: 'showAllBookmarks',
@@ -869,10 +843,6 @@ export const settingsFieldGroups = ({
 	},
 ];
 
-/**
-Other words people use for a field, for the finder. A field is always found by its label and its option names;
-add words here only for what the label does not say. Keyed by the setting's name, so a typo fails the type check.
-*/
 export const SETTING_WORDS: Partial<Record<keyof Settings, string[]>> = {
 	newTabEnabled: ['new tab page', 'newtab', 'home page', 'start page'],
 	newTabFallback: ['new tab fallback', 'blank page', 'browser new tab'],
@@ -970,6 +940,7 @@ export const SETTING_WORDS: Partial<Record<keyof Settings, string[]>> = {
 	sessionLinkClickAction: ['click a session link', 'saved tab click'],
 	groupTitleAction: ['click a session title', 'session title'],
 	bookmarkBoardView: ['board view', 'focus view', 'columns view', 'layout'],
+	bookmarkSort: ['sort', 'order', 'newest', 'oldest', 'title', 'site'],
 	showAllBookmarks: ['show all', 'all bookmarks', 'all view'],
 	bookmarkClickAction: ['click a bookmark', 'open bookmark', 'bookmark click'],
 	bookmarkQuickActions: ['quick actions', 'bookmark buttons', 'card buttons'],
