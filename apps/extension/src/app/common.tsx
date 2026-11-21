@@ -7,7 +7,7 @@ import {
 	type ComponentType,
 	type ReactNode,
 } from 'react';
-import {Bookmark, CircleAlert, CircleCheck, X} from 'lucide-react';
+import {Bookmark, CircleAlert, CircleCheck, Info, X} from 'lucide-react';
 import {
 	Card,
 	CardContent,
@@ -513,6 +513,10 @@ export type Status = {
 	*/
 	id?: string;
 	/**
+	A notice, not a success or an error: a save that stored nothing because it was a duplicate. It is shown as a toast with an info icon, never the success check.
+	*/
+	notice?: boolean;
+	/**
 	A button on the toast, such as Undo. The toast stays a little longer while it has one.
 	*/
 	action?: StatusAction;
@@ -526,6 +530,10 @@ export type StatusOptions = {
 	Show a success message as a visible toast instead of only announcing it to screen readers.
 	*/
 	toast?: boolean;
+	/**
+	Marks the toast as a notice (see `Status.notice`).
+	*/
+	notice?: boolean;
 	/**
 	Adds a button to the toast (always shown as a toast), for example `{label: 'Undo', onClick}`.
 	*/
@@ -605,6 +613,7 @@ export function reportSessionSave(
 	const message = saveMessage(outcome);
 	if (forceable) {
 		showStatus(message, false, {
+			notice: outcome.kind === 'duplicate',
 			action: forceAddAction(result.rejectedTabIds, showStatus, reload),
 		});
 		return;
@@ -634,7 +643,10 @@ export function reportSessionSave(
 		return;
 	}
 
-	showStatus(message, outcome.kind === 'failed', {toast: true});
+	showStatus(message, outcome.kind === 'failed', {
+		toast: true,
+		notice: outcome.kind === 'duplicate',
+	});
 }
 
 /**
@@ -649,7 +661,7 @@ export function showSaveFailure(
 	showStatus(
 		result?.error || fallback,
 		!result?.duplicate,
-		result?.duplicate ? {toast: true} : undefined,
+		result?.duplicate ? {toast: true, notice: true} : undefined,
 	);
 }
 
@@ -662,6 +674,7 @@ export function useStatus(): [Status | null, ShowStatus] {
 						message,
 						error: Boolean(error),
 						toast: Boolean(options.toast || options.action),
+						...(options.notice && {notice: true}),
 						id: `${Date.now()}-${Math.random()}`,
 						...(options.action && {action: options.action}),
 					}
@@ -733,7 +746,11 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 		document.addEventListener('keydown', onKeyDown);
 		return () => document.removeEventListener('keydown', onKeyDown);
 	}, [undoAction, key]);
-	const Icon = visible?.error ? CircleAlert : CircleCheck;
+	const Icon = visible?.error
+		? CircleAlert
+		: visible?.notice
+			? Info
+			: CircleCheck;
 	return (
 		<>
 			<p className="sr-only" role="status" aria-live="polite">
@@ -759,7 +776,11 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					<Icon
 						className={cn(
 							'mt-0.5 h-4 w-4 shrink-0',
-							visible.error ? 'text-destructive' : 'text-primary',
+							visible.error
+								? 'text-destructive'
+								: visible.notice
+									? 'text-muted-foreground'
+									: 'text-primary',
 						)}
 						aria-hidden="true"
 					/>
