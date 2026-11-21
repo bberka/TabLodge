@@ -458,9 +458,6 @@ function NewTab() {
 		toggle: toggleBookmark,
 		clear: clearBookmarkSelection,
 	} = useBookmarkSelection(bookmarks);
-	const selectedBookmarkIds = bookmarks
-		.filter((bookmark) => selectedBookmarks.has(bookmark.id))
-		.map((bookmark) => bookmark.id);
 	const bookmarkSelectionMode: BookmarkSelectionMode = bookmarkSelectionEnabled
 		? 'on'
 		: selectionModifier
@@ -479,6 +476,11 @@ function NewTab() {
 	const bookmarkSort = settings.bookmarkSort ?? 'manual';
 	// Only the stored order can be rearranged; any other sort is a view of it.
 	const manualOrder = bookmarkSort === 'manual';
+	// In the order shown, so a batch moved under a sort arrives in that order.
+	const selectedBookmarkIds = sortBookmarks(
+		bookmarks.filter((bookmark) => selectedBookmarks.has(bookmark.id)),
+		bookmarkSort,
+	).map((bookmark) => bookmark.id);
 	const compactBoard = settings.bookmarkDensity === 'compact';
 	const bookmarkGridTemplateColumns = bookmarkGridTemplate(
 		settings.bookmarkColumnWidth ?? 'default',
@@ -527,6 +529,7 @@ function NewTab() {
 			}
 
 			await reload();
+			showStatus(`Bookmarks sorted: ${sortLabel(value as BookmarkSort)}.`);
 		},
 		[reload, showStatus],
 	);
@@ -1871,20 +1874,22 @@ function NewTab() {
 			const ids = draggedBookmarksRef.current.includes(bookmarkId)
 				? draggedBookmarksRef.current
 				: [bookmarkId];
-			if (
-				!manualOrder &&
-				ids.every(
-					(id) =>
-						bookmarks.find((entry) => entry.id === id)?.columnId === column.id,
-				)
-			) {
+			// In a sorted column, bookmarks already there keep their stored position.
+			const movable = manualOrder
+				? ids
+				: ids.filter(
+						(id) =>
+							bookmarks.find((entry) => entry.id === id)?.columnId !==
+							column.id,
+					);
+			if (movable.length === 0) {
 				showStatus(
 					`Bookmarks are sorted (${sortLabel(bookmarkSort)}). Choose Manual order in the sort menu to rearrange them.`,
 				);
 				return;
 			}
 
-			await moveBookmarks(ids, column.id, targetBookmarkId, position);
+			await moveBookmarks(movable, column.id, targetBookmarkId, position);
 
 			return;
 		}
