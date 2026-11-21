@@ -73,9 +73,12 @@ function mediaBookmark(
 		: {url: page, title: click.pageTitle?.trim() || siteName(page)};
 }
 
+/**
+`isDuplicate` is the save duplicate rule (save-rules.ts) for the column the media goes to.
+*/
 export function mediaSave(
 	click: MediaClick,
-	bookmarkUrls: ReadonlySet<string>,
+	isDuplicate: (url: string) => boolean,
 	trash: readonly unknown[],
 ): MediaSave {
 	const bookmark = mediaBookmark(click);
@@ -83,7 +86,7 @@ export function mediaSave(
 		return {ok: false, reason: 'unsupported'};
 	}
 
-	if (bookmarkUrls.has(bookmark.url)) {
+	if (isDuplicate(bookmark.url)) {
 		return {ok: false, reason: 'saved'};
 	}
 

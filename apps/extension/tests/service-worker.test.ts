@@ -2406,38 +2406,6 @@ test('RESTORE_GROUP retries without saved bounds when the browser rejects them',
 	assert.equal(harness.windowCreateCalls[1].left, undefined);
 });
 
-test('single-tab restore can remain in the background or switch based on its setting', async () => {
-	const background = createWorkerHarness(
-		stateWithSession({singleTabBehavior: 'stay'}),
-	);
-	const backgroundResult = await background.sendMessage({
-		type: 'RESTORE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-	});
-	assert.equal(backgroundResult.ok, true, backgroundResult.error);
-	assert.equal(
-		background.tabs.find((tab) => tab.id === background.openedTabs[0].id)!
-			.active,
-		false,
-	);
-
-	const foreground = createWorkerHarness(
-		stateWithSession({singleTabBehavior: 'switch'}),
-	);
-	const foregroundResult = await foreground.sendMessage({
-		type: 'RESTORE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-	});
-	assert.equal(foregroundResult.ok, true, foregroundResult.error);
-	assert.equal(
-		foreground.tabs.find((tab) => tab.id === foreground.openedTabs[0].id)!
-			.active,
-		true,
-	);
-});
-
 test('background restore unloading leaves active and pinned tabs alone', async () => {
 	const state = stateWithSession({
 		unloadRestoredTabs: true,
@@ -5263,7 +5231,7 @@ test('pinned and grouped split pairs keep their state, with grouping before spli
 	assert.match(harness.apiLog.at(-1)!, /:collapsed$/);
 });
 
-test('restore duplicate skipping and single-tab restore open a lone half without splitting', async () => {
+test('restore duplicate skipping opens a lone half without splitting', async () => {
 	const open = [
 		{
 			id: 1,
@@ -5290,19 +5258,6 @@ test('restore duplicate skipping and single-tab restore open a lone half without
 		skipped.openedTabs.map((tab) => tab.url),
 		['https://right.example/', 'https://plain.example/'],
 	);
-
-	const single = createWorkerHarness(stateWithSplitSession());
-	const singleResult = await single.sendMessage({
-		type: 'RESTORE_TAB',
-		groupId: 'session-1',
-		tabId: 'split-right',
-	});
-	assert.equal(singleResult.ok, true, singleResult.error);
-	assert.deepEqual(
-		single.openedTabs.map((tab) => tab.url),
-		['https://right.example/'],
-	);
-	assert.deepEqual(single.apiLog, []);
 });
 
 test('restored tabs are unloaded only when the restore opened more than the threshold', async () => {
@@ -9167,20 +9122,6 @@ test('undo paths: restore-and-remove, move between sessions and close-after-save
 		['saved-tab-1', 'saved-tab-2'],
 	);
 
-	// Single-tab restore-and-remove.
-	const single = await harness.sendMessage({
-		type: 'RESTORE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-		restoreMode: 'remove',
-		restoreTarget: 'current-window',
-	});
-	assert.equal(single.ok, true, single.error);
-	assert.ok(single.trashId);
-	assert.equal(harness.state.groups[0].tabs.length, 1);
-	await harness.sendMessage({type: 'RESTORE_TRASH', id: single.trashId});
-	assert.equal(harness.state.groups[0].tabs[0].id, 'saved-tab-1');
-
 	// Moving a link and moving it back to the neighbor it sat next to.
 	const two = stateWithSession();
 	two.groups = [
@@ -9360,7 +9301,12 @@ test('saving is refused with a clear error when it would exceed 1000 sessions, a
 
 test('adding into a full session is refused for a move and for saving the current tab', async () => {
 	const state = reorderState();
-	state.groups[0] = {...state.groups[0], ...filler('A', 1000)};
+	// The default target is the most recently updated session, so make the full one that.
+	state.groups[0] = {
+		...state.groups[0],
+		...filler('A', 1000),
+		updatedAt: 9_999_999_999_999,
+	};
 	const harness = createWorkerHarness(state);
 	const moved = await harness.sendMessage({
 		type: 'MOVE_TAB',
@@ -12005,6 +11951,52 @@ const remoteSource = (id: string, value?: Record<string, unknown>) => ({
 	h: stampAt(Date.now() + 60_000),
 	d: 'other-browser',
 	...(value ? {value} : {deleted: true as const}),
+});
+
+test('the theme and accents from another browser apply here, and the rest of the private config stays', async () => {
+	const server = syncServer();
+	const remoteSetting = (id: string, value: unknown) => ({
+		kind: 'setting' as const,
+		id,
+		h: stampAt(Date.now() + 60_000),
+		d: 'other-browser',
+		value,
+	});
+	assert.deepEqual(
+		server.log.push(
+			[
+				remoteSetting('uiTheme', 'dark'),
+				remoteSetting('uiAccent', 'not-an-accent'),
+				remoteSetting('privateAccent', 'violet'),
+			],
+			Date.now(),
+		),
+		['applied', 'applied', 'applied'],
+	);
+	const privateConfig = {
+		mode: 'saved',
+		configured: true,
+		redirectNewTabs: false,
+		accent: 'teal',
+	};
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+		storage: {
+			...regularSync,
+			uiAccent: 'rose',
+			'tablodge.private.config': privateConfig,
+		},
+	});
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	assert.equal(harness.extraStorage.uiTheme, 'dark');
+	assert.equal(harness.extraStorage.uiAccent, 'rose', 'a value not valid here');
+	assert.deepEqual(
+		structuredClone(harness.extraStorage['tablodge.private.config']),
+		{
+			...privateConfig,
+			accent: 'violet',
+		},
+	);
 });
 
 test('Sources choices pulled from another browser show as on there, not here', async () => {

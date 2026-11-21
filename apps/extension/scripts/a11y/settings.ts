@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import type {Page} from 'playwright';
+import type {Locator, Page} from 'playwright';
 import {settingsSections} from '../../src/app/settings-sections.ts';
 import {fromRoot} from '../vite-shared.ts';
 import {captureEvidence, captureResetEvidence} from './evidence.ts';
@@ -44,6 +44,98 @@ export async function settingsSearchCheck(env: Env) {
 				} finally {
 					await page.close();
 				}
+			}
+		},
+	);
+}
+
+// A section reset or a row reset once wrapped onto its own line on a phone, and the Archive row's days field stacked under its select.
+export async function settingsNarrowLayoutCheck(env: Env) {
+	const {context, extensionId} = env;
+	await check(
+		'settings resets and row controls stay level at narrow widths',
+		async () => {
+			const page = await openPage(context, extensionId, 'options');
+			const saved = await page.evaluate(async () => {
+				const {chrome} = globalThis as typeof globalThis & {
+					chrome: ExtensionApi;
+				};
+				const before = (await chrome.runtime.sendMessage({
+					type: 'UPDATE_SETTINGS',
+					settings: {},
+				})) as {settings: Record<string, unknown>};
+				await chrome.runtime.sendMessage({
+					type: 'UPDATE_SETTINGS',
+					settings: {autoArchiveDays: 45, sessionSort: 'oldest'},
+				});
+				return {
+					autoArchiveDays: before.settings.autoArchiveDays,
+					sessionSort: before.settings.sessionSort,
+				};
+			});
+			try {
+				for (const width of [360, 390, 768]) {
+					await page.setViewportSize({width, height: 900});
+					await page.goto(page.url());
+					const card = page.locator('[id="settings-session-board"]');
+					await card.waitFor();
+					const centerOf = async (locator: Locator) => {
+						const box = await locator.boundingBox();
+						assert.ok(box);
+						return {
+							middle: box.y + box.height / 2,
+							top: box.y,
+							bottom: box.y + box.height,
+						};
+					};
+
+					const title = await centerOf(
+						card.getByRole('heading', {name: 'Session board'}),
+					);
+					const sectionReset = await centerOf(
+						card.getByRole('button', {name: 'Reset Session board to default'}),
+					);
+					assert.ok(
+						sectionReset.middle >= title.top - 24,
+						`section reset sits above the title at ${width}px`,
+					);
+					assert.ok(
+						sectionReset.middle <= title.bottom + 24,
+						`section reset wrapped below the title at ${width}px`,
+					);
+					const row = card.locator('[data-setting-row="autoArchiveDays"]');
+					// The page may still be scrolling to the section, so read all three lines until they agree.
+					let lines = {resetY: 0, selectY: 0, daysY: 0};
+					await until(
+						async () => {
+							lines = {
+								resetY: (
+									await centerOf(
+										row.getByRole('button', {name: /^Reset Archive/}),
+									)
+								).middle,
+								selectY: (await centerOf(row.getByRole('combobox'))).middle,
+								daysY: (await centerOf(row.getByRole('spinbutton'))).middle,
+							};
+							return (
+								Math.abs(lines.resetY - lines.selectY) <= 3 &&
+								(width >= 640 || Math.abs(lines.daysY - lines.selectY) <= 3)
+							);
+						},
+						`Archive reset and days field level with the select at ${width}px (${JSON.stringify(lines)})`,
+					);
+				}
+			} finally {
+				await page.evaluate(async (values) => {
+					const {chrome} = globalThis as typeof globalThis & {
+						chrome: ExtensionApi;
+					};
+					await chrome.runtime.sendMessage({
+						type: 'UPDATE_SETTINGS',
+						settings: values,
+					});
+				}, saved);
+				await page.close();
 			}
 		},
 	);

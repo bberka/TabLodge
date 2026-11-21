@@ -153,7 +153,6 @@ export type Settings = {
 	restoreTarget: RestoreTarget;
 	restoreWindowBounds: boolean;
 	restoreMode: RestoreMode;
-	singleTabBehavior: 'stay' | 'switch';
 	unloadRestoredTabs: boolean;
 	/**
 	Background restored tabs are unloaded only when a restore opened more tabs than this (1 to 500, default 5).
@@ -738,7 +737,6 @@ export type TabLodgeMessages = {
 		links?: LinkEntry[];
 	};
 	SAVE_CURRENT_TAB_TO_GROUP: {};
-	RESTORE_TAB: {groupId: string; tabId: string} & RestoreOptions;
 	RESTORE_GROUP: {groupId: string; forceRemove?: boolean} & RestoreOptions;
 	/**
 	Saves the window's web tabs as a new session, opens `groupId` in the same window, and closes the saved tabs.
@@ -1070,6 +1068,10 @@ export type ActionFailure = {
 	*/
 	locked?: true;
 	/**
+	Set when nothing was saved because every link was already saved (a skipped duplicate): shown as a notice, never as success.
+	*/
+	duplicate?: true;
+	/**
 	Set when connecting to a sync server failed because of one form field, so the page can show the error there.
 	*/
 	field?: 'url' | 'token' | 'credential' | 'serverCredential';
@@ -1231,7 +1233,6 @@ export type TabLodgeResponses = {
 	*/
 	PREVIEW_SESSION_NAME: {name: string; asks: boolean};
 	SAVE_CURRENT_TAB_TO_GROUP: {count: number; skipped: number; groupId: string};
-	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
 	/**
 	`saved`/`savedGroupId`: the tabs of the old window and the session they went into. When a saved session already

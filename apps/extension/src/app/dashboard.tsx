@@ -103,7 +103,6 @@ import type {
 	Settings,
 	TabLodgeState,
 } from '../shared/types';
-import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
 import {hostOf, webUrl} from '../shared/web-url';
 import {
@@ -118,6 +117,7 @@ import {
 	isArchivedFolder,
 	visibleSessionFolders,
 } from '../shared/session-folders';
+import {duplicatesNote, saveMessage} from '../shared/save-feedback';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -131,6 +131,7 @@ import {
 	useStatus,
 	restoreFailureText,
 	plural,
+	showSaveFailure,
 } from './common';
 import {defaultBookmarkColumnId} from './default-column';
 import {ImportDialog, useShareDialog} from './lazy-dialogs';
@@ -145,6 +146,10 @@ import {
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {FolderLabel, IconLabel} from './icon-label';
+import {
+	TargetPickerDialog,
+	type TargetPickerRequest,
+} from './target-picker-dialog';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
@@ -168,6 +173,7 @@ import {
 import {
 	canOpenPrivateWindow,
 	openInPrivateWindow,
+	linkDestination,
 	openLink,
 	privateWindowFailure,
 	resolveLinkTarget,
@@ -206,6 +212,10 @@ type FolderDialog = {
 	Create mode only: the session to move into the new folder.
 	*/
 	moveGroupId?: string;
+	/**
+	Create mode only: a name typed in the folder picker, used as the form's first value.
+	*/
+	name?: string;
 	/**
 	The icon chosen so far in the open dialog.
 	*/
@@ -339,6 +349,9 @@ export function SessionManager({
 	const [selected, setSelected] = useState(() => new Set<string>());
 	const [anchor, setAnchor] = useState<string | null>(null);
 	const [dialog, setDialog] = useState<DialogState>(null);
+	const [targetPicker, setTargetPicker] = useState<TargetPickerRequest | null>(
+		null,
+	);
 	const [editingGroup, setEditingGroup] = useState<Session | null>(null);
 	// Set when a session title click opens the details dialog: the name field gets focus with its text selected.
 	const [focusGroupName, setFocusGroupName] = useState(false);
@@ -885,9 +898,7 @@ export function SessionManager({
 		}
 
 		await reload();
-		const duplicates = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
+		const duplicates = duplicatesNote(result.skipped);
 		offerUndo(
 			mode === 'replace'
 				? `Replaced the links in “${group.name}” with this window: ${plural(result.count, 'link')}, ${result.added} new, ${result.removed} removed.${duplicates}`
@@ -919,38 +930,6 @@ export function SessionManager({
 			showStatus,
 			reload,
 		);
-	}
-
-	async function restoreTab(
-		group: Session,
-		tab: SavedTabRecord,
-		event?: ClickModifiers,
-	) {
-		const result = await send('RESTORE_TAB', {
-			groupId: group.id,
-			tabId: tab.id,
-			restoreMode: event?.ctrlKey || event?.metaKey ? 'keep' : undefined,
-			restoreTarget: event?.shiftKey ? 'always-new-window' : undefined,
-			activate: event?.ctrlKey || event?.metaKey ? false : undefined,
-		});
-		if (!result?.ok) {
-			showStatus(result?.error || 'Could not restore this tab.', true);
-		} else if (result.failed) {
-			showStatus(
-				restoreFailureText(result.failures?.[0]) ||
-					'This tab could not be restored.',
-				true,
-			);
-		} else if (result.trashId) {
-			offerTrashUndo(
-				'Restored the tab and removed it from the session.',
-				result.trashId,
-				showStatus,
-				reload,
-			);
-		}
-
-		await reload();
 	}
 
 	async function saveTabDetails(event: SyntheticEvent<HTMLFormElement>) {
@@ -1063,9 +1042,7 @@ export function SessionManager({
 		const opened: number[] = [];
 		try {
 			for (const tab of tabs) {
-				const destination = settings.removeTrackingParameters
-					? stripTrackingParameters(tab.url)
-					: tab.url;
+				const destination = linkDestination(tab.url, settings);
 				const created = await chrome.tabs.create({
 					url: destination,
 					active: false,
@@ -1104,9 +1081,7 @@ export function SessionManager({
 	async function copyTabLink(tab: SavedTabRecord) {
 		try {
 			await writeClipboard({
-				text: settings.removeTrackingParameters
-					? stripTrackingParameters(tab.url)
-					: tab.url,
+				text: linkDestination(tab.url, settings),
 				html: null,
 			});
 		} catch {
@@ -1187,16 +1162,19 @@ export function SessionManager({
 			position,
 		});
 		if (!result?.ok) {
-			showStatus(result?.error || 'Could not add the dropped links.', true);
+			showSaveFailure(showStatus, result, 'Could not add the dropped links.');
 			return;
 		}
 
 		await reload();
-		const duplicates = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
 		offerUndo(
-			`Added ${plural(result.added, 'link')} to “${group.name}”.${duplicates}`,
+			saveMessage({
+				kind: 'saved',
+				count: result.added,
+				skipped: result.skipped,
+				noun: 'link',
+				into: `“${group.name}”`,
+			}),
 			result.undoId,
 			showStatus,
 			reload,
@@ -1361,7 +1339,6 @@ export function SessionManager({
 		replaceFromWindow: (group) => updateFromWindow(group, 'replace'),
 		appendWindow: (group) => updateFromWindow(group, 'append'),
 		splitSelected,
-		restoreTab,
 		updateGroup,
 		archive: archiveGroup,
 		share: (group) =>
@@ -1392,26 +1369,20 @@ export function SessionManager({
 		moveGroup,
 		canMoveGroup,
 		merge: mergeGroup,
-		newFolderFor: (group) => setDialog({mode: 'create', moveGroupId: group.id}),
+		newFolderFor: (group, name) =>
+			setDialog({mode: 'create', moveGroupId: group.id, name}),
 		folderTargets: () => folders,
+		pickTarget: setTargetPicker,
 		bookmark: openBookmarkPicker,
 		select: changeSelection,
 		selectGroup: changeGroupSelection,
-		moveTargets(excludeId) {
-			const targets: Array<{id: string; name: string}> = [];
-			for (const group of groups) {
-				if (group.id === excludeId) {
-					continue;
-				}
-
-				targets.push({id: group.id, name: group.name});
-				if (targets.length === MAX_MOVE_TARGETS) {
-					break;
-				}
-			}
-
-			return targets;
-		},
+		moveTargets: (excludeId) =>
+			groups
+				.filter((group) => group.id !== excludeId)
+				.map((group) => ({
+					id: group.id,
+					name: group.name.trim() || 'Untitled session',
+				})),
 		dragBegin: drag.begin,
 		dragEnd: drag.end,
 		dragOver: drag.over,
@@ -1463,7 +1434,11 @@ export function SessionManager({
 				},
 			});
 			if (!result?.ok) {
-				showStatus(result?.error || 'Could not bookmark this saved tab.', true);
+				showSaveFailure(
+					showStatus,
+					result,
+					'Could not bookmark this saved tab.',
+				);
 				return;
 			}
 
@@ -1495,9 +1470,10 @@ export function SessionManager({
 				undoable: true,
 			});
 			if (!result?.ok) {
-				showStatus(
-					result?.error || 'Could not bookmark the selected tabs.',
-					true,
+				showSaveFailure(
+					showStatus,
+					result,
+					'Could not bookmark the selected tabs.',
 				);
 				return;
 			}
@@ -1509,11 +1485,14 @@ export function SessionManager({
 				columns.find((column) => column.id === columnId)?.name ||
 				newBookmarkColumn.name.trim() ||
 				'Unfiled';
-			const skipped = result.skipped
-				? ` ${plural(result.skipped, 'duplicate')} skipped.`
-				: '';
 			offerUndo(
-				`Added ${plural(result.count, 'bookmark')} to “${columnName}”.${skipped}`,
+				saveMessage({
+					kind: 'saved',
+					count: result.count,
+					skipped: result.skipped,
+					noun: 'bookmark',
+					into: `“${columnName}”`,
+				}),
 				result.undoId,
 				showStatus,
 				reload,
@@ -1587,9 +1566,7 @@ export function SessionManager({
 		}
 
 		await reload();
-		const duplicates = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
+		const duplicates = duplicatesNote(result.skipped);
 		offerUndo(
 			`Merged “${group.name}” into “${target?.name ?? 'the session'}”: ${plural(result.added, 'link')} added.${duplicates}`,
 			result.undoId,
@@ -1622,10 +1599,12 @@ export function SessionManager({
 	}
 
 	async function moveGroupToFolder(
-		group: Session,
+		opened: Session,
 		targetId: string,
 		targetName?: string,
 	) {
+		// The menu may have opened on an older copy of the session; Undo must return it to where it is now.
+		const group = groups.find((entry) => entry.id === opened.id) ?? opened;
 		if (group.folderId === targetId) {
 			return;
 		}
@@ -2404,6 +2383,10 @@ export function SessionManager({
 			<StatusLine status={status} />
 
 			{shareDialog}
+			<TargetPickerDialog
+				request={targetPicker}
+				onClose={() => setTargetPicker(null)}
+			/>
 			<ImportDialog
 				open={importOpen}
 				initialKind="sessions"
@@ -2782,7 +2765,8 @@ export function SessionManager({
 									autoFocus: true,
 									name: 'name',
 									maxLength: 60,
-									defaultValue: folderDialog?.folder?.name || '',
+									defaultValue:
+										folderDialog?.folder?.name || folderDialog?.name || '',
 								}}
 								onIconChange={(icon) =>
 									setDialog((old) =>
@@ -2932,11 +2916,6 @@ type CardActions = {
 	Moves the group's selected links into a new session.
 	*/
 	splitSelected: (group: Session) => void;
-	restoreTab: (
-		group: Session,
-		tab: SavedTabRecord,
-		event?: ClickModifiers,
-	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
@@ -2959,7 +2938,7 @@ type CardActions = {
 	/**
 	Opens the new-folder dialog; saving it creates the folder and moves the session in.
 	*/
-	newFolderFor: (group: Session) => void;
+	newFolderFor: (group: Session, name?: string) => void;
 	/**
 	Folders a session can move to (read when a menu opens, never while rendering).
 	*/
@@ -2971,6 +2950,10 @@ type CardActions = {
 	Sessions a link can be moved to (read when a menu opens, never while rendering).
 	*/
 	moveTargets: (excludeId: string) => Array<{id: string; name: string}>;
+	/**
+	Opens the shared searchable picker for a move whose targets can outgrow a menu.
+	*/
+	pickTarget: (request: TargetPickerRequest) => void;
 	dragBegin: (item: DragItem) => void;
 	dragEnd: () => void;
 	dragOver: (group: Session, event: DragEvent<HTMLElement>) => void;
@@ -3285,45 +3268,36 @@ const GroupCard = memo(
 			},
 			{type: 'separator'},
 			{
-				type: 'submenu',
 				id: 'move-folder',
-				label: 'Move to folder',
+				label: 'Move to folder…',
 				icon: ACTION_ICONS.move,
-				items: [
-					...handlers.folderTargets().map((folder): MenuAction => ({
-						id: `folder-${folder.id}`,
-						label:
-							folder.name.length > 40
-								? `${folder.name.slice(0, 39)}…`
-								: folder.name,
-						icon: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component,
-						checked: folder.id === group.folderId,
-						disabled: folder.id === group.folderId,
-						onSelect: () => handlers.moveToFolder(group, folder.id),
-					})),
-					{type: 'separator'},
-					{
-						id: 'folder-new',
-						label: 'Create folder',
-						icon: FolderPlus,
-						onSelect: () => handlers.newFolderFor(group),
-					},
-				],
+				onSelect: () =>
+					handlers.pickTarget({
+						title: 'Move to folder',
+						description: `Choose the folder for “${group.name}”.`,
+						kind: 'folder',
+						targets: handlers.folderTargets(),
+						currentId: group.folderId,
+						onPick: (folder) => handlers.moveToFolder(group, folder.id),
+						create: {
+							label: 'New folder',
+							run: (typed) => handlers.newFolderFor(group, typed),
+						},
+					}),
 			},
 			{
-				type: 'submenu',
 				id: 'merge',
-				label: 'Merge into',
+				label: 'Merge into…',
 				icon: Merge,
 				hidden: handlers.moveTargets(group.id).length === 0,
-				items: handlers.moveTargets(group.id).map((target) => ({
-					id: `merge-${target.id}`,
-					label:
-						target.name.length > 40
-							? `${target.name.slice(0, 39)}…`
-							: target.name,
-					onSelect: () => handlers.merge(group, target.id),
-				})),
+				onSelect: () =>
+					handlers.pickTarget({
+						title: 'Merge into session',
+						description: `Add the links of “${group.name}” to the session you choose.`,
+						kind: 'session',
+						targets: handlers.moveTargets(group.id),
+						onPick: (target) => handlers.merge(group, target.id),
+					}),
 			},
 			{
 				id: 'move-up',
@@ -3716,8 +3690,6 @@ type SavedTabProps = {
 	splitBadge?: boolean;
 };
 
-const MAX_MOVE_TARGETS = 30;
-
 const SavedTab = memo(
 	({
 		tab,
@@ -3747,8 +3719,6 @@ const SavedTab = memo(
 		);
 		const onSelect = (checked: boolean, event: ClickModifiers) =>
 			handlers.select(tabKey(group.id, tab.id), checked, event);
-		const onRestore = (event: ClickModifiers) =>
-			handlers.restoreTab(group, tab, event);
 		const onOpen = (requested?: 'current' | 'new') =>
 			handlers.openTab(tab, requested);
 		const onDelete = () => handlers.deleteTab(group, tab);
@@ -3783,12 +3753,6 @@ const SavedTab = memo(
 				hidden: !canOpenPrivateWindow,
 				onSelect: () => handlers.openTabPrivately(tab),
 			},
-			{
-				id: 'restore',
-				label: 'Restore',
-				icon: RotateCcw,
-				onSelect: () => onRestore({}),
-			},
 			{type: 'separator'},
 			{
 				id: 'copy',
@@ -3818,17 +3782,16 @@ const SavedTab = memo(
 			},
 			{
 				id: 'move',
-				label: 'Move to session',
+				label: 'Move to session…',
 				icon: ACTION_ICONS.move,
-				type: 'submenu',
-				items: handlers.moveTargets(group.id).map((target) => ({
-					id: `move-${target.id}`,
-					label:
-						target.name.length > 40
-							? `${target.name.slice(0, 39)}…`
-							: target.name,
-					onSelect: () => handlers.moveTab(group, tab, target.id),
-				})),
+				onSelect: () =>
+					handlers.pickTarget({
+						title: 'Move to session',
+						description: `Choose the session for “${tab.title || tab.url}”.`,
+						kind: 'session',
+						targets: handlers.moveTargets(group.id),
+						onPick: (target) => handlers.moveTab(group, tab, target.id),
+					}),
 			},
 			{
 				id: 'bookmark',
@@ -3953,11 +3916,7 @@ const SavedTab = memo(
 							<LinkPreview url={tab.url}>
 								<a
 									className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-									href={
-										settings.removeTrackingParameters
-											? stripTrackingParameters(tab.url)
-											: tab.url
-									}
+									href={linkDestination(tab.url, settings)}
 									target="_blank"
 									rel="noopener noreferrer"
 									title={previews ? undefined : urlOnly ? tab.url : label}
@@ -4033,17 +3992,6 @@ const SavedTab = memo(
 						)}
 					</div>
 					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100">
-						<IconTooltip label="Restore tab">
-							<Button
-								variant="ghost"
-								size="icon"
-								className={action}
-								aria-label={`Restore ${label}`}
-								onClick={(event) => onRestore(event)}
-							>
-								<RotateCcw />
-							</Button>
-						</IconTooltip>
 						<IconTooltip label="Remove from session">
 							<Button
 								variant="ghost"

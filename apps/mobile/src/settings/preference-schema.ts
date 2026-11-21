@@ -3,13 +3,13 @@ What the phone's preferences are: each one's type, default, validation, and whet
 file holds no storage and no React Native, so every rule here runs under Node. `preferences.ts` keeps the current values
 and saves them.
 
-A preference syncs with the other phones through the library's `mobileApp` setting, unless `ANDROID_LOCAL_PREFERENCES`
-in the shared `local-settings.ts` lists it with the reason it stays on this phone. Adding one means one entry in
-`FIELDS`; the types and every reader follow from it, and it syncs by default.
+A preference syncs with the other phones through the library's `mobileApp` setting, unless `ANDROID_PREFERENCES` in
+the shared `setting-scopes.ts` scopes it to this device, with the reason. Adding one means one entry in `FIELDS` and
+one there; the types and every reader follow from them.
 */
 import {isAccent} from '../../../extension/src/shared/accent-colors';
 import {cleanDeviceName} from '../../../extension/src/shared/device';
-import {ANDROID_LOCAL_PREFERENCES} from '../../../extension/src/shared/local-settings';
+import {ANDROID_PREFERENCES} from '../../../extension/src/shared/setting-scopes';
 
 const LOOKS = ['auto', 'material', 'ios'] as const;
 export type Look = (typeof LOOKS)[number];
@@ -296,15 +296,18 @@ export const defaults = Object.fromEntries(
 	KEYS.map((key) => [key, FIELDS[key].default]),
 ) as Preferences;
 
-// A key in the shared list that is no preference here would be a reason for nothing; this fails to compile then.
-const listedLocal: ReadonlyArray<keyof Preferences> = Object.keys(
-	ANDROID_LOCAL_PREFERENCES,
-) as Array<keyof typeof ANDROID_LOCAL_PREFERENCES>;
+// Every preference has a scope: one missing fails to compile here, and a scope for no preference fails below.
+const scopes: {
+	[Key in keyof Preferences]: (typeof ANDROID_PREFERENCES)[Key];
+} = ANDROID_PREFERENCES;
 
 /**
-The keys that sync, which the extension keeps in the library's `mobileApp` setting: every one not listed as local.
+The keys that sync to the other phones, which the extension keeps in the library's `mobileApp` setting: every one
+not scoped to this device.
 */
-export const SYNCED_KEYS = KEYS.filter((key) => !listedLocal.includes(key));
+export const SYNCED_KEYS: ReadonlyArray<keyof Preferences> = (
+	Object.keys(ANDROID_PREFERENCES) as Array<keyof typeof ANDROID_PREFERENCES>
+).filter((key) => scopes[key][0] !== 'device');
 
 /**
 An earlier size, Icons only, was full width without names. Stored or synced values in that form read as today's pair.

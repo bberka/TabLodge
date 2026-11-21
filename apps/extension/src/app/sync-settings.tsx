@@ -501,9 +501,11 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 						id={settingsHelpId}
 						className="text-xs leading-5 text-muted-foreground"
 					>
-						Uses the same TabLodge settings in every browser you connect. The
-						theme, the device name, and Copy backups to Downloads stay on each
-						device. Turning this back on uploads this browser’s settings.
+						Link settings such as removing tracking parameters reach every
+						browser and phone you connect. The theme, the accent, and the
+						dashboard layout follow your other browsers but not your phones. The
+						device name and Copy backups to Downloads stay on this device.
+						Turning this back on uploads this browser’s settings.
 					</p>
 				</div>
 				<Switch
