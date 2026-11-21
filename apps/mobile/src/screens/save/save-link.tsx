@@ -61,17 +61,12 @@ export function SaveLinkForm({
 	initialText,
 	initialTitle,
 	editing,
-	focusTags = false,
 	onMany,
 	onQuote,
 	onDone,
 }: {
 	initialText: string;
 	initialTitle: string;
-	/**
-	Opened from Edit tags: the Tags field takes the focus.
-	*/
-	focusTags?: boolean;
 	/**
 	A bookmark to change instead of saving a new one. The initial text and title are then its own.
 	*/
@@ -401,7 +396,6 @@ export function SaveLinkForm({
 							url={url ?? ''}
 							value={tagged}
 							draft={tagDraft}
-							autoFocus={focusTags}
 							onDraftChange={setTagDraft}
 							onChange={(next) => {
 								setTagged(next);

@@ -88,7 +88,7 @@ The drawer that is open over the list, if any: one bookmark's edit form, the cho
 for making or changing a column.
 */
 type Sheet =
-	| {kind: 'edit'; bookmark: Bookmark; focusTags?: boolean}
+	| {kind: 'edit'; bookmark: Bookmark}
 	| {kind: 'tags'}
 	| {kind: 'move'}
 	| {kind: 'column'; id?: string};
@@ -253,18 +253,6 @@ export function BookmarksScreen({
 					hint: 'Its link, title, and column',
 					onPress() {
 						setSheet({kind: 'edit', bookmark: rowMenuBookmark});
-					},
-				},
-				{
-					icon: 'pricetag-outline',
-					label: 'Edit tags',
-					hint: 'Add your own, or remove the automatic one',
-					onPress() {
-						setSheet({
-							kind: 'edit',
-							bookmark: rowMenuBookmark,
-							focusTags: true,
-						});
 					},
 				},
 				...(store.bookmarkColumns.length > 1
@@ -954,7 +942,6 @@ export function BookmarksScreen({
 			/>
 			<EditSheet
 				bookmark={editing}
-				focusTags={sheet?.kind === 'edit' && sheet.focusTags}
 				onClose={() => {
 					setSheet(undefined);
 					selection.stop();

@@ -418,11 +418,9 @@ The drawer for changing a bookmark's link, title, or column. It is open while a 
 */
 export function EditSheet({
 	bookmark,
-	focusTags,
 	onClose,
 }: {
 	bookmark?: Bookmark;
-	focusTags?: boolean;
 	onClose: () => void;
 }) {
 	return (
@@ -436,7 +434,6 @@ export function EditSheet({
 				<SaveLinkForm
 					key={bookmark.id}
 					editing={bookmark}
-					focusTags={focusTags}
 					initialText={bookmark.url}
 					initialTitle={bookmark.title}
 					onDone={onClose}
