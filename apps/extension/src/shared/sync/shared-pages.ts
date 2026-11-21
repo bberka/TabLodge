@@ -8,9 +8,18 @@ Listed in /v1/status `features` by a server that takes shared pages.
 */
 export const SHARED_PAGES_FEATURE = 'shared-pages';
 export const SHARED_PAGE_IMPORT_FEATURE = 'shared-page-import';
+export const SHARED_PAGE_LIVE_PASSWORD_FEATURE = 'shared-page-live-password';
+export const SHARED_PAGE_PASSWORD_HEADER = 'X-TabLodge-Password-Required';
 export const SHARED_PAGE_PREFIX = '/p/';
 export const MAX_SHARED_PAGE_TITLE = 200;
 export const MAX_SHARED_PAGE_SOURCE = 100;
+export type SharedPageMode = 'snapshot' | 'live';
+export const SHARED_PAGE_MODES: readonly SharedPageMode[] = [
+	'snapshot',
+	'live',
+];
+export const isSharedPageMode = (value: unknown): value is SharedPageMode =>
+	value === 'snapshot' || value === 'live';
 /**
 22 random base64url characters (132 bits), so a link cannot be guessed.
 */

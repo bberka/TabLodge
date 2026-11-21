@@ -5,7 +5,11 @@ Settings › Sync with the same words.
 */
 import {isRecord} from '../library-values';
 import {PROTOCOL_VERSION} from './change-log';
-import {SHARED_PAGE_IMPORT_FEATURE, SHARED_PAGES_FEATURE} from './shared-pages';
+import {
+	SHARED_PAGE_IMPORT_FEATURE,
+	SHARED_PAGE_LIVE_PASSWORD_FEATURE,
+	SHARED_PAGES_FEATURE,
+} from './shared-pages';
 
 /**
 The server's own account of itself. `version` is null for a server from before it reported one, and `0.0.0` for one
@@ -115,6 +119,12 @@ export const SERVER_FEATURES: ReadonlyArray<{
 		since: '0.4.0',
 		missing:
 			'Shared pages have no Add to TabLodge button, and Share does not list the links made from a column or session.',
+	},
+	{
+		name: SHARED_PAGE_LIVE_PASSWORD_FEATURE,
+		since: '0.4.0',
+		missing:
+			'Live shared links and password-protected shared pages are not available.',
 	},
 	{
 		name: 'page-source',

@@ -4,12 +4,15 @@ The calls a device makes for shared pages (see shared-pages.ts), used by the ext
 import {isRecord} from '../library-values';
 import {callServer, type SyncConfig, SyncError, type SyncHost} from './client';
 import {
+	isSharedPageMode,
 	MAX_SHARED_PAGE_SOURCE,
 	MAX_SHARED_PAGE_TITLE,
 	SHARED_PAGE_ID,
 	SHARED_PAGE_IMPORT_FEATURE,
+	SHARED_PAGE_LIVE_PASSWORD_FEATURE,
 	SHARED_PAGE_PREFIX,
 	SHARED_PAGES_FEATURE,
+	type SharedPageMode,
 } from './shared-pages';
 
 export type SharedPage = {
@@ -20,11 +23,14 @@ export type SharedPage = {
 	*/
 	size: number;
 	createdAt: number;
+	updatedAt: number;
 	/**
 	The public link: the server address the device connected with, plus /p/<id>.
 	*/
 	url: string;
 	source: string;
+	mode: SharedPageMode;
+	hasPassword: boolean;
 };
 
 export const sharedPageSource = (kind: 'column' | 'session', id: string) =>
@@ -44,6 +50,8 @@ const ERRORS = new Map([
 	],
 	['not_found', 'The server no longer has this page.'],
 	['page_exists', 'The server already has a page with this link. Share again.'],
+	['bad_password', 'Choose a password between 4 and 128 characters.'],
+	['not_live', 'This shared page is a snapshot and cannot be updated.'],
 ]);
 
 function parsePage(value: unknown, server: string): SharedPage | undefined {
@@ -63,8 +71,12 @@ function parsePage(value: unknown, server: string): SharedPage | undefined {
 		title: value.title,
 		size: value.size,
 		createdAt: value.createdAt,
+		updatedAt:
+			typeof value.updatedAt === 'number' ? value.updatedAt : value.createdAt,
 		url: sharedPageUrl(server, value.id),
 		source: typeof value.source === 'string' ? value.source : '',
+		mode: isSharedPageMode(value.mode) ? value.mode : 'snapshot',
+		hasPassword: value.hasPassword === true,
 	};
 }
 
@@ -95,7 +107,11 @@ can carry its own link.
 export async function sharedPagesSupport(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
-): Promise<{server: 'ready' | 'old' | 'offline'; keepsIds: boolean}> {
+): Promise<{
+	server: 'ready' | 'old' | 'offline';
+	keepsIds: boolean;
+	supportsLivePassword: boolean;
+}> {
 	try {
 		const body = await ask(send, target, '/v1/status');
 		const features =
@@ -104,10 +120,13 @@ export async function sharedPagesSupport(
 			? {
 					server: 'ready',
 					keepsIds: features.includes(SHARED_PAGE_IMPORT_FEATURE),
+					supportsLivePassword: features.includes(
+						SHARED_PAGE_LIVE_PASSWORD_FEATURE,
+					),
 				}
-			: {server: 'old', keepsIds: false};
+			: {server: 'old', keepsIds: false, supportsLivePassword: false};
 	} catch {
-		return {server: 'offline', keepsIds: false};
+		return {server: 'offline', keepsIds: false, supportsLivePassword: false};
 	}
 }
 
@@ -121,7 +140,17 @@ export async function uploadSharedPage(
 	target: SyncConfig,
 	title: string,
 	html: string,
-	{id, source}: {id?: string; source?: string} = {},
+	{
+		id,
+		source,
+		mode,
+		password,
+	}: {
+		id?: string;
+		source?: string;
+		mode?: SharedPageMode;
+		password?: string;
+	} = {},
 ): Promise<SharedPage> {
 	const body = await ask(send, target, '/v1/pages', {
 		method: 'POST',
@@ -130,10 +159,39 @@ export async function uploadSharedPage(
 			html,
 			...(id && {id}),
 			...(source && {source: source.slice(0, MAX_SHARED_PAGE_SOURCE)}),
+			...(mode && {mode}),
+			...(password !== undefined && password !== '' && {password}),
 		}),
 	});
 	const page = parsePage(body, target.url);
 	if (!page || (id !== undefined && page.id !== id)) {
+		throw new SyncError('server', 'The sync server sent a broken answer.');
+	}
+
+	return page;
+}
+
+export async function updateSharedPage(
+	send: SyncHost['fetch'],
+	target: SyncConfig,
+	id: string,
+	title: string,
+	html: string,
+): Promise<SharedPage> {
+	const body = await ask(
+		send,
+		target,
+		`/v1/pages/${encodeURIComponent(id)}/update`,
+		{
+			method: 'POST',
+			body: JSON.stringify({
+				title: title.slice(0, MAX_SHARED_PAGE_TITLE),
+				html,
+			}),
+		},
+	);
+	const page = parsePage(body, target.url);
+	if (!page || page.id !== id) {
 		throw new SyncError('server', 'The sync server sent a broken answer.');
 	}
 

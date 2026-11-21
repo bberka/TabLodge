@@ -207,6 +207,10 @@ export type SyncHost = {
 			was: Readonly<Record<string, unknown>>,
 		): Promise<void>;
 	};
+	onSynced?: (
+		target: SyncConfig,
+		server: ServerInfo | undefined,
+	) => void | Promise<void>;
 	/**
 	Writes a library assembled from synced records; the host normalizes it like any untrusted input.
 	*/
@@ -1020,6 +1024,12 @@ export function createSyncClient(host: SyncHost) {
 					again = false;
 
 					await round(target);
+					if (host.onSynced && config === target) {
+						try {
+							await host.onSynced(target, status.server);
+						} catch {}
+					}
+
 					if (noticeCursor > seenCursor) {
 						again = true;
 					}

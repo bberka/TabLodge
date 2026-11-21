@@ -2,6 +2,7 @@
 // (shell/service-worker.ts) and the extension pages in src/app.
 // Only types live here so the classic service-worker bundle stays import-free.
 import type {SyncStatus} from './sync/client';
+import type {SharedPageMode} from './sync/shared-pages';
 import type {SharedPage} from './sync/shared-pages-client';
 import type {PageCopy} from './page-copy';
 import type {LinkKind} from './link-kind';
@@ -364,6 +365,7 @@ export type Settings = {
 	The style used when `sessionNameStyle` is `ask` and the name is left empty (default "date-title").
 	*/
 	sessionNameFallback: SessionNameFallback;
+	defaultShareMode: SharedPageMode;
 	/**
 	Preferences of the Android app. The extension never reads them; it keeps them so they sync between the phones that
 	share this library (plain strings, numbers, and booleans only).
@@ -998,6 +1000,8 @@ export type TabLodgeMessages = {
 		id?: string;
 		linkBase?: string;
 		source?: string;
+		mode?: SharedPageMode;
+		password?: string;
 	};
 	DELETE_SHARED_PAGE: {id: string};
 	GET_SITE_SOURCES: {};
@@ -1434,6 +1438,8 @@ export type TabLodgeResponses = {
 		server: SharedPagesServer;
 		pages: SharedPage[];
 		linkBase: string | null;
+		supportsLivePassword: boolean;
+		defaultShareMode: SharedPageMode;
 	};
 	UPLOAD_SHARED_PAGE: {page: SharedPage};
 	DELETE_SHARED_PAGE: {};

@@ -8,9 +8,12 @@ import { DurableObject } from "cloudflare:workers";
 // ../extension/src/shared/sync/shared-pages.ts
 var SHARED_PAGES_FEATURE = "shared-pages";
 var SHARED_PAGE_IMPORT_FEATURE = "shared-page-import";
+var SHARED_PAGE_LIVE_PASSWORD_FEATURE = "shared-page-live-password";
+var SHARED_PAGE_PASSWORD_HEADER = "X-TabLodge-Password-Required";
 var SHARED_PAGE_PREFIX = "/p/";
 var MAX_SHARED_PAGE_TITLE = 200;
 var MAX_SHARED_PAGE_SOURCE = 100;
+var isSharedPageMode = /* @__PURE__ */ __name((value) => value === "snapshot" || value === "live", "isSharedPageMode");
 var SHARED_PAGE_ID = /^[\w-]{22}$/;
 var ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 var newSharedPageId = /* @__PURE__ */ __name((randomBytes = (count) => crypto.getRandomValues(new Uint8Array(count))) => Array.from(randomBytes(22), (byte) => ID_ALPHABET[byte % 64]).join(""), "newSharedPageId");
@@ -2434,6 +2437,22 @@ var cors = /* @__PURE__ */ __name((options) => {
   }, "cors");
 }, "cors");
 
+// ../extension/src/shared/passcode.ts
+var PASSWORD_MIN_LENGTH = 4;
+var PASSWORD_MAX_LENGTH = 128;
+var PASSWORD_RULE = `${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters, any kind.`;
+function validateCredential(value) {
+  if (value.length === 0) {
+    return "Enter a password.";
+  }
+  const { length } = [...value.normalize("NFKC")];
+  if (length < PASSWORD_MIN_LENGTH) {
+    return `A password needs at least ${PASSWORD_MIN_LENGTH} characters.`;
+  }
+  return length > PASSWORD_MAX_LENGTH ? `A password can have at most ${PASSWORD_MAX_LENGTH} characters.` : null;
+}
+__name(validateCredential, "validateCredential");
+
 // ../extension/src/shared/sync/clock.ts
 var WALL_WIDTH = 11;
 var COUNTER_WIDTH = 5;
@@ -2896,6 +2915,16 @@ async function fetchIcon(host, deps = {}) {
 }
 __name(fetchIcon, "fetchIcon");
 
+// ../extension/src/shared/escape-html.ts
+var ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+var escapeHtml = /* @__PURE__ */ __name((value) => String(value ?? "").replaceAll(/["&'<>]/g, (char) => ESCAPES[char]), "escapeHtml");
+
 // src/shared-pages.ts
 var PAGE_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
@@ -2909,10 +2938,106 @@ var PAGE_HEADERS = {
   // A deleted page must stop showing at once.
   "Cache-Control": "no-store"
 };
+var PASSWORD_PROMPT_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Robots-Tag": "noindex, nofollow",
+  "Cache-Control": "no-store",
+  [SHARED_PAGE_PASSWORD_HEADER]: "1"
+};
+var HASH_ITERATIONS = 1e5;
+var SALT_BYTES = 16;
+var KEY_BITS = 256;
+var PROMPT_STYLE = '*{box-sizing:border-box}:root{color-scheme:light dark;--bg:#f6f7fb;--card:#fff;--text:#1f2433;--muted:#5c6375;--line:#e2e5ee;--accent:#4f46c8;--on-accent:#fff;--danger:#b91c1c}@media (prefers-color-scheme:dark){:root{--bg:#111318;--card:#1a1d25;--text:#e8eaf0;--muted:#a6acba;--line:#2d313d;--accent:#aba5ff;--on-accent:#15132e;--danger:#f87171}}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}main{width:min(420px,100%);padding:24px;border:1px solid var(--line);border-radius:14px;background:var(--card)}h1{margin:0 0 8px;font-size:20px;line-height:1.3}p{margin:0 0 16px;color:var(--muted)}p.error{color:var(--danger);font-weight:500}label{display:block;margin:0 0 6px;font-size:14px;font-weight:600}input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}button{margin-top:14px;width:100%;padding:10px 16px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;cursor:pointer}';
+function toHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    ""
+  );
+}
+__name(toHex, "toHex");
+function fromHex(encoded) {
+  if (encoded.length === 0 || encoded.length % 2 !== 0 || !/^[\da-f]+$/i.test(encoded)) {
+    return void 0;
+  }
+  const bytes = new Uint8Array(new ArrayBuffer(encoded.length / 2));
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(encoded.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+__name(fromHex, "fromHex");
+async function deriveKeyHash(secret, salt, iterations) {
+  const encoded = new TextEncoder().encode(secret.normalize("NFKC"));
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoded,
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt,
+      iterations
+    },
+    keyMaterial,
+    KEY_BITS
+  );
+  return toHex(new Uint8Array(derived));
+}
+__name(deriveKeyHash, "deriveKeyHash");
+async function hashPagePassword(secret) {
+  const salt = crypto.getRandomValues(
+    new Uint8Array(new ArrayBuffer(SALT_BYTES))
+  );
+  const derived = await deriveKeyHash(secret, salt, HASH_ITERATIONS);
+  return `pbkdf2$${HASH_ITERATIONS}$${toHex(salt)}$${derived}`;
+}
+__name(hashPagePassword, "hashPagePassword");
+async function verifyPagePassword(secret, storedHash) {
+  const parts = storedHash.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2") {
+    return false;
+  }
+  const iterations = Number(parts[1]);
+  const salt = fromHex(parts[2]);
+  const expected = parts[3];
+  if (!Number.isSafeInteger(iterations) || iterations < 1 || !salt || expected === "") {
+    return false;
+  }
+  const actual = await deriveKeyHash(secret, salt, iterations);
+  return sameToken(actual, expected);
+}
+__name(verifyPagePassword, "verifyPagePassword");
+function passwordPromptHtml(id, wrongPassword) {
+  const action = `${SHARED_PAGE_PREFIX}${encodeURIComponent(id)}`;
+  const error = wrongPassword ? '<p class="error" role="alert">Incorrect password. Try again.</p>' : "";
+  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Password required</title><style>${PROMPT_STYLE}</style><body><main><h1>Password required</h1><p>Enter the password to view this shared page.</p>${error}<form method="post" action="${escapeHtml(action)}"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Unlock</button></form></main></body></html>`;
+}
+__name(passwordPromptHtml, "passwordPromptHtml");
 var pageNotFound = /* @__PURE__ */ __name(() => new Response("Not found", {
   status: 404,
   headers: { ...PAGE_HEADERS, "Content-Type": "text/plain; charset=utf-8" }
 }), "pageNotFound");
+function rowToStoredPage(row) {
+  const createdAt = Number(row.created);
+  const updated = Number(row.updated);
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    size: Number(row.size),
+    createdAt,
+    updatedAt: updated > 0 ? updated : createdAt,
+    source: String(row.source ?? ""),
+    mode: isSharedPageMode(row.mode) ? row.mode : "snapshot",
+    hasPassword: String(row.password_hash ?? "") !== ""
+  };
+}
+__name(rowToStoredPage, "rowToStoredPage");
 var SqlPageStore = class {
   constructor(sql) {
     this.sql = sql;
@@ -2927,6 +3052,27 @@ var SqlPageStore = class {
       sql.all("SELECT source FROM pages LIMIT 0");
     } catch {
       sql.all("ALTER TABLE pages ADD COLUMN source TEXT NOT NULL DEFAULT ''");
+    }
+    try {
+      sql.all("SELECT mode FROM pages LIMIT 0");
+    } catch {
+      sql.all(
+        "ALTER TABLE pages ADD COLUMN mode TEXT NOT NULL DEFAULT 'snapshot'"
+      );
+    }
+    try {
+      sql.all("SELECT password_hash FROM pages LIMIT 0");
+    } catch {
+      sql.all(
+        "ALTER TABLE pages ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"
+      );
+    }
+    try {
+      sql.all("SELECT updated FROM pages LIMIT 0");
+    } catch {
+      sql.all(
+        "ALTER TABLE pages ADD COLUMN updated INTEGER NOT NULL DEFAULT 0"
+      );
     }
   }
   sql;
@@ -2949,31 +3095,76 @@ var SqlPageStore = class {
         return "full";
       }
       this.sql.all(
-        "INSERT INTO pages (id, title, html, size, created, source) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO pages (id, title, html, size, created, source, mode, password_hash, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         page.id,
         page.title,
         page.html,
         page.size,
         page.createdAt,
-        page.source
+        page.source,
+        page.mode,
+        page.passwordHash ?? "",
+        page.updatedAt
       );
       return "added";
     });
   }
+  update(id, next, budget) {
+    return this.sql.transaction(() => {
+      const existing = this.sql.all(
+        "SELECT id, title, size, created, source, mode, password_hash, updated FROM pages WHERE id = ?",
+        id
+      )[0];
+      if (!existing) {
+        return { status: "not_found" };
+      }
+      if (existing.mode !== "live") {
+        return { status: "not_live" };
+      }
+      const used = this.sql.all(
+        "SELECT COALESCE(SUM(size), 0) AS bytes FROM pages"
+      )[0];
+      const totalWithoutThis = Number(used?.bytes) - Number(existing.size);
+      if (totalWithoutThis + next.size > budget.maxBytes) {
+        return { status: "full" };
+      }
+      this.sql.all(
+        "UPDATE pages SET title = ?, html = ?, size = ?, updated = ? WHERE id = ?",
+        next.title,
+        next.html,
+        next.size,
+        next.updatedAt,
+        id
+      );
+      return {
+        status: "updated",
+        page: rowToStoredPage({
+          ...existing,
+          title: next.title,
+          size: next.size,
+          updated: next.updatedAt
+        })
+      };
+    });
+  }
   list() {
     return this.sql.all(
-      "SELECT id, title, size, created, source FROM pages ORDER BY created DESC"
-    ).map((row) => ({
-      id: String(row.id),
-      title: String(row.title),
-      size: Number(row.size),
-      createdAt: Number(row.created),
-      source: String(row.source ?? "")
-    }));
+      "SELECT id, title, size, created, source, mode, password_hash, updated FROM pages ORDER BY created DESC"
+    ).map((row) => rowToStoredPage(row));
   }
   html(id) {
     const row = this.sql.all("SELECT html FROM pages WHERE id = ?", id)[0];
     return row ? String(row.html) : void 0;
+  }
+  view(id) {
+    const row = this.sql.all(
+      "SELECT html, password_hash FROM pages WHERE id = ?",
+      id
+    )[0];
+    return row ? {
+      html: String(row.html),
+      passwordHash: String(row.password_hash ?? "")
+    } : void 0;
   }
   remove(id) {
     const removed = this.sql.all("DELETE FROM pages WHERE id = ? RETURNING id", id).length > 0;
@@ -2989,6 +3180,7 @@ var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Expose-Headers": SHARED_PAGE_PASSWORD_HEADER,
   "Access-Control-Max-Age": "86400"
 };
 var MIN_TOKEN_LENGTH = 32;
@@ -3044,6 +3236,7 @@ function createApi(options) {
       origin: "*",
       allowMethods: ["GET", "POST", "OPTIONS"],
       allowHeaders: ["Authorization", "Content-Type"],
+      exposeHeaders: [SHARED_PAGE_PASSWORD_HEADER],
       maxAge: 86400
     })
   );
@@ -3163,7 +3356,12 @@ function createApi(options) {
       cursor: log.cursor,
       records: log.size,
       limits,
-      features: options.pages ? [...FEATURES, SHARED_PAGES_FEATURE, SHARED_PAGE_IMPORT_FEATURE] : FEATURES
+      features: options.pages ? [
+        ...FEATURES,
+        SHARED_PAGES_FEATURE,
+        SHARED_PAGE_IMPORT_FEATURE,
+        SHARED_PAGE_LIVE_PASSWORD_FEATURE
+      ] : FEATURES
     });
   });
   app.get("/v1/key", (c) => c.json({ key: options.log().key }));
@@ -3250,7 +3448,10 @@ function createApi(options) {
   );
   const { pages } = options;
   if (pages) {
-    const pageRecord = /* @__PURE__ */ __name((page) => ({ ...page, path: `${SHARED_PAGE_PREFIX}${page.id}` }), "pageRecord");
+    const pageRecord = /* @__PURE__ */ __name((page) => ({
+      ...page,
+      path: `${SHARED_PAGE_PREFIX}${page.id}`
+    }), "pageRecord");
     app.get(
       "/v1/pages",
       (c) => c.json({
@@ -3274,9 +3475,12 @@ function createApi(options) {
         } catch {
           return c.json(problem("bad_json"), 400);
         }
-        const { title, html, id, source } = body ?? {};
-        if (typeof title !== "string" || title.length > MAX_SHARED_PAGE_TITLE || typeof html !== "string" || html === "" || id !== void 0 && (typeof id !== "string" || !SHARED_PAGE_ID.test(id)) || source !== void 0 && (typeof source !== "string" || source.length > MAX_SHARED_PAGE_SOURCE)) {
+        const { title, html, id, source, mode, password } = body ?? {};
+        if (typeof title !== "string" || title.length > MAX_SHARED_PAGE_TITLE || typeof html !== "string" || html === "" || id !== void 0 && (typeof id !== "string" || !SHARED_PAGE_ID.test(id)) || source !== void 0 && (typeof source !== "string" || source.length > MAX_SHARED_PAGE_SOURCE) || mode !== void 0 && !isSharedPageMode(mode) || password !== void 0 && typeof password !== "string") {
           return c.json(problem("bad_page"), 400);
+        }
+        if (password !== void 0 && password !== "" && (validateCredential(password) !== null || /[\n\r]/.test(password))) {
+          return c.json(problem("bad_password"), 400);
         }
         const size = utf8Bytes(html);
         if (size > limits.maxPageBytes) {
@@ -3285,15 +3489,20 @@ function createApi(options) {
             413
           );
         }
+        const passwordHash = password !== void 0 && password !== "" ? await hashPagePassword(password) : "";
+        const createdAt = now();
         const page = {
           id: typeof id === "string" ? id : newSharedPageId(),
           title,
           size,
-          createdAt: now(),
-          source: typeof source === "string" ? source : ""
+          createdAt,
+          updatedAt: createdAt,
+          source: typeof source === "string" ? source : "",
+          mode: isSharedPageMode(mode) ? mode : "snapshot",
+          hasPassword: passwordHash !== ""
         };
         const added = pages().add(
-          { ...page, html },
+          { ...page, html, passwordHash },
           { maxPages: limits.maxPages, maxBytes: limits.maxPageStorageBytes }
         );
         if (added === "taken") {
@@ -3309,11 +3518,67 @@ function createApi(options) {
       }
     );
     app.post(
+      "/v1/pages/:id/update",
+      bodyLimit({
+        maxSize: limits.maxPageBytes * 6 + 4096,
+        onError: /* @__PURE__ */ __name((c) => c.json(
+          problem("page_too_large", { maxBytes: limits.maxPageBytes }),
+          413
+        ), "onError")
+      }),
+      async (c) => {
+        const id = c.req.param("id");
+        if (!SHARED_PAGE_ID.test(id)) {
+          return c.json(problem("not_found"), 404);
+        }
+        let body;
+        try {
+          body = await c.req.json();
+        } catch {
+          return c.json(problem("bad_json"), 400);
+        }
+        const { title, html } = body ?? {};
+        if (typeof title !== "string" || title.length > MAX_SHARED_PAGE_TITLE || typeof html !== "string" || html === "") {
+          return c.json(problem("bad_page"), 400);
+        }
+        const size = utf8Bytes(html);
+        if (size > limits.maxPageBytes) {
+          return c.json(
+            problem("page_too_large", { maxBytes: limits.maxPageBytes }),
+            413
+          );
+        }
+        const result = pages().update(
+          id,
+          { title, html, size, updatedAt: now() },
+          { maxBytes: limits.maxPageStorageBytes }
+        );
+        if (result.status === "updated") {
+          return c.json(pageRecord(result.page), 200);
+        }
+        if (result.status === "not_found") {
+          return c.json(problem("not_found"), 404);
+        }
+        if (result.status === "not_live") {
+          return c.json(problem("not_live"), 400);
+        }
+        return c.json(
+          problem("pages_full", {
+            maxPages: limits.maxPages,
+            maxBytes: limits.maxPageStorageBytes
+          }),
+          507
+        );
+      }
+    );
+    app.post(
       "/v1/pages/:id/delete",
       (c) => pages().remove(c.req.param("id")) ? c.json({ deleted: true }) : c.json(problem("not_found"), 404)
     );
     let viewWindow = { start: 0, count: 0 };
-    app.get(`${SHARED_PAGE_PREFIX}:id`, (c) => {
+    const passwordAttempts = /* @__PURE__ */ new Map();
+    const passwordAttemptsPerMinute = 10;
+    const checkViewLimit = /* @__PURE__ */ __name(() => {
       const time = now();
       if (time - viewWindow.start >= MINUTE_MS) {
         viewWindow = { start: time, count: 0 };
@@ -3331,10 +3596,92 @@ function createApi(options) {
           }
         });
       }
+      return void 0;
+    }, "checkViewLimit");
+    app.get(`${SHARED_PAGE_PREFIX}:id`, (c) => {
+      const limited = checkViewLimit();
+      if (limited) {
+        return limited;
+      }
       const id = c.req.param("id");
-      const html = SHARED_PAGE_ID.test(id) ? pages().html(id) : void 0;
-      return html === void 0 ? pageNotFound() : new Response(html, { headers: PAGE_HEADERS });
+      const record = SHARED_PAGE_ID.test(id) ? pages().view(id) : void 0;
+      if (!record) {
+        return pageNotFound();
+      }
+      if (record.passwordHash !== "") {
+        return new Response(passwordPromptHtml(id, false), {
+          status: 401,
+          headers: PASSWORD_PROMPT_HEADERS
+        });
+      }
+      return new Response(record.html, { headers: PAGE_HEADERS });
     });
+    app.post(
+      `${SHARED_PAGE_PREFIX}:id`,
+      bodyLimit({
+        maxSize: 4096,
+        onError: /* @__PURE__ */ __name(() => new Response("Request too large", {
+          status: 413,
+          headers: {
+            ...PAGE_HEADERS,
+            "Content-Type": "text/plain; charset=utf-8"
+          }
+        }), "onError")
+      }),
+      async (c) => {
+        const limited = checkViewLimit();
+        if (limited) {
+          return limited;
+        }
+        const id = c.req.param("id");
+        if (!SHARED_PAGE_ID.test(id)) {
+          return pageNotFound();
+        }
+        const record = pages().view(id);
+        if (!record) {
+          return pageNotFound();
+        }
+        if (record.passwordHash === "") {
+          return new Response(record.html, { headers: PAGE_HEADERS });
+        }
+        const time = now();
+        for (const [key, entry] of passwordAttempts) {
+          if (time - entry.start >= MINUTE_MS) {
+            passwordAttempts.delete(key);
+          }
+        }
+        const bucket = passwordAttempts.get(id);
+        const current = bucket ? { start: bucket.start, count: bucket.count + 1 } : { start: time, count: 1 };
+        passwordAttempts.set(id, current);
+        if (current.count > passwordAttemptsPerMinute) {
+          return new Response("Too many requests", {
+            status: 429,
+            headers: {
+              ...PAGE_HEADERS,
+              "Content-Type": "text/plain; charset=utf-8",
+              "Retry-After": String(
+                Math.ceil((current.start + MINUTE_MS - time) / 1e3)
+              )
+            }
+          });
+        }
+        let password = "";
+        try {
+          const raw2 = await c.req.text();
+          password = new URLSearchParams(raw2).get("password") ?? "";
+        } catch {
+          password = "";
+        }
+        const matched = password !== "" && await verifyPagePassword(password, record.passwordHash);
+        if (!matched) {
+          return new Response(passwordPromptHtml(id, true), {
+            status: 401,
+            headers: PASSWORD_PROMPT_HEADERS
+          });
+        }
+        return new Response(record.html, { headers: PAGE_HEADERS });
+      }
+    );
   }
   return app;
 }
@@ -3634,7 +3981,7 @@ var worker_default = {
         { status: 503, headers: CORS_HEADERS }
       );
     }
-    const sharedPage = space === "default" && request.method === "GET" && pathname.startsWith(SHARED_PAGE_PREFIX);
+    const sharedPage = space === "default" && (request.method === "GET" || request.method === "POST") && pathname.startsWith(SHARED_PAGE_PREFIX);
     if (sharedPage && !SHARED_PAGE_ID.test(pathname.slice(SHARED_PAGE_PREFIX.length))) {
       return pageNotFound();
     }

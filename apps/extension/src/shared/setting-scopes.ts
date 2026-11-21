@@ -144,6 +144,7 @@ export const LIBRARY_SETTINGS = {
 	sessionNameStyle: ['all', BOTH],
 	sessionNameTemplate: ['all', BOTH],
 	sessionNameFallback: ['all', BOTH],
+	defaultShareMode: ['all', BOTH],
 	mobileApp: [
 		'platform',
 		"The Android app's own preferences, which only phones read (`ANDROID_PREFERENCES`).",
