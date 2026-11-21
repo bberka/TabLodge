@@ -23,6 +23,7 @@ import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {importIntoStore, previewFor} from '../../transfer/transfer';
 import {Button, Chips, Field, Switch} from '../../ui/widgets';
+import {cappedFetch} from '../../transfer/capped-fetch';
 import {Title} from './transfer-sheets';
 
 export type ImportSource =
@@ -81,13 +82,29 @@ export function ImportSheet({
 	const kind: ImportKind =
 		picked ?? parsed?.kind ?? (sessions ? 'sessions' : 'bookmarks');
 	const readRef = useRef(0);
+	const abortRef = useRef<AbortController | undefined>(undefined);
+	const cancelRead = () => {
+		readRef.current += 1;
+		abortRef.current?.abort();
+		abortRef.current = undefined;
+		setFetching(false);
+	};
+
 	const readLink = async (address: string) => {
-		const attempt = ++readRef.current;
+		cancelRead();
+		const attempt = readRef.current;
+		const controller = new AbortController();
+		abortRef.current = controller;
 		setFetching(true);
 		setLinked(undefined);
 		let result: Reading;
 		try {
-			result = {ok: true, parsed: await importFromLink(fetch, address)};
+			result = {
+				ok: true,
+				parsed: await importFromLink(cappedFetch(), address, {
+					signal: controller.signal,
+				}),
+			};
 		} catch (error) {
 			result = {
 				ok: false,
@@ -108,22 +125,25 @@ export function ImportSheet({
 
 	const linkUrl = source?.mode === 'link' ? source.url : undefined;
 	useEffect(() => {
-		readRef.current += 1;
-		setFetching(false);
+		cancelRead();
 		setLink(linkUrl ?? '');
 		setLinked(undefined);
 		setPicked(undefined);
+		setSkip(true);
 		if (linkUrl && isSharedPageUrl(linkUrl)) {
 			void readLink(linkUrl);
 		}
 	}, [source, linkUrl]);
 	const preview = parsed ? previewFor(store, parsed, kind, trash) : undefined;
 	const addable = preview ? preview.links - (skip ? preview.duplicates : 0) : 0;
+	const sourceRef = useRef(source);
+	sourceRef.current = source;
 	const run = async () => {
 		if (!parsed) {
 			return;
 		}
 
+		const opened = source;
 		setBusy(true);
 		try {
 			let added = 0;
@@ -143,7 +163,9 @@ export function ImportSheet({
 					? 'Nothing new to import'
 					: `Imported ${added} ${added === 1 ? 'link' : 'links'}`,
 			);
-			onClose();
+			if (sourceRef.current === opened) {
+				onClose();
+			}
 		} catch {
 			notify('Could not import', 'Try again.');
 		} finally {
@@ -176,8 +198,7 @@ export function ImportSheet({
 							autoCapitalize="none"
 							autoCorrect={false}
 							onChangeText={(address) => {
-								readRef.current += 1;
-								setFetching(false);
+								cancelRead();
 								setLink(address);
 								setLinked(undefined);
 								setPicked(undefined);
@@ -241,9 +262,12 @@ export function ImportSheet({
 									? 'column'
 									: 'columns'}
 							{preview.duplicates > 0
-								? `, ${preview.duplicates} already saved or in the trash`
+								? `, ${preview.duplicates} already saved, in the trash, or repeated`
 								: ''}
 							{preview.invalid > 0 ? `, ${preview.invalid} skipped` : ''}
+							{preview.pinnedSkipped > 0
+								? `, ${preview.pinnedSkipped} pinned ${preview.pinnedSkipped === 1 ? 'tab' : 'tabs'} left out`
+								: ''}
 						</Text>
 						{parsed.warnings.map((warning) => (
 							<Text key={warning} style={{color: colors.warn}}>

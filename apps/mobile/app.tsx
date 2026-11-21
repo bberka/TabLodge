@@ -222,6 +222,7 @@ function Main() {
 	const openShare = useCallback(
 		async (outcome: ShareOutcome, quick: boolean) => {
 			setSharedFile(undefined);
+			openImport(undefined);
 			if (outcome.kind === 'refused') {
 				if (quick) {
 					// The toast stays on screen over the app the file came from.
@@ -354,6 +355,7 @@ function Main() {
 			const page = parseImportRoute(url);
 			if (page) {
 				setOpen(false);
+				setSharedFile(undefined);
 				openImport({mode: 'link', url: page});
 				return;
 			}

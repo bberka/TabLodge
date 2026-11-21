@@ -7,12 +7,14 @@ import {
 import {webUrl} from './web-url';
 
 const TIMEOUT_MS = 20_000;
+export const IMPORT_TOO_LARGE = 'That page is larger than 45 MB.';
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 export async function importFromLink(
 	send: Fetch,
 	address: string,
+	{signal}: {signal?: AbortSignal} = {},
 ): Promise<ParsedImport> {
 	const url = webUrl(address);
 	if (!url) {
@@ -25,6 +27,11 @@ export async function importFromLink(
 	const timer = setTimeout(() => {
 		controller.abort();
 	}, TIMEOUT_MS);
+	const stopWithCaller = () => {
+		controller.abort();
+	};
+
+	signal?.addEventListener('abort', stopWithCaller);
 	try {
 		let response: Response;
 		try {
@@ -33,10 +40,12 @@ export async function importFromLink(
 				cache: 'no-store',
 				signal: controller.signal,
 			});
-		} catch {
-			throw new ImportFormatError(
-				'Could not read that link. Check that the address is right and that you are online.',
-			);
+		} catch (error) {
+			throw error instanceof ImportFormatError
+				? error
+				: new ImportFormatError(
+						'Could not read that link. Check that the address is right and that you are online.',
+					);
 		}
 
 		if (response.status === 404) {
@@ -52,16 +61,15 @@ export async function importFromLink(
 		}
 
 		if (Number(response.headers.get('content-length')) > MAX_IMPORT_BYTES) {
-			throw new ImportFormatError(TOO_LARGE);
+			throw new ImportFormatError(IMPORT_TOO_LARGE);
 		}
 
 		return parseImportFile(await readCapped(response));
 	} finally {
 		clearTimeout(timer);
+		signal?.removeEventListener('abort', stopWithCaller);
 	}
 }
-
-const TOO_LARGE = 'That page is larger than 45 MB.';
 
 async function readCapped(response: Response): Promise<string> {
 	try {
@@ -69,7 +77,7 @@ async function readCapped(response: Response): Promise<string> {
 		if (!reader) {
 			const text = await response.text();
 			if (text.length > MAX_IMPORT_BYTES) {
-				throw new ImportFormatError(TOO_LARGE);
+				throw new ImportFormatError(IMPORT_TOO_LARGE);
 			}
 
 			return text;
@@ -87,7 +95,7 @@ async function readCapped(response: Response): Promise<string> {
 			bytes += value.byteLength;
 			if (bytes > MAX_IMPORT_BYTES) {
 				void reader.cancel();
-				throw new ImportFormatError(TOO_LARGE);
+				throw new ImportFormatError(IMPORT_TOO_LARGE);
 			}
 
 			text += decoder.decode(value, {stream: true});

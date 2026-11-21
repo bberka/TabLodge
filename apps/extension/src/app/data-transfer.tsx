@@ -1194,6 +1194,7 @@ export function ImportDialog({
 	const chooseButtonRef = useRef<HTMLButtonElement>(null);
 	const credentialRef = useRef<HTMLInputElement>(null);
 	const readGenerationRef = useRef(0);
+	const linkReadRef = useRef<AbortController | undefined>(undefined);
 	const columns = state?.bookmarkColumns ?? [];
 	// Addresses in the trash, which the import skips like saved links.
 	const [trashed, setTrashed] = useState({
@@ -1432,12 +1433,22 @@ export function ImportDialog({
 		}
 	}
 
+	function cancelLinkRead() {
+		linkReadRef.current?.abort();
+		linkReadRef.current = undefined;
+	}
+
 	async function readLink(address: string) {
+		cancelLinkRead();
+		const controller = new AbortController();
+		linkReadRef.current = controller;
 		const generation = ++readGenerationRef.current;
 		setError('');
 		setReading(true);
 		try {
-			const result = await importFromLink(fetch, address);
+			const result = await importFromLink(fetch, address, {
+				signal: controller.signal,
+			});
 			if (generation !== readGenerationRef.current) {
 				return;
 			}
@@ -1459,6 +1470,7 @@ export function ImportDialog({
 		} finally {
 			if (generation === readGenerationRef.current) {
 				setReading(false);
+				linkReadRef.current = undefined;
 			}
 		}
 	}
@@ -1923,6 +1935,12 @@ export function ImportDialog({
 												value={link}
 												className="min-w-0 flex-1"
 												onChange={(event) => {
+													if (linkReadRef.current) {
+														cancelLinkRead();
+														readGenerationRef.current += 1;
+														setReading(false);
+													}
+
 													setLink(event.target.value);
 												}}
 											/>
