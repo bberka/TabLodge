@@ -428,13 +428,11 @@ function Main() {
 	const finish = (saved?: string) => {
 		setOpen(false);
 		if (saved) {
-			// A single link reports its column; a list of links says what happened in full.
-			const message =
-				draft.urls.length > 1 || draft.many ? saved : `Saved to ${saved}`;
+			// The forms say what happened in full (save-feedback.ts), so every save reads the same.
 			if (Platform.OS === 'android' && draft.quick) {
-				ToastAndroid.show(message, ToastAndroid.SHORT);
+				ToastAndroid.show(saved, ToastAndroid.SHORT);
 			} else {
-				showSnack(message);
+				showSnack(saved);
 			}
 		}
 

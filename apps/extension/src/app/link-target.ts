@@ -8,9 +8,13 @@ export type {LinkClickAction} from '../shared/types';
 type LinkKind = 'bookmark' | 'session';
 
 /**
-Decides what a link click does. `requested` is an explicit menu choice and wins over the setting.
-A bookmark can resolve to 'menu' (open its action menu); that never navigates, so pages that cannot show the menu must handle or replace it.
+The one rule for what opening a saved link does, shared by the dashboard, the side panel, and the finder.
+`requested` is an explicit menu choice and wins over the setting.
 `pinnedLodge` is true when this page is the pinned TabLodge tab: there, "current" becomes "new".
+A bookmark click can resolve to 'menu' (open its action menu) and any click can resolve to 'none' (do nothing).
+A surface that has no menu or no idle click says so with `canMenu: false` or `canIdle: false`: 'menu' then opens
+the link in the current tab, and 'none' opens it the way the default setting does (current tab for a bookmark, new
+tab for a saved tab). The finder sets both, because Enter on a result must never do nothing.
 */
 export function resolveLinkTarget(
 	kind: LinkKind,
@@ -18,17 +22,41 @@ export function resolveLinkTarget(
 		Settings,
 		'bookmarkClickAction' | 'sessionLinkClickAction' | 'keepLodgePinned'
 	>,
-	opts: {requested?: 'current' | 'new'; pinnedLodge?: boolean} = {},
+	opts: {
+		requested?: 'current' | 'new';
+		pinnedLodge?: boolean;
+		canMenu?: boolean;
+		canIdle?: boolean;
+	} = {},
 ): BookmarkClickAction {
-	const action: BookmarkClickAction =
+	const fallback = kind === 'bookmark' ? 'current' : 'new';
+	let action: BookmarkClickAction =
 		opts.requested ??
 		(kind === 'bookmark'
 			? settings.bookmarkClickAction
 			: settings.sessionLinkClickAction) ??
-		(kind === 'bookmark' ? 'current' : 'new');
+		fallback;
+	if (action === 'menu' && opts.canMenu === false) {
+		action = 'current';
+	}
+
+	if (action === 'none' && opts.canIdle === false) {
+		action = fallback;
+	}
+
 	return action === 'current' && settings.keepLodgePinned && opts.pinnedLodge
 		? 'new'
 		: action;
+}
+
+/**
+The address to open or copy a saved link as: tracking parameters removed when the setting is on.
+*/
+export function linkDestination(
+	url: string,
+	settings: Partial<Pick<Settings, 'removeTrackingParameters'>>,
+): string {
+	return settings.removeTrackingParameters ? stripTrackingParameters(url) : url;
 }
 
 /**
@@ -51,9 +79,7 @@ export async function openInPrivateWindow(
 	}
 
 	await chrome.windows.create({
-		url: settings.removeTrackingParameters
-			? stripTrackingParameters(safe)
-			: safe,
+		url: linkDestination(safe, settings),
 		incognito: true,
 		focused: true,
 	});
@@ -90,10 +116,9 @@ export async function openLink(
 	settings: Settings,
 	requested?: 'current' | 'new',
 	where?: {windowId?: number},
+	idleClick = true,
 ): Promise<void> {
-	const destination = settings.removeTrackingParameters
-		? stripTrackingParameters(url)
-		: url;
+	const destination = linkDestination(url, settings);
 	const target = where ? await activeTabOf(where.windowId) : undefined;
 	const pinned = where
 		? Boolean(
@@ -104,19 +129,13 @@ export async function openLink(
 		: settings.keepLodgePinned
 			? await isPinnedLodgeTab()
 			: false;
-	// Places that cannot show a bookmark menu (the search palette) open the link like the default setting.
-	const resolved = resolveLinkTarget(kind, settings, {
+	// Nothing here can show a bookmark menu. Only a plain click may do nothing; the finder passes `idleClick: false`.
+	const action = resolveLinkTarget(kind, settings, {
 		requested,
 		pinnedLodge: pinned,
+		canMenu: false,
+		canIdle: idleClick && where === undefined,
 	});
-	const action =
-		resolved === 'menu'
-			? resolveLinkTarget(
-					kind,
-					{...settings, bookmarkClickAction: 'current'},
-					{pinnedLodge: pinned},
-				)
-			: resolved;
 	if (action === 'none') {
 		return;
 	}

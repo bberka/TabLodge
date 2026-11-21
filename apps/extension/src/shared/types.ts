@@ -5,6 +5,7 @@ import type {SyncStatus} from './sync/client';
 import type {SharedPage} from './sync/shared-pages-client';
 import type {PageCopy} from './page-copy';
 import type {LinkKind} from './link-kind';
+import type {ToastDuration, ToastPosition} from './toast-prefs';
 
 export type ActionMode =
 	| 'popup'
@@ -61,6 +62,10 @@ export type RestoreTarget =
 export type RestoreMode = 'keep' | 'remove';
 export type SessionSort =
 	'newest' | 'oldest' | 'opened' | 'name' | 'tabs' | 'custom';
+/**
+How a bookmark column lists its bookmarks. `manual` is the stored order; the others only change what is shown.
+*/
+export type BookmarkSort = 'manual' | 'newest' | 'oldest' | 'title' | 'site';
 export type CopyFormat =
 	'rich' | 'title-url' | 'url-title' | 'url' | 'markdown';
 export type TabGroupColor = `${chrome.tabGroups.Color}`;
@@ -162,6 +167,10 @@ export type Settings = {
 	paletteLocation: PaletteLocation;
 	sessionSort: SessionSort;
 	/**
+	How bookmark columns are listed (default: manual). Anything else is a view only; the stored order is kept.
+	*/
+	bookmarkSort: BookmarkSort;
+	/**
 	Session cards start expanded on the TabLodge page (default off: collapsed); each can still be toggled during the visit.
 	*/
 	expandSessionsByDefault: boolean;
@@ -221,6 +230,15 @@ export type Settings = {
 	Show the sessions section above the bookmark board (only when both are enabled).
 	*/
 	sessionsOnTop: boolean;
+	/**
+	Where toasts appear, on TabLodge's pages, in the Sources toast on site pages, and for the quote toast. `default` is
+	each one's own place (bottom center, and bottom right on site pages).
+	*/
+	toastPosition: ToastPosition;
+	/**
+	How long toasts stay: as today (`default`), twice as long, or until dismissed.
+	*/
+	toastDuration: ToastDuration;
 	/**
 	Show the Save this window shortcut in the dashboard header (default on).
 	*/
@@ -1028,6 +1046,11 @@ export type TabLodgeMessages = {
 	*/
 	SITE_SOURCE_PENDING: {source: string};
 	/**
+	Sent by a toast on a page that cannot read the settings (the Sources toast on a site): asks where toasts appear and
+	how long they stay.
+	*/
+	TOAST_PREFS: {};
+	/**
 	Sent by the site content script on the site's saved page: the items listed there. The worker answers how many
 	TabLodge lacks and whether to ask about them; it never says which.
 	*/
@@ -1062,6 +1085,10 @@ export type ActionFailure = {
 	Set when the private library is locked: the page shows the lock screen instead of the error.
 	*/
 	locked?: true;
+	/**
+	Set when nothing was saved because every link was already saved (a skipped duplicate): shown as a notice, never as success.
+	*/
+	duplicate?: true;
 	/**
 	Set when connecting to a sync server failed because of one form field, so the page can show the error there.
 	*/
@@ -1436,6 +1463,7 @@ export type TabLodgeResponses = {
 	SITE_SOURCE_PENDING: {
 		saved?: {outcome: SiteSourceOutcome; column?: string} & Undoable;
 	};
+	TOAST_PREFS: {position: ToastPosition; duration: ToastDuration};
 	/**
 	`missing`: how many listed items TabLodge lacks. `ask`: some of them were never answered Not now.
 	*/

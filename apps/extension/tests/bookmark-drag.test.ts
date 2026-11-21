@@ -3,6 +3,7 @@ import type {DragEvent} from 'react';
 import {describe, test} from 'vite-plus/test';
 import {
 	acceptsDrop,
+	ALL_BOOKMARKS_ID,
 	parsePastedLinks,
 	previewBookmarkDrop,
 	type DropIndicator,
@@ -129,6 +130,51 @@ describe('bookmark drops', () => {
 			kind: 'column',
 			columnId: 'c1',
 			position: 'before',
+		});
+	});
+});
+
+describe('drops on the All item', () => {
+	test('offer no slot, even next to a card, so the browser refuses the drop', () => {
+		for (const kind of [BOOKMARK_DRAG_TYPE, 'text/uri-list']) {
+			let seen: DropIndicator | null | undefined;
+			let prevented = false;
+			const event = dragEvent([kind], {id: 'b1', top: 100, height: 40}, 110);
+			event.preventDefault = () => {
+				prevented = true;
+			};
+
+			previewBookmarkDrop(
+				event,
+				ALL_BOOKMARKS_ID,
+				(value) => {
+					seen = value;
+				},
+				false,
+			);
+			assert.equal(seen, null);
+			assert.equal(prevented, false);
+		}
+	});
+});
+
+describe('drops on a sorted column', () => {
+	test('offer no slot next to a card', () => {
+		let seen: DropIndicator | null = null;
+		previewBookmarkDrop(
+			dragEvent([BOOKMARK_DRAG_TYPE], {id: 'b1', top: 100, height: 40}, 110),
+			'c1',
+			(value) => {
+				seen = value;
+			},
+			true,
+			false,
+		);
+		assert.deepEqual(seen, {
+			kind: 'bookmark',
+			columnId: 'c1',
+			targetBookmarkId: null,
+			position: 'after',
 		});
 	});
 });

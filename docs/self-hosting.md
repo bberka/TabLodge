@@ -206,7 +206,7 @@ Each optional part of TabLodge needs a server from the release that added it:
 | Bookmark notes (`notes`) | 0.4.0 | Notes stay on the device where they were written |
 | Bookmark tags (`tags`) | 0.4.0 | Tags you add, and automatic tags you remove, stay on the device where you changed them |
 | Sources settings (`sources`) | 0.4.0 | The sites in **Settings › Sources**, their columns, and save modes stay in each browser |
-| Newer settings (`settings`) | 0.4.0 | Settings added since 0.3.0 stay on each device; the older ones still sync |
+| Newer settings (`settings`) | 0.4.0 | Settings added since 0.3.0, and the extension's theme and accents, stay on each device; the older ones still sync |
 | Shared pages (`shared-pages`) | 0.4.0 | **Get a link** cannot share pages |
 | Importable shared pages (`shared-page-import`) | 0.4.0 | Shared pages have no **Add to TabLodge** button, and **Share** does not list the links made from a column or session |
 | Page copies through the server (`page-source`) | 0.4.0 | The Android app fetches pages for **Keep a copy** itself, so the site sees the phone |

@@ -34,7 +34,7 @@ export const ROWS = {
 	privateOpenApp: {label: 'Private browser', hint: 'The app for private links'},
 	syncSettings: {
 		label: 'Sync settings',
-		hint: 'Gestures and choices follow your other phones; the look stays here',
+		hint: 'Link options reach every device, the look and gestures your other phones. The device name and browsers stay here',
 	},
 	syncPrivate: {
 		label: 'Sync the private library',
@@ -48,6 +48,14 @@ export const ROWS = {
 	accent: {
 		label: 'Accent color',
 		hint: "Buttons and highlights. System follows your phone's color",
+	},
+	messagePosition: {
+		label: 'Message position',
+		hint: 'Where Undo messages appear',
+	},
+	toastDuration: {
+		label: 'Messages stay',
+		hint: 'How long an Undo message stays',
 	},
 	compactSessions: {
 		label: 'Compact session cards',
@@ -166,6 +174,10 @@ export const SECTIONS = {
 			'frosted',
 			'liquid glass',
 			'transparent',
+			'toast',
+			'snackbar',
+			'undo',
+			'messages',
 		],
 		rows: [
 			ROWS.style,
@@ -175,6 +187,8 @@ export const SECTIONS = {
 			ROWS.barSize,
 			ROWS.barLabels,
 			ROWS.glassEffect,
+			ROWS.messagePosition,
+			ROWS.toastDuration,
 		],
 	},
 	syncApp: {

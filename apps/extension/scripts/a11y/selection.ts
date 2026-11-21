@@ -172,11 +172,12 @@ export async function bulkSelectionActionsCheck(env: Env, theme: Theme) {
 				await bookmarks.getByRole('button', {name, exact: true}).waitFor();
 			}
 
-			const sessionTargetSelect = bookmarks.getByRole('combobox', {
-				name: 'Add selected bookmarks to session',
-				exact: true,
-			});
-			await sessionTargetSelect.waitFor();
+			await bookmarks
+				.getByRole('button', {
+					name: 'Add to session…',
+					exact: true,
+				})
+				.waitFor();
 			assert.equal(
 				await bookmarks.getByText('2 bookmarks selected').count(),
 				1,
@@ -198,14 +199,18 @@ export async function bulkSelectionActionsCheck(env: Env, theme: Theme) {
 				bookmarks,
 			);
 
-			await sessionTargetSelect.focus();
-			await page.keyboard.press('Enter');
+			await bookmarks
+				.getByRole('button', {
+					name: 'Add to session…',
+					exact: true,
+				})
+				.press('Enter');
 			const homeLabTarget = page.getByRole('option', {
 				name: 'Home lab rebuild',
 				exact: true,
 			});
 			await homeLabTarget.waitFor();
-			assert.equal(await homeLabTarget.getAttribute('data-highlighted'), '');
+			assert.equal(await homeLabTarget.getAttribute('aria-selected'), 'true');
 			await page.keyboard.press('Enter');
 			await until(async () => {
 				const store = await readDevStore(page);
@@ -434,41 +439,43 @@ export async function moveSelectedToNewColumnCheck(env: Env, theme: Theme) {
 				.getByRole('button', {name: 'Move bookmarks', exact: true})
 				.press('Enter');
 			const dialog = page.getByRole('dialog');
-			const columnPicker = dialog.getByRole('combobox', {
-				name: 'Column',
-				exact: true,
-			});
-			await columnPicker.press('Enter');
-			const options = page.getByRole('option');
-			await options.first().waitFor();
+			await until(
+				async () => (await dialog.locator('input:focus').count()) === 1,
+				'the search field to take focus',
+			);
+			const options = dialog.getByRole('option');
 			const optionNames = (await options.allTextContents()).map((name) =>
 				name.trim(),
 			);
-			assert.deepEqual(optionNames, ['Daily', 'Dev', 'Reading', 'Add column']);
+			assert.deepEqual(optionNames, ['Daily', 'Dev', 'Reading']);
 			assert.ok(!optionNames.includes('Unfiled'));
-			await page
-				.getByRole('option', {name: 'Add column', exact: true})
-				.press('Enter');
+			// A name that matches nothing offers to create the column.
 			const columnName = `Bulk move ${theme}`;
-			await dialog
-				.getByRole('textbox', {name: 'New column name'})
-				.fill(columnName);
-			await dialog
-				.getByRole('button', {name: 'Move bookmarks', exact: true})
-				.press('Enter');
+			await page.keyboard.type(columnName);
+			await options.filter({hasText: `New column “${columnName}”`}).waitFor();
+			await page.keyboard.press('Enter');
 			await dialog.waitFor({state: 'hidden'});
-			const store = await readDevStore(page);
-			const column = store.bookmarkColumns.find(
-				(entry) => entry.name === columnName,
-			);
-			assert.ok(column, 'the selected destination column should be created');
-			assert.deepEqual(
-				store.bookmarks
+			// The dialog closes first; the column is created and the bookmarks move after.
+			const moved = async () => {
+				const store = await readDevStore(page);
+				const column = store.bookmarkColumns.find(
+					(entry) => entry.name === columnName,
+				);
+				const columnIds = store.bookmarks
 					.filter((bookmark) =>
 						['dev-bookmark-1', 'dev-bookmark-2'].includes(bookmark.id),
 					)
-					.map((bookmark) => bookmark.columnId),
-				[column.id, column.id],
+					.map((bookmark) => bookmark.columnId);
+				return column &&
+					columnIds.length === 2 &&
+					columnIds.every((id) => id === column.id)
+					? column.id
+					: undefined;
+			};
+
+			await until(
+				async () => (await moved()) !== undefined,
+				'the selected bookmarks to land in the new column',
 			);
 			await page.close();
 		},
@@ -769,35 +776,9 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 				.getByRole('button', {name: 'Move bookmarks', exact: true})
 				.focus();
 			await page.keyboard.press('Enter');
-			await page.getByRole('combobox', {name: 'Column', exact: true}).focus();
+			await page.getByRole('combobox', {name: 'Search columns'}).waitFor();
+			await page.keyboard.type('Reading');
 			await page.keyboard.press('Enter');
-			await page.keyboard.press('r');
-			await until(
-				async () =>
-					(await page.locator('[role="option"]:focus').textContent()) ===
-					'Reading',
-				'the last column option to receive focus',
-			);
-			await page.keyboard.press('Enter');
-			// The select hands focus back to its trigger a moment after it closes. Focusing the button before that
-			// lets the trigger take focus back, and Enter then reopens the select instead of submitting.
-			await until(
-				async () =>
-					(await page.locator('[role="listbox"]').count()) === 0 &&
-					(await page.locator('#move-bookmark-column:focus').count()) === 1,
-				'the column select to close and give focus back',
-			);
-			const move = page
-				.getByRole('dialog')
-				.getByRole('button', {name: 'Move bookmarks', exact: true});
-			await move.focus();
-			assert.match(
-				(await page.locator(':focus').textContent()) ?? '',
-				/Move bookmarks/,
-				'Move bookmarks has focus',
-			);
-			await page.keyboard.press('Enter');
-			// An open select hides the dialog from the accessibility tree, so wait for the element itself to go.
 			await page.locator('[role="dialog"]').waitFor({state: 'detached'});
 			const destination = page.locator('section[data-column-id]').last();
 			const columnId = await destination.getAttribute('data-column-id');

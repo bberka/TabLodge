@@ -62,6 +62,7 @@ import {columnForUrl} from '../shared/column-sites';
 import {webUrl} from '../shared/web-url';
 import {isSharedPageUrl} from '../shared/sync/shared-pages';
 import {archivedFolderId} from '../shared/session-folders';
+import {defaultTargetSession} from '../shared/save-rules';
 import {PrivateWindowMark} from './private-window-appearance';
 import {
 	LoadingLine,
@@ -74,8 +75,8 @@ import {
 	useStatus,
 	useTabLodgeState,
 	useTabSelection,
-	forceAddAction,
-	duplicatesNote,
+	reportSessionSave,
+	showSaveFailure,
 	plural,
 } from './common';
 import {LinkSummary} from './favicon';
@@ -253,10 +254,6 @@ function Popup() {
 						? highlighted
 						: valid.filter((tab) => includePinnedTabs || !tab.pinned);
 				setSelectedIds(initial.map((tab) => tab.id));
-				const active = valid.find((tab) => tab.active);
-				setGroupName(
-					active?.title ? `Saved from ${active.title}`.slice(0, 120) : '',
-				);
 			})
 			.catch(() => {
 				if (alive) {
@@ -294,15 +291,11 @@ function Popup() {
 		});
 		setBusy('');
 		if (result?.ok) {
-			showStatus(
-				`Saved ${plural(result.count, 'tab')} in ${plural(result.groups, 'session')}.${duplicatesNote(result.skipped)}`,
-				false,
-				result.rejectedTabIds.length > 0
-					? {
-							action: forceAddAction(result.rejectedTabIds, showStatus, reload),
-						}
-					: {toast: true},
-			);
+			reportSessionSave(result, {
+				closeOnSave: state?.settings?.closeOnSave !== false,
+				showStatus,
+				reload,
+			});
 			setChooseOpen(false);
 			await reload();
 		} else {
@@ -429,7 +422,7 @@ function Popup() {
 					bookmark: {title: tab.title || url, url, columnId: claimed.id},
 				});
 				if (!added?.ok) {
-					showStatus(added?.error || 'Could not bookmark this page.', true);
+					showSaveFailure(showStatus, added, 'Could not bookmark this page.');
 					return;
 				}
 
@@ -478,7 +471,12 @@ function Popup() {
 			}
 
 			setSessionTab({title: tab.title || url, url});
-			setSessionId(pickerSessions[0].id);
+			setSessionId(
+				(
+					defaultTargetSession(groups, state?.folders ?? []) ??
+					pickerSessions[0]
+				).id,
+			);
 			setSessionOpen(true);
 		} catch {
 			showStatus(
@@ -504,9 +502,10 @@ function Popup() {
 				links: [sessionTab],
 			});
 			if (!result?.ok) {
-				showStatus(
-					result?.error || 'Could not add this page to the session.',
-					true,
+				showSaveFailure(
+					showStatus,
+					result,
+					'Could not add this page to the session.',
 				);
 				return;
 			}
@@ -547,7 +546,7 @@ function Popup() {
 				bookmark: {...bookmarkTab, columnId: target},
 			});
 			if (!result?.ok) {
-				showStatus(result?.error || 'Could not bookmark this page.', true);
+				showSaveFailure(showStatus, result, 'Could not bookmark this page.');
 				return;
 			}
 
@@ -971,7 +970,7 @@ function Popup() {
 									id="quick-session-title"
 									value={groupName}
 									maxLength={120}
-									placeholder="Saved session"
+									placeholder="Named by your Settings"
 									onChange={(event) => setGroupName(event.target.value)}
 								/>
 							</div>
