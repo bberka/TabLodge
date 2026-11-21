@@ -117,14 +117,19 @@ describe('search on every key', () => {
 		assert.equal(watched.reads(), 0);
 		assert.deepEqual(
 			second.map((bookmark: Bookmark) => bookmark.id),
-			first
+			store.bookmarks
 				.filter((bookmark) =>
-					`${bookmark.title} ${bookmark.url} ${bookmark.notes ?? ''}`
+					[
+						bookmark.title,
+						bookmark.url,
+						bookmark.notes ?? '',
+						...(bookmark.tags ?? []),
+					]
+						.join(' ')
 						.toLowerCase()
 						.includes('gu'),
 				)
-				.map((bookmark) => bookmark.id)
-				.filter((id) => second.some((found) => found.id === id)),
+				.map((bookmark) => bookmark.id),
 		);
 	});
 

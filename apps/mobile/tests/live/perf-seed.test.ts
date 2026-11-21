@@ -48,6 +48,11 @@ describe.skipIf(!scenario)('seed a scale scenario', () => {
 			});
 			const started = performance.now();
 			await client.syncNow();
+			const {error} = await client.status();
+			if (error) {
+				throw new Error(`The seed push failed: ${JSON.stringify(error)}`);
+			}
+
 			const seconds = ((performance.now() - started) / 1000).toFixed(1);
 			const response = await fetch(`${url}/v1/changes?cursor=0&limit=1`, {
 				headers: {Authorization: `Bearer ${token}`},

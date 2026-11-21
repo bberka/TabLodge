@@ -12,6 +12,8 @@ PKG=com.bberka.tablodge
 TOKEN=perf-token-perf-token-perf-token-0123456789
 ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
 mkdir -p "$OUT"
+OUT=$(cd "$OUT" && pwd)
+rm -f "$OUT/$SCENARIO".A.log "$OUT/$SCENARIO".B.log "$OUT/$SCENARIO".D.log "$OUT/$SCENARIO".C.txt
 adb="adb -s $SERIAL"
 
 wait_for() { # <pattern> <seconds>

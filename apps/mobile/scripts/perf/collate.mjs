@@ -67,9 +67,13 @@ for (const scenario of scenarios) {
 	const perKey = (ends) =>
 		median(
 			keys
-				.map((key, index) =>
-					index < ends.length ? ends[index].at - key.at : undefined,
-				)
+				.map((key) => {
+					const end = ends.find(
+						(candidate) =>
+							candidate.length === key.length && candidate.at >= key.at,
+					);
+					return end ? end.at - key.at : undefined;
+				})
 				.filter((value) => value !== undefined),
 		);
 	const scroll = read(`${scenario}.C.txt`);
@@ -101,7 +105,13 @@ for (const scenario of scenarios) {
 			'import-parse-1000',
 			'import-preview-1000',
 			'import-apply-1000',
-		].reduce((sum, name) => sum + (step(a, name) ?? 0), 0),
+		].every((name) => step(a, name) !== undefined)
+			? [
+					'import-parse-1000',
+					'import-preview-1000',
+					'import-apply-1000',
+				].reduce((sum, name) => sum + step(a, name), 0)
+			: undefined,
 		normalize: step(a, 'normalizeStore'),
 		allB: step(a, 'allBookmarks'),
 		searchB: step(a, 'searchBookmarks'),
