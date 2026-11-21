@@ -74,14 +74,15 @@ export async function loadPreferences(): Promise<void> {
 	}
 }
 
-export function takeLegacySiteIcons(): 'browser' | undefined {
-	const found = legacySiteIcons;
-	if (found) {
-		legacySiteIcons = undefined;
-		void writeJson(KEY, current);
+export const getLegacySiteIcons = (): 'browser' | undefined => legacySiteIcons;
+
+export function clearLegacySiteIcons(): void {
+	if (!legacySiteIcons) {
+		return;
 	}
 
-	return found;
+	legacySiteIcons = undefined;
+	void writeJson(KEY, current);
 }
 
 let onLocalChange: ((change: Partial<Preferences>) => void) | undefined;
