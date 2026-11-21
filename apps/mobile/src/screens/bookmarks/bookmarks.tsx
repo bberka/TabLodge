@@ -47,9 +47,14 @@ import {useColors} from '../../ui/theme';
 import {PrivateSwitch} from '../../private/private-switch';
 import {useRefresh} from '../../library/use-refresh';
 import {useSelection} from '../../ui/use-selection';
-import {BOOKMARK_UNFILED_ID} from '../../../../extension/src/shared/bookmark-rules';
+import {
+	BOOKMARK_UNFILED_ID,
+	sortBookmarks,
+} from '../../../../extension/src/shared/bookmark-rules';
 import {useStableCallback} from '../../ui/stable-callback';
 import {trackScroll} from '../../ui/scroll-state';
+import {useScrollTop} from '../../ui/scroll-top';
+import {bookmarkSortName} from '../../library/bookmark-sort';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
@@ -70,6 +75,7 @@ import {linkOpenActions, openIn} from '../open-in';
 import {useCopyUrls} from '../../library/page-copies';
 import {sharedPageSource} from '../../../../extension/src/shared/sync/shared-pages-client';
 import {useSharedPagesAction} from '../settings/shared-pages-settings';
+import {SortSheet} from './sort-sheet';
 import {TagFilterSheet} from './tags';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
@@ -127,6 +133,8 @@ export function BookmarksScreen({
 	const {query} = search;
 	const {refreshing, refresh} = useRefresh();
 	const listRef = useRef<FlatList<Bookmark>>(null);
+	const scrollTop = useScrollTop(listRef);
+	const [sortOpen, setSortOpen] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	// The bookmark whose menu is open, from holding down its row.
 	const [rowMenuId, setRowMenuId] = useState<string>();
@@ -211,17 +219,27 @@ export function BookmarksScreen({
 	useBackAction(isListView && inside && !isSearching, () => {
 		setInside(false);
 	});
+	const sort = links.bookmarkSort;
+	const manualOrder = sort === 'manual';
 	const shown = useMemo(
 		() =>
 			isSearching
 				? searchBookmarks(store, query)
 				: atList
 					? []
-					: columnId === ALL_BOOKMARKS_ID
-						? allBookmarks(store)
-						: bookmarksIn(store, columnId),
-		[store, query, columnId, isSearching, atList],
+					: (sortBookmarks(
+							columnId === ALL_BOOKMARKS_ID
+								? allBookmarks(store)
+								: bookmarksIn(store, columnId),
+							sort,
+						) as Bookmark[]),
+		[store, query, columnId, isSearching, atList, sort],
 	);
+	useEffect(() => {
+		if (!manualOrder) {
+			setReordering(false);
+		}
+	}, [manualOrder]);
 	const searchCount = useSettledText(isSearching, resultCount(shown.length));
 	const sharedPagesAction = useSharedPagesAction();
 	const columnName =
@@ -391,7 +409,10 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!isSearching && shown.length > 1 && columnId !== ALL_BOOKMARKS_ID
+		...(!isSearching &&
+		manualOrder &&
+		shown.length > 1 &&
+		columnId !== ALL_BOOKMARKS_ID
 			? [
 					{
 						icon: 'swap-vertical-outline' as const,
@@ -435,6 +456,18 @@ export function BookmarksScreen({
 						hint: 'Rename it, or change its icon and color',
 						onPress() {
 							setSheet({kind: 'column', id: columnId});
+						},
+					},
+				]
+			: []),
+		...(store.bookmarks.length > 1
+			? [
+					{
+						icon: 'filter-outline' as const,
+						label: 'Sort bookmarks',
+						hint: bookmarkSortName(sort),
+						onPress() {
+							setSortOpen(true);
 						},
 					},
 				]
@@ -834,6 +867,7 @@ export function BookmarksScreen({
 						onScroll={(event) => {
 							dragSelect.onScroll(event);
 							trackScroll(event);
+							scrollTop.onScroll(event);
 						}}
 						onRefresh={() => {
 							void refresh();
@@ -842,7 +876,12 @@ export function BookmarksScreen({
 				</Animated.View>
 			</GlassTarget>
 			{!selection.active && !reordering && !search.open && (
-				<FloatingActions bottom={space} onAdd={onAdd} onSearch={search.show} />
+				<FloatingActions
+					bottom={space}
+					onAdd={onAdd}
+					onSearch={search.show}
+					onUp={scrollTop.visible ? scrollTop.up : undefined}
+				/>
 			)}
 			{search.open && (
 				<SearchDock
@@ -855,8 +894,20 @@ export function BookmarksScreen({
 					onTips={() => {
 						setTipsOpen(true);
 					}}
+					onUp={scrollTop.visible ? scrollTop.up : undefined}
 				/>
 			)}
+			<SortSheet
+				visible={sortOpen}
+				value={sort}
+				onClose={() => {
+					setSortOpen(false);
+				}}
+				onPick={(next) => {
+					void setSyncedSetting('bookmarkSort', next);
+					showSnack(`Bookmarks sorted: ${bookmarkSortName(next)}`);
+				}}
+			/>
 			<SearchTipsSheet
 				visible={tipsOpen}
 				onClose={() => {

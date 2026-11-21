@@ -146,11 +146,13 @@ export function FloatingActions({
 	bottom,
 	onSearch,
 	onAdd,
+	onUp,
 	buttonLabel = 'Add link',
 }: {
 	bottom: number;
 	onSearch?: () => void;
 	onAdd?: () => void;
+	onUp?: () => void;
 	buttonLabel?: string;
 }) {
 	// With a floating tab bar the search button sits in its row, at the right edge, as tall as the bar, and the add
@@ -175,13 +177,23 @@ export function FloatingActions({
 		<RoundButton icon="search" label="Search" size={each} onPress={onSearch} />
 	);
 	const add = onAdd && (
-		<RoundButton
-			primary
-			icon="add"
-			label={buttonLabel}
-			size={each}
-			onPress={onAdd}
-		/>
+		<View style={styles.pair}>
+			{onUp && (
+				<RoundButton
+					icon="arrow-up"
+					label="Scroll to top"
+					size={each}
+					onPress={onUp}
+				/>
+			)}
+			<RoundButton
+				primary
+				icon="add"
+				label={buttonLabel}
+				size={each}
+				onPress={onAdd}
+			/>
+		</View>
 	);
 	return (
 		// Clear of the tab bar below, whose own shadow would otherwise reach the buttons.
@@ -225,6 +237,7 @@ export function SearchDock({
 	onChange,
 	onClose,
 	onTips,
+	onUp,
 }: {
 	label: string;
 	placeholder: string;
@@ -236,6 +249,7 @@ export function SearchDock({
 	Shows a help button at the end of the field that opens the search tips.
 	*/
 	onTips?: () => void;
+	onUp?: () => void;
 }) {
 	const colors = useColors();
 	const glassOn = useGlass();
@@ -250,68 +264,84 @@ export function SearchDock({
 	// The banner of a docked bar is an edge of the screen, so only the floating forms are glass.
 	const glass = glassOn;
 	const rest = floatingBar ? barGap + insets.bottom : bottom;
+	const dockBottom = keyboardOpen
+		? Animated.add(inset, floatingBar ? 8 : 0)
+		: rest;
 	return (
-		<Animated.View
-			style={[
-				styles.dock,
-				floatingBar ? styles.floating : styles.banner,
-				{
-					width: floatingBar ? screenWidth - 32 : screenWidth,
-					bottom: keyboardOpen
-						? Animated.add(inset, floatingBar ? 8 : 0)
-						: rest,
-					backgroundColor: glass ? 'transparent' : colors.surface,
-					borderColor: colors.border,
-				},
-				glass && styles.noBorder,
-			]}
-		>
-			{glass && <GlassBackdrop kind="search" />}
-			<Icon name="search" size={22} color={colors.muted} />
-			<View style={styles.inputBox}>
-				<TextInput
-					autoFocus
-					accessibilityLabel={label}
-					placeholder={placeholder}
-					placeholderTextColor={colors.muted}
-					value={query}
-					autoCapitalize="none"
-					autoCorrect={false}
-					returnKeyType="search"
-					style={[styles.input, {color: colors.text}]}
-					onChangeText={onChange}
-				/>
-			</View>
-			{query !== '' && (
-				<IconButton
-					icon="close-circle"
-					label="Clear search"
-					color={colors.muted}
-					onPress={() => {
-						onChange('');
-					}}
-				/>
+		<>
+			{onUp && (
+				<Animated.View
+					pointerEvents="box-none"
+					style={[styles.row, {bottom: Animated.add(dockBottom, SIZE + 12)}]}
+				>
+					<RoundButton
+						icon="arrow-up"
+						label="Scroll to top"
+						size={SIZE}
+						onPress={onUp}
+					/>
+				</Animated.View>
 			)}
-			{onTips && (
-				<IconButton
-					icon="help-circle-outline"
-					label="Search tips"
-					color={colors.muted}
-					onPress={onTips}
-				/>
-			)}
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Close search"
-				style={({pressed}) => [
-					styles.close,
-					pressed && {backgroundColor: colors.pressed},
+			<Animated.View
+				style={[
+					styles.dock,
+					floatingBar ? styles.floating : styles.banner,
+					{
+						width: floatingBar ? screenWidth - 32 : screenWidth,
+						bottom: dockBottom,
+						backgroundColor: glass ? 'transparent' : colors.surface,
+						borderColor: colors.border,
+					},
+					glass && styles.noBorder,
 				]}
-				onPress={onClose}
 			>
-				<Icon name="chevron-down" color={colors.text} />
-			</Pressable>
-		</Animated.View>
+				{glass && <GlassBackdrop kind="search" />}
+				<Icon name="search" size={22} color={colors.muted} />
+				<View style={styles.inputBox}>
+					<TextInput
+						autoFocus
+						accessibilityLabel={label}
+						placeholder={placeholder}
+						placeholderTextColor={colors.muted}
+						value={query}
+						autoCapitalize="none"
+						autoCorrect={false}
+						returnKeyType="search"
+						style={[styles.input, {color: colors.text}]}
+						onChangeText={onChange}
+					/>
+				</View>
+				{query !== '' && (
+					<IconButton
+						icon="close-circle"
+						label="Clear search"
+						color={colors.muted}
+						onPress={() => {
+							onChange('');
+						}}
+					/>
+				)}
+				{onTips && (
+					<IconButton
+						icon="help-circle-outline"
+						label="Search tips"
+						color={colors.muted}
+						onPress={onTips}
+					/>
+				)}
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="Close search"
+					style={({pressed}) => [
+						styles.close,
+						pressed && {backgroundColor: colors.pressed},
+					]}
+					onPress={onClose}
+				>
+					<Icon name="chevron-down" color={colors.text} />
+				</Pressable>
+			</Animated.View>
+		</>
 	);
 }
 
@@ -323,6 +353,7 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 12,
 	},
+	pair: {flexDirection: 'row', alignItems: 'center', gap: 12},
 	button: {overflow: 'hidden', elevation: 3},
 	fill: {flex: 1, alignItems: 'center', justifyContent: 'center'},
 	dock: {
