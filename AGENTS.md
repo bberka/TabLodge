@@ -22,7 +22,8 @@ Run tasks as `vp run <task>` from the root; scripts in the root `package.json` f
 - Every fix or feature carries proof in the pull request, one piece per acceptance criterion. Ask the user only when no proof is possible.
 - Report only what you ran. Say what you could not run or check; never infer a result.
 - A change the user can see, including a follow up request, gets fresh screenshots (dev browser for the extension and site, emulator for the app) uploaded with `vp run evidence <pr> <files>` into the pull request. Local file paths are not proof.
-- A guard (hook, lint rule, check, skipped test, `eslint-disable`) says what it prevents. Read that before changing it, and write it when you add one.
+- A guard (hook, lint rule, check, skipped test) says what it prevents, in its doc or config entry. A lint or type directive carries its reason inside it (`eslint-disable-next-line rule -- reason`, `@ts-expect-error reason`). Read the reason before changing a guard.
+- Write no code comments; the reason goes in a name, a type, a test, or an ADR.
 - Never ask whether to run the app, take screenshots, or open the pull request. Do them, then report.
 - Finish the task: commit, push, open the pull request, wait for green CI, stop every process you started, then say done. Load [workflow.md](docs/agents/workflow.md) and [validation.md](docs/agents/validation.md) before the first edit.
 - Before every push, run the `unslop-*` skills on the diff and finish the gate. Leave the Git hooks on.
@@ -39,6 +40,7 @@ Run tasks as `vp run <task>` from the root; scripts in the root `package.json` f
 - Sync server (`apps/server`) → [server.md](docs/agents/server.md)
 - Website (`apps/site`), its screenshots → [site.md](docs/agents/site.md)
 - Shared code, protocol, data model, new feature, or a feature another app could want → [cross-app.md](docs/agents/cross-app.md)
+- Code comments, directives, the comment ratchet, deleting an area's comments → [comments.md](docs/agents/comments.md)
 - Workflows, releases, store publishing, Docker image → [ci.md](docs/agents/ci.md)
 - Editing docs, Help, or site copy; editing this file → [documentation.md](docs/agents/documentation.md)
 - Issues, labels, triage → [issue-tracker.md](docs/agents/issue-tracker.md)
