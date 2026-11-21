@@ -1,7 +1,3 @@
-/*
-The bookmark sort choices of Settings and of the Bookmarks screen. The values and labels are the extension's, so both
-apps offer the same sorts under the same names; only the icons are this app's.
-*/
 import {BOOKMARK_SORT_OPTIONS} from '../../../extension/src/shared/bookmark-rules';
 import type {BookmarkSort} from '../../../extension/src/shared/types';
 import type {IconName} from '../ui/widgets';

@@ -217,7 +217,6 @@ export function BookmarksScreen({
 	useBackAction(isListView && inside && !isSearching, () => {
 		setInside(false);
 	});
-	// Only the stored order can be rearranged; any other sort is a view of it, as in the extension.
 	const sort = links.bookmarkSort;
 	const manualOrder = sort === 'manual';
 	const shown = useMemo(
@@ -234,7 +233,6 @@ export function BookmarksScreen({
 						) as Bookmark[]),
 		[store, query, columnId, isSearching, atList, sort],
 	);
-	// A sort that arrives while the order is being edited, from a sync, ends the editing.
 	useEffect(() => {
 		if (!manualOrder) {
 			setReordering(false);

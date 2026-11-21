@@ -3,9 +3,6 @@ import {BOOKMARK_SORT_CHOICES} from '../../library/bookmark-sort';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {ChoiceList} from '../settings/select-row';
 
-/**
-The drawer that picks how the bookmark columns are sorted, the same choice as Settings › Bookmarks.
-*/
 export function SortSheet({
 	visible,
 	value,

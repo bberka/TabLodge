@@ -152,9 +152,6 @@ export function FloatingActions({
 	bottom: number;
 	onSearch?: () => void;
 	onAdd?: () => void;
-	/**
-	Shows the Up button, left of add, while a list is scrolled away from its top.
-	*/
 	onUp?: () => void;
 	buttonLabel?: string;
 }) {
@@ -252,9 +249,6 @@ export function SearchDock({
 	Shows a help button at the end of the field that opens the search tips.
 	*/
 	onTips?: () => void;
-	/**
-	Shows the Up button just above the field while the results are scrolled away from their top.
-	*/
 	onUp?: () => void;
 }) {
 	const colors = useColors();

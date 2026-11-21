@@ -10,18 +10,12 @@ import {
 	IconTooltip,
 } from '../shared/ui';
 
-/**
-The sort button and its radio menu, shared by the session list and the bookmark columns.
-*/
 export function SortMenu({
 	label,
 	value,
 	options,
 	onChange,
 }: {
-	/**
-	Names the button and titles the menu, for example "Sort sessions".
-	*/
 	label: string;
 	value: string;
 	options: ReadonlyArray<readonly [value: string, label: string]>;

@@ -7,10 +7,6 @@ import {
 } from 'react-native';
 import {upButtonShows} from './scroll-top-rule';
 
-/**
-The state of an Up button for one list: pass `onScroll` to the list, show the button when `visible`, and `up` scrolls
-the list back to its first row.
-*/
 export function useScrollTop(
 	listRef: RefObject<Pick<FlatList, 'scrollToOffset'> | null>,
 ) {
