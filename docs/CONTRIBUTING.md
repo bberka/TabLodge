@@ -12,6 +12,8 @@ Install the Vite+ CLI once as described in [Development](#development), then run
 
 For code locations and how the pieces fit together, see the [project structure](#project-structure) and [architecture notes](architecture.md).
 
+Performance work: `apps/extension/scripts/browser/perf-fixture.ts` builds a synthetic library of any size, `perf-profile.ts` measures it over the headless dev browser's CDP endpoint (`node scripts/browser/perf-profile.ts <endpoint> <bookmark count>`), and `perf-cpu.ts` prints a CPU profile of the page or the worker. `perf-profile.ts` is left out of lint and typecheck (`xo.config.ts`, `tsconfig.node.json`) because most of it runs inside the page or the worker, where this project has no DOM or `chrome` types. None of them is bundled.
+
 ## Development
 
 Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then use `vp run <task>` from the repository root.

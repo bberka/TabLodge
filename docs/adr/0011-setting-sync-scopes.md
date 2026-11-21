@@ -21,5 +21,5 @@ ADR 10 split settings into those that sync and those that stay on one device, an
 ## Consequences
 
 * A 0.3.0 extension skips `setting` records and keeps its own theme. A 0.3.0 phone already synced its look in `mobileApp` and keeps doing so.
-* Two settings exist once in each app under different keys (site icons, and link previews while saving), so each is `platform` until #429 merges them into one `all` setting.
+* Site icons existed once in each app under different keys. #429 made it one `all` library setting, `siteIcons`, with `server` and `browser`; the phone's `off` and `direct` carry over as `browser`, and a phone that held one keeps it unless the server already holds a value (first contact, ADR 10). The phone's save screen lookup (`savePreview`) and the extension's hover card (`linkPreviews`) are different behaviors, so each stays a `platform` setting of its own app.
 * Moving a setting between `all` and `platform` changes nothing on the wire. Moving one out of `device` later needs a new key, as ADR 10 says.
