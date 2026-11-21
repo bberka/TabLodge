@@ -1,0 +1,344 @@
+diff --git a/apps/mobile/app.tsx b/apps/mobile/app.tsx
+index 7051f111..63317f59 100644
+--- a/apps/mobile/app.tsx
++++ b/apps/mobile/app.tsx
+@@ -53,6 +53,8 @@ import {
+ 	startPrivate,
+ 	wakePrivate,
+ } from './src/private/private-library';
++import {perfLog, PERF} from './src/platform/perf-probe';
++import {runPerf} from './src/platform/perf-run';
+ import {loadPreferences} from './src/settings/preferences';
+ import {requestJump, usePendingJump} from './src/library/jump';
+ import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
+@@ -187,6 +189,14 @@ function Main() {
+ 	useEffect(() => {
+ 		void loadPreferences()
+ 			.then(startLibrary)
++			.then(() => {
++				perfLog({mark: 'library-ready'});
++				if (PERF) {
++					runPerf().catch((error: unknown) => {
++						perfLog({step: 'perf-error', error: String(error)});
++					});
++				}
++			})
+ 			.then(startWidgetSnapshot)
+ 			.then(startBackgroundSync)
+ 			.then(startPrivate)
+@@ -457,7 +467,11 @@ function Main() {
+ 				)}
+ 				{tab === 'settings' && <SettingsScreen onConnect={connect} />}
+ 			</SafeAreaView>
+-			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />
++			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={(next) => {
++					perfLog({mark: 'tab-press', tab: next});
++					setTab(next);
++				}}
++			/>
+ 			<SnackbarHost />
+ 			<DialogHost />
+ 			<PrivateSheetHost />
+diff --git a/apps/mobile/index.ts b/apps/mobile/index.ts
+index 0ddd0849..8b24f516 100644
+--- a/apps/mobile/index.ts
++++ b/apps/mobile/index.ts
+@@ -4,6 +4,8 @@ import {registerRootComponent} from 'expo';
+ import './src/platform/polyfills';
+ import {defineBackgroundSync} from './src/library/background-sync';
+ import App from './app';
++import {perfLog} from './src/platform/perf-probe';
+ 
++perfLog({mark: 'bundle-start'});
+ defineBackgroundSync();
+ registerRootComponent(App);
+diff --git a/apps/mobile/src/library/library-store.ts b/apps/mobile/src/library/library-store.ts
+index 7bcce837..cdde82a4 100644
+--- a/apps/mobile/src/library/library-store.ts
++++ b/apps/mobile/src/library/library-store.ts
+@@ -18,6 +18,7 @@ import {
+ 	reconnectPrivate,
+ 	usePrivateStore,
+ } from '../private/private-library';
++import {perfTime} from '../platform/perf-probe';
+ import {getPreferences} from '../settings/preferences';
+ import {readJson, removeKeys, writeJson} from '../platform/storage';
+ import {emptyStore, isStore} from './store-shape';
+@@ -110,7 +111,9 @@ export async function loadLibrary(): Promise<void> {
+ }
+ 
+ async function loadSaved(): Promise<void> {
+-	const saved = await readJson(LIBRARY_KEY);
++	const saved = await perfTime('load-library', async () =>
++		readJson(LIBRARY_KEY),
++	);
+ 	if (isStore(saved)) {
+ 		await mutate(async () => {
+ 			core.load(saved);
+diff --git a/apps/mobile/src/platform/perf-probe.ts b/apps/mobile/src/platform/perf-probe.ts
+new file mode 100644
+index 00000000..5766420e
+--- /dev/null
++++ b/apps/mobile/src/platform/perf-probe.ts
+@@ -0,0 +1,44 @@
++/*
++Timing marks for profiling a large library on a phone or emulator (issue #436). Everything here is off unless the
++bundle is built with EXPO_PUBLIC_PERF=1, which Expo inlines, so the shipped app keeps none of it. Marks go to logcat
++as `PERF {...}` lines; scripts/perf/run-matrix.sh reads them.
++*/
++export const PERF =
++	// eslint-disable-next-line n/prefer-global/process -- Expo inlines the literal `process.env.EXPO_PUBLIC_*` at bundle time
++	process.env.EXPO_PUBLIC_PERF === '1';
++
++const seen = new Set<string>();
++
++export function perfLog(fields: Record<string, unknown>): void {
++	if (PERF) {
++		console.log(`PERF ${JSON.stringify({...fields, at: Math.round(performance.now())})}`);
++	}
++}
++
++/**
++Logs the first time only, for "first rows shown" style marks.
++*/
++export function perfOnce(name: string, fields: Record<string, unknown> = {}): void {
++	if (PERF && !seen.has(name)) {
++		seen.add(name);
++		perfLog({mark: name, ...fields});
++	}
++}
++
++export async function perfTime<T>(
++	name: string,
++	work: () => T | Promise<T>,
++	fields: Record<string, unknown> = {},
++): Promise<T> {
++	const start = performance.now();
++	const result = await work();
++	perfLog({step: name, ms: Math.round((performance.now() - start) * 10) / 10, ...fields});
++	return result;
++}
++
++export function perfSync<T>(name: string, work: () => T, fields: Record<string, unknown> = {}): T {
++	const start = performance.now();
++	const result = work();
++	perfLog({step: name, ms: Math.round((performance.now() - start) * 10) / 10, ...fields});
++	return result;
++}
+diff --git a/apps/mobile/src/platform/perf-run.ts b/apps/mobile/src/platform/perf-run.ts
+new file mode 100644
+index 00000000..afae73c6
+--- /dev/null
++++ b/apps/mobile/src/platform/perf-run.ts
+@@ -0,0 +1,129 @@
++/*
++Profiling run for a large library (issue #436), only in a bundle built with EXPO_PUBLIC_PERF=1. On the first start of
++an installed build it connects to the sync server the scripts filled (a pull of the whole library), then times the work
++the screens and the transfer sheets do on that library, in Hermes, and disconnects. Later starts do nothing, so a cold
++start can be timed on the saved library.
++*/
++import {randomUUID} from 'expo-crypto';
++import {parseImportFile} from '../../../extension/src/shared/import-formats';
++import {normalizeStore} from '../../../extension/src/shared/library-normalize';
++import {
++	allBookmarks,
++	bookmarksIn,
++	columnViews,
++	searchBookmarks,
++	updateBookmark,
++} from '../library/board-edits';
++import {
++	connectServer,
++	disconnectServer,
++	editRegular,
++	getLibrary,
++	syncClient,
++} from '../library/library-store';
++import {
++	renameSession,
++	searchSessions,
++	sessionFolders,
++	sessionsIn,
++} from '../library/session-edits';
++import {searchElsewhere} from '../library/search-elsewhere';
++import {buildWidgetSnapshot} from '../library/widget-snapshot';
++import {buildBackup, readBackup} from '../transfer/backup';
++import {importIntoStore, previewFor} from '../transfer/transfer';
++import {readJson, writeJson} from './storage';
++import {perfLog, perfSync, perfTime} from './perf-probe';
++
++const SERVER = 'http://localhost:18917';
++const TOKEN = 'perf-token-perf-token-perf-token-0123456789';
++const DONE_KEY = 'tablodge.perf.done';
++const LOCAL_KEY = 'tablodge.perf.local';
++
++function importFile(count: number): string {
++	const rows = Array.from(
++		{length: count},
++		(_, index) => `<DT><A HREF="https://import.example/${index}">Imported ${index}</A>`,
++	);
++	return `<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Imported</H3><DL><p>${rows.join('\n')}</DL><p></DL><p>`;
++}
++
++export async function runPerf(): Promise<void> {
++	if ((await readJson(DONE_KEY)) !== undefined) {
++		return;
++	}
++
++	await writeJson(DONE_KEY, true);
++	// The library was put into the phone's storage directly (a library too large to sync in reasonable time).
++	const local = (await readJson(LOCAL_KEY)) !== undefined;
++	if (!local) {
++		await perfTime('sync-pull', async () => connectServer(SERVER, TOKEN));
++	}
++
++	const store = getLibrary();
++	const defaultSort = 'newest' as const;
++	const stats = {
++		bookmarks: store.bookmarks.length,
++		columns: store.bookmarkColumns.length,
++		sessions: store.groups.length,
++		links: store.groups.reduce((sum, group) => sum + group.tabs.length, 0),
++		folders: store.folders.length,
++	};
++	perfLog({step: 'library', ...stats});
++	perfSync('stringify', () => JSON.stringify(store).length);
++	const text = JSON.stringify(store);
++	perfSync('parse', () => JSON.parse(text) as unknown, {bytes: text.length});
++	perfSync('normalizeStore', () => normalizeStore(store as never));
++	// What the Bookmarks screen computes for All and for one column, and for a search.
++	perfSync('allBookmarks', () => allBookmarks(store).length);
++	perfSync('columnViews', () => columnViews(store).length);
++	if (store.bookmarkColumns[0]) {
++		perfSync('bookmarksIn', () => bookmarksIn(store, store.bookmarkColumns[0].id).length);
++	}
++
++	perfSync('searchBookmarks', () => searchBookmarks(store, 'guide').length);
++	perfSync('searchSessions', () => searchSessions(store.groups, 'guide', store.folders).length);
++	// The same search again, and a second word: what typing the next letter costs once the first key has paid for any caching.
++	perfSync('searchBookmarks-again', () => searchBookmarks(store, 'guid').length);
++	perfSync('searchSessions-again', () => searchSessions(store.groups, 'guid', store.folders).length);
++	// A query with no match, which opens the results from the other places: it builds an index of the whole library.
++	perfSync('searchElsewhere-miss', () => searchElsewhere(store, 'zzzzq', 'sessions').length);
++	perfSync('searchElsewhere-miss-again', () => searchElsewhere(store, 'zzzzqq', 'sessions').length);
++	perfSync('sessionFolders', () => sessionFolders(store).length);
++	perfSync('sessionsIn', () => sessionsIn(store, 'all', defaultSort).length);
++	perfSync('widgetSnapshot', () => buildWidgetSnapshot(store, {how: 'default' as never, app: ''}));
++	// One edit: JS work, the screen store update, and the SQLite save, then the push of that one change.
++	await perfTime('edit', async () =>
++		editRegular((current) => {
++			const first = current.bookmarks[0];
++			if (first) {
++				return updateBookmark(
++					current,
++					first.id,
++					{title: 'Edited once', url: first.url, columnId: first.columnId},
++					Date.now(),
++				);
++			}
++
++			const session = current.groups[0];
++			return session ? renameSession(current, session.id, 'Edited once', Date.now()) : current;
++		}),
++	);
++	if (!local) {
++		await perfTime('sync-push', async () => syncClient.syncNow());
++	}
++
++	const backup = await perfTime('export', async () => buildBackup(getLibrary(), 'TabLodge'));
++	perfLog({step: 'export-size', bytes: backup.bytes.length});
++	await perfTime('import-backup', async () => readBackup(backup.bytes));
++	const file = importFile(1000);
++	const parsed = perfSync('import-parse-1000', () => parseImportFile(file));
++	perfSync('import-preview-1000', () => previewFor(getLibrary(), parsed, 'bookmarks'));
++	perfSync('import-apply-1000', () =>
++		importIntoStore(getLibrary(), parsed, {kind: 'bookmarks', now: Date.now(), newId: randomUUID}),
++	);
++	if (!local) {
++		await disconnectServer();
++	}
++
++	perfLog({step: 'done'});
++}
+diff --git a/apps/mobile/src/screens/bookmarks/bookmarks.tsx b/apps/mobile/src/screens/bookmarks/bookmarks.tsx
+index be18f66f..0e2376b2 100644
+--- a/apps/mobile/src/screens/bookmarks/bookmarks.tsx
++++ b/apps/mobile/src/screens/bookmarks/bookmarks.tsx
+@@ -71,6 +71,7 @@ import {useCopyUrls} from '../../library/page-copies';
+ import {TagFilterSheet} from './tags';
+ import {useDragSelect} from './use-drag-select';
+ import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
++import {perfOnce} from '../../platform/perf-probe';
+ import {ColumnsSheet} from './columns-sheet';
+ import {ReorderRow} from './reorder-row';
+ import {
+@@ -220,6 +221,11 @@ export function BookmarksScreen({
+ 						: bookmarksIn(store, columnId),
+ 		[store, query, columnId, isSearching, atList],
+ 	);
++	useEffect(() => {
++		if (shown.length > 0) {
++			perfOnce('bookmarks-first-rows', {shown: shown.length});
++		}
++	}, [shown.length]);
+ 	const searchCount = useSettledText(isSearching, resultCount(shown.length));
+ 	const columnName =
+ 		columnId === ALL_BOOKMARKS_ID
+diff --git a/apps/mobile/src/screens/sessions/sessions.tsx b/apps/mobile/src/screens/sessions/sessions.tsx
+index a7c1c93c..da5d2ea0 100644
+--- a/apps/mobile/src/screens/sessions/sessions.tsx
++++ b/apps/mobile/src/screens/sessions/sessions.tsx
+@@ -62,6 +62,7 @@ import {
+ 	tabMenuActions,
+ } from './session-actions';
+ import {saveSessionDetails, selectionOf} from './session-changes';
++import {perfOnce} from '../../platform/perf-probe';
+ import {SessionSelectionBar} from './session-selection-bar';
+ import {SessionsEmpty} from './sessions-empty';
+ 
+@@ -172,6 +173,11 @@ export function SessionsScreen({
+ 		const inFolder = sessionsIn(store, scopeId, links.sessionSort);
+ 		return needle ? searchSessions(inFolder, query, store.folders) : inFolder;
+ 	}, [store, scopeId, links.sessionSort, needle, query, atList]);
++	useEffect(() => {
++		if (shown.length > 0) {
++			perfOnce('sessions-first-rows', {shown: shown.length});
++		}
++	}, [shown.length]);
+ 	const moreMenu = moreOpen
+ 		? folderMenuFor(folderId, store, folders, folderMenuOptions)
+ 		: undefined;
+diff --git a/apps/mobile/src/ui/floating-actions.tsx b/apps/mobile/src/ui/floating-actions.tsx
+index 21325bd2..ef167cb3 100644
+--- a/apps/mobile/src/ui/floating-actions.tsx
++++ b/apps/mobile/src/ui/floating-actions.tsx
+@@ -1,4 +1,5 @@
+-import {useEffect, useRef, useState} from 'react';
++import {useEffect, useLayoutEffect, useRef, useState} from 'react';
++import {perfLog, PERF} from '../platform/perf-probe';
+ import {
+ 	Animated,
+ 	Easing,
+@@ -35,7 +36,21 @@ Search that opens from a button. `open` and `query` belong to the screen, which
+ */
+ export function useSearch() {
+ 	const [open, setOpen] = useState(false);
+-	const [query, setQuery] = useState('');
++	const [query, setQueryState] = useState('');
++	const setQuery = (next: string) => {
++		perfLog({mark: 'search-key', length: next.length});
++		setQueryState(next);
++	};
++	useLayoutEffect(() => {
++		if (PERF && query) {
++			perfLog({mark: 'search-commit', length: query.length});
++			requestAnimationFrame(() => {
++				requestAnimationFrame(() => {
++					perfLog({mark: 'search-frame', length: query.length});
++				});
++			});
++		}
++	}, [query]);
+ 	// A docked tab bar holds the search button itself, so the screen on show hands it what to do.
+ 	const {floatingBar} = usePreferences();
+ 	useBackAction(open, () => {
