@@ -277,6 +277,8 @@ export const SECTIONS = {
 		title: 'Import and export',
 		aliases: [
 			'import',
+			'import from a link',
+			'shared page',
 			'export',
 			'backup',
 			'file',
@@ -342,6 +344,9 @@ export const SECTIONS = {
 			'background',
 			'widget',
 			'battery',
+			'shared pages',
+			'share link',
+			'get a link',
 		],
 		rows: [ROWS.syncPrivate, ROWS.backgroundSync],
 	},

@@ -2095,6 +2095,7 @@ function NewTab() {
 		'open-trash': () => emitRecoveryEvent({type: 'trash'}),
 		'share-bookmarks': () => shareBookmarks(),
 		'import-bookmarks': () => setImportOpen(true),
+		'shared-pages': () => setSharedPagesOpen(true),
 		'backup-bookmarks': openBookmarkBackup,
 		'import-sessions': () => emitFinderEvent({type: 'import-sessions'}),
 		'backup-sessions': () => emitFinderEvent({type: 'backup-sessions'}),

@@ -107,7 +107,7 @@ import {
 	type FullBackupContents,
 } from '../shared/full-backup';
 import type {SharedPage} from '../shared/sync/shared-pages-client';
-import {newSharedPageId} from '../shared/sync/shared-pages';
+import {isSharedPageUrl, newSharedPageId} from '../shared/sync/shared-pages';
 import {importFromLink} from '../shared/import-link';
 import {siteName} from '../shared/web-url';
 import {offerUndo} from './recovery-core';
@@ -542,7 +542,7 @@ function SharePreviewPanel({
 							{pageTitle}
 						</h4>
 						<p className="mt-1 text-[11px] text-muted-foreground">
-							Shared on{' '}
+							Links shared from {PROJECT.name} on{' '}
 							{new Date().toLocaleDateString(undefined, {dateStyle: 'medium'})}{' '}
 							· {plural(counts.links, 'link')}
 						</p>
@@ -1250,7 +1250,7 @@ export function ImportDialog({
 		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
 		setNewColumn({name: ''});
 		setLink(initialLink ?? '');
-		if (initialLink) {
+		if (initialLink && isSharedPageUrl(initialLink)) {
 			void readLink(initialLink);
 		}
 

@@ -7,6 +7,7 @@ import {
 	type ParsedImport,
 } from '../../../../extension/src/shared/import-formats';
 import {importFromLink} from '../../../../extension/src/shared/import-link';
+import {isSharedPageUrl} from '../../../../extension/src/shared/sync/shared-pages';
 import {
 	buildExport,
 	type ExportData,
@@ -145,7 +146,8 @@ export function ImportSheet({
 		setLink(linkUrl ?? '');
 		setLinked(undefined);
 		setPicked(undefined);
-		if (linkUrl) {
+		// Any app can send this link, so only an address shaped like a shared page is fetched without a tap.
+		if (linkUrl && isSharedPageUrl(linkUrl)) {
 			void readLink(linkUrl);
 		}
 	}, [source, linkUrl]);

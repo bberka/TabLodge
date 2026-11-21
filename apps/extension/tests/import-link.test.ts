@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict';
+import {test} from 'vite-plus/test';
+import {ImportFormatError} from '../src/shared/import-formats';
+import {importFromLink} from '../src/shared/import-link';
+import {shareHtmlPage} from '../src/shared/share-formats';
+import {isSharedPageUrl} from '../src/shared/sync/shared-pages';
+
+const PAGE_URL = 'https://sync.example.test/p/AAAAAAAAAAAAAAAAAAAAAA';
+const page = shareHtmlPage(
+	'Trip',
+	[
+		{name: 'Day one', tabs: [{title: 'Map', url: 'https://maps.example/'}]},
+		{
+			name: 'Day two',
+			tabs: [{title: 'Museum', url: 'https://museum.example/'}],
+		},
+	],
+	'TabLodge',
+	{kind: 'sessions', url: PAGE_URL},
+);
+
+test('a shared page read from its link comes back as its sessions, fetched without credentials', async () => {
+	const calls: Array<[string, RequestInit | undefined]> = [];
+	const parsed = await importFromLink(async (url, init) => {
+		calls.push([url, init]);
+		return new Response(page, {headers: {'Content-Type': 'text/html'}});
+	}, ` ${PAGE_URL} `);
+
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0][0], PAGE_URL);
+	assert.equal(calls[0][1]?.credentials, 'omit');
+	assert.equal(parsed.kind, 'sessions');
+	assert.deepEqual(
+		parsed.sessions.map((group) => group.name),
+		['Day one', 'Day two'],
+	);
+});
+
+test('a link that cannot be read says why and imports nothing', async () => {
+	const fails = async (
+		address: string,
+		send: Parameters<typeof importFromLink>[0],
+		message: RegExp,
+	) =>
+		assert.rejects(
+			importFromLink(send, address),
+			(error) =>
+				error instanceof ImportFormatError && message.test(error.message),
+		);
+	const unused = async () => {
+		throw new Error('fetched');
+	};
+
+	await fails('not a link', unused, /starts with https:\/\/ or http:\/\//);
+	await fails('javascript:alert(1)', unused, /starts with https:\/\//);
+	await fails(
+		PAGE_URL,
+		async () => {
+			throw new TypeError('Failed to fetch');
+		},
+		/Could not read that link/,
+	);
+	await fails(
+		PAGE_URL,
+		async () => new Response('Not found', {status: 404}),
+		/Nothing is at that link/,
+	);
+	await fails(
+		PAGE_URL,
+		async () => new Response('', {status: 503}),
+		/error \(503\)/,
+	);
+	await fails(
+		PAGE_URL,
+		async () => new Response('<p>No links here</p>'),
+		/has no links/,
+	);
+});
+
+test('only an address ending in /p/ and a 22 character id looks like a shared page', () => {
+	assert.ok(isSharedPageUrl(PAGE_URL));
+	assert.ok(
+		isSharedPageUrl('http://192.168.1.5:8787/p/abcdefghij-_KLMNOPQRS0'),
+	);
+	assert.ok(
+		isSharedPageUrl('https://example.test/sync/p/AAAAAAAAAAAAAAAAAAAAAA'),
+	);
+	for (const address of [
+		undefined,
+		'',
+		'https://sync.example.test/p/short',
+		'https://sync.example.test/p/AAAAAAAAAAAAAAAAAAAAAA/more',
+		'https://www.instagram.com/p/AAAAAAAAAAA/',
+		'ftp://sync.example.test/p/AAAAAAAAAAAAAAAAAAAAAA',
+		'chrome-extension://abc/p/AAAAAAAAAAAAAAAAAAAAAA',
+	]) {
+		assert.equal(isSharedPageUrl(address), false, String(address));
+	}
+});

@@ -152,7 +152,7 @@ test('a shared page has a dated header, a jump to each column, and a row per lin
 
 	assert.match(
 		html,
-		/<h1>Team links<\/h1><p class="meta">Shared on 21 Nov 2026 · 2 columns · 3 links<\/p>/,
+		/<h1>Team links<\/h1><p class="meta">Links shared from TabLodge on 21 Nov 2026 · 2 columns · 3 links<\/p>/,
 	);
 	assert.match(
 		html,

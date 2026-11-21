@@ -213,7 +213,7 @@ export function shareHtmlPage(
 		})
 		.join('');
 	const meta = [
-		...(sharedAt ? [`Shared on ${escapeHtml(formatDate(sharedAt))}`] : []),
+		`Links shared from ${escapeHtml(appName)}${sharedAt ? ` on ${escapeHtml(formatDate(sharedAt))}` : ''}`,
 		...(several ? [`${groups.length} ${groupNoun}s`] : []),
 		`${links} ${links === 1 ? 'link' : 'links'}`,
 	].join(' · ');
