@@ -142,6 +142,7 @@ import {
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {showQuoteToast} from '../src/app/quote-toast';
+import {toastEdges, toastMs, toastPlace} from '../src/shared/toast-prefs';
 import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
 import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
@@ -10309,8 +10310,8 @@ const quoteUndoTabs = new Map<string, number>();
 
 /**
 Messages from code in a web page: the site content script and the Save quote toast. They get the source actions (a
-save, the saved page catch-up, and their Undo) and Undo of the toast's own quote, and nothing else: no page can
-read or change the library through them, and the catch-up answers only how many of its site's links are missing.
+save, the saved page catch-up, and their Undo), Undo of the toast's own quote, and where toasts appear, and nothing
+else: no page can read or change the library through them, and the catch-up answers only how many of its site's links are missing.
 */
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
@@ -10352,6 +10353,10 @@ async function handleSourceMessage(
 					!privateSourcesOff(),
 				),
 			};
+		}
+
+		case 'TOAST_PREFS': {
+			return toastPrefs();
 		}
 
 		case 'SITE_SOURCE_PENDING': {
@@ -10572,6 +10577,10 @@ async function handleMessage(
 			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
 			await mutationQueue;
 			return {ok: true, ...config};
+		}
+
+		case 'TOAST_PREFS': {
+			return toastPrefs();
 		}
 
 		case 'GET_STATE': {
@@ -11071,6 +11080,26 @@ async function handleMessage(
 			return {ok: false, error: `Unknown ${APP_NAME} action.`};
 		}
 	}
+}
+
+/**
+Where the Save quote toast sits and how long it stays, as the page script needs them (it cannot import `toast-prefs`).
+*/
+async function quoteToastPlacement() {
+	const {toastPosition, toastDuration} = await readSettings();
+	const {top, bottom, left, right, transform} = toastEdges(
+		toastPlace(toastPosition, 'bottom'),
+		24,
+	);
+	return {
+		edges: {top, bottom, left, right, transform},
+		closeMs: toastMs(6000, toastDuration) ?? null,
+	};
+}
+
+async function toastPrefs(): Promise<ActionResult<'TOAST_PREFS'>> {
+	const {toastPosition, toastDuration} = await readSettings();
+	return {ok: true, position: toastPosition, duration: toastDuration};
 }
 
 const EXTENSION_ORIGIN = chrome.runtime.getURL('');
@@ -12114,7 +12143,13 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 			const [injected] = await chrome.scripting.executeScript({
 				target: {tabId: tab.id},
 				func: showQuoteToast,
-				args: [{...toast, theme: asTheme(await readKey(UI_THEME_KEY))}],
+				args: [
+					{
+						...toast,
+						theme: asTheme(await readKey(UI_THEME_KEY)),
+						...(await quoteToastPlacement()),
+					},
+				],
 			});
 			shown = injected?.result === true;
 		} catch {

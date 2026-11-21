@@ -118,3 +118,52 @@ test('an old host left by an earlier copy of the script is removed', async () =>
 	assert.equal(hosts(), 1);
 	assert.equal(document.documentElement.contains(old), false);
 });
+
+const askForPrefs = (position: string, duration: string) => {
+	vi.stubGlobal('chrome', {
+		extension: {inIncognitoContext: false},
+		storage: {local: {get: async () => ({})}},
+		runtime: {sendMessage: async () => ({ok: true, position, duration})},
+	});
+};
+
+const hostStyle = (name: string) => {
+	const style =
+		document
+			.querySelector('[id="tablodge-source-toast"]')
+			?.getAttribute('style') ?? '';
+	return new RegExp(String.raw`(?:^|;)\s*${name}:\s*([^;!]+)`)
+		.exec(style)?.[1]
+		.trim();
+};
+
+test('Toast position moves the stack, and the newest stays nearest the edge', async () => {
+	askForPrefs('top-left', 'default');
+	showSourceToast('Saved A.');
+	await vi.advanceTimersByTimeAsync(0);
+	assert.equal(hostStyle('top'), '16px');
+	assert.equal(hostStyle('left'), '16px');
+	assert.equal(hostStyle('bottom'), 'auto');
+	assert.equal(hostStyle('right'), 'auto');
+});
+
+test('with no answer from the worker the stack is at the bottom right', async () => {
+	showSourceToast('Saved A.');
+	await vi.advanceTimersByTimeAsync(0);
+	assert.equal(hostStyle('bottom'), '16px');
+	assert.equal(hostStyle('right'), '16px');
+});
+
+test('Messages stay: Longer doubles the 8 seconds, Until dismissed never closes', async () => {
+	askForPrefs('default', 'longer');
+	showSourceToast('Saved A.');
+	await vi.advanceTimersByTimeAsync(15_000);
+	assert.deepEqual(texts(), ['Saved A.']);
+	await vi.advanceTimersByTimeAsync(1100);
+	assert.deepEqual(texts(), []);
+
+	askForPrefs('default', 'dismiss');
+	showSourceToast('Saved B.');
+	await vi.advanceTimersByTimeAsync(10 * 60_000);
+	assert.deepEqual(texts(), ['Saved B.']);
+});

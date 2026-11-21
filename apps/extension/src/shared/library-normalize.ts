@@ -14,6 +14,7 @@ import {deviceStamp, isDeviceKind, MAX_DEVICE_NAME} from './device';
 import {ICON_IDS} from './icon-ids';
 import {LAYOUT_VERSION} from './library-state';
 import {isRecord} from './library-values';
+import {TOAST_DURATIONS, TOAST_POSITIONS} from './toast-prefs';
 import type {
 	Bookmark,
 	BookmarkColumn,
@@ -175,6 +176,8 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionLinkClickAction: 'new',
 	bookmarkQuickActions: ['open-new'],
 	sessionsOnTop: false,
+	toastPosition: 'default',
+	toastDuration: 'default',
 	showSaveWindowButton: true,
 	linkPreviews: false,
 	siteIcons: 'server',
@@ -1016,6 +1019,12 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'new',
 		bookmarkQuickActions: normalizeBookmarkQuickActions(raw),
 		sessionsOnTop: raw.sessionsOnTop === true,
+		toastPosition: isOneOf(TOAST_POSITIONS, raw.toastPosition)
+			? raw.toastPosition
+			: 'default',
+		toastDuration: isOneOf(TOAST_DURATIONS, raw.toastDuration)
+			? raw.toastDuration
+			: 'default',
 		showSaveWindowButton: raw.showSaveWindowButton !== false,
 		linkPreviews: raw.linkPreviews === true,
 		siteIcons: raw.siteIcons === 'browser' ? 'browser' : 'server',

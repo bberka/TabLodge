@@ -25,6 +25,8 @@ export const RESETS = new Map<Row, Reset>([
 	[ROWS.glassEffect, {prefs: ['glassEffect']}],
 	[ROWS.theme, {prefs: ['theme']}],
 	[ROWS.accent, {prefs: ['accent']}],
+	[ROWS.messagePosition, {prefs: ['messagePosition']}],
+	[ROWS.toastDuration, {synced: ['toastDuration']}],
 	[ROWS.compactSessions, {prefs: ['compactSessions']}],
 	[ROWS.sessionIcons, {synced: ['showSessionFaviconPreviews']}],
 	[ROWS.showSavedOn, {prefs: ['showSavedOn']}],

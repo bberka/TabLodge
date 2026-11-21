@@ -408,6 +408,32 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'toastPosition',
+				label: 'Toast position',
+				help: 'Where messages with an Undo button appear: on TabLodge pages, in the Sources notice on a site, and after Save quote. Default is the bottom center, and the bottom right on a site.',
+				type: 'select',
+				options: [
+					['default', 'Default'],
+					['top-left', 'Top left'],
+					['top', 'Top center'],
+					['top-right', 'Top right'],
+					['bottom-left', 'Bottom left'],
+					['bottom', 'Bottom center'],
+					['bottom-right', 'Bottom right'],
+				],
+			},
+			{
+				name: 'toastDuration',
+				label: 'Messages stay',
+				help: 'How long a toast stays before it closes. Longer is twice the usual time. Until dismissed keeps it until you close it. It always stays while the pointer or focus is on it.',
+				type: 'select',
+				options: [
+					['default', 'Default'],
+					['longer', 'Longer'],
+					['dismiss', 'Until dismissed'],
+				],
+			},
+			{
 				name: 'urlDisplayMode',
 				label: 'Show URLs as',
 				help: 'How web addresses appear under bookmarks and saved session links. Full URL only hides the title and shows the address instead.',

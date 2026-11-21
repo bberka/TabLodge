@@ -976,13 +976,17 @@ function Help() {
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
 							imports, actions that open many tabs, and closing duplicate tabs
-							also offer Undo for a few seconds. Settings › Recovery &amp;
-							backups has a Trash bin button too, and Empty trash bin at the
-							bottom of the bin deletes everything in it for good.
+							also offer Undo for a few seconds. Settings › Dashboard has Toast
+							position, which moves these messages (and the notice Sources shows
+							on a site, and the one after Save quote) to a corner or the top,
+							and Messages stay, which makes them last twice as long or until
+							you close them. Settings › Recovery &amp; backups has a Trash bin
+							button too, and Empty trash bin at the bottom of the bin deletes
+							everything in it for good.
 						</>
 					),
 					searchText:
-						'undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
+						'toast position messages stay notification corner top bottom longer until dismissed undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
 				},
 				{
 					title: 'Automatic backups',

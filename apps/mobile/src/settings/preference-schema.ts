@@ -208,6 +208,10 @@ export type Preferences = {
 	*/
 	compactSessions: boolean;
 	/**
+	Where a message with an Undo appears: at the top of the screen (the default) or above the tab bar.
+	*/
+	messagePosition: 'top' | 'bottom';
+	/**
 	Show which device saved a session on its card.
 	*/
 	showSavedOn: boolean;
@@ -281,6 +285,7 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	privateOpenWith: field('same', oneOf([...OPEN_WITH, 'same'])),
 	privateOpenApp: field('', text),
 	compactSessions: field(false, bool),
+	messagePosition: field('top', oneOf(['top', 'bottom'])),
 	showSavedOn: field(true, bool),
 	deviceName: field('', (raw) => cleanDeviceName(raw)),
 };

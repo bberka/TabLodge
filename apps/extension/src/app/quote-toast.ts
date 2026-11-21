@@ -15,6 +15,18 @@ export function showQuoteToast(toast: {
 	failed: boolean;
 	undoId?: string;
 	theme: 'system' | 'light' | 'dark';
+	/**
+	The edges to sit at (from `toastEdges`, as the worker cannot pass this function an import) and how long to stay,
+	null for never.
+	*/
+	edges: {
+		top?: string;
+		bottom?: string;
+		left?: string;
+		right?: string;
+		transform?: string;
+	};
+	closeMs: number | null;
 }): boolean {
 	const hostId = 'tablodge-quote-toast';
 	document.querySelector(`#${hostId}`)?.remove();
@@ -49,9 +61,11 @@ export function showQuoteToast(toast: {
 	set(host, {
 		all: 'initial',
 		position: 'fixed',
-		left: '50%',
-		bottom: '24px',
-		transform: 'translateX(-50%)',
+		top: toast.edges.top ?? 'auto',
+		bottom: toast.edges.bottom ?? 'auto',
+		left: toast.edges.left ?? 'auto',
+		right: toast.edges.right ?? 'auto',
+		transform: toast.edges.transform ?? 'none',
 		'z-index': '2147483647',
 		'max-width': 'calc(100vw - 32px)',
 	});
@@ -86,7 +100,9 @@ export function showQuoteToast(toast: {
 
 	const later = () => {
 		clearTimeout(timer);
-		timer = setTimeout(close, 6000);
+		if (toast.closeMs !== null) {
+			timer = setTimeout(close, toast.closeMs);
+		}
 	};
 
 	if (toast.undoId) {
