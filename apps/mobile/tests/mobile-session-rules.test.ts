@@ -1,7 +1,3 @@
-/*
-The phone follows the extension's Session name and Archive settings (#424): the same shared rules decide the name and
-which sessions go to Archived.
-*/
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {DEFAULTS, type LinkSettings} from '../src/library/links';
@@ -34,7 +30,6 @@ test('a new session is named by the style setting, as the extension names it', (
 		),
 		'example.com (2)',
 	);
-	// `ask` names with its fallback when the name field is left empty.
 	assert.equal(
 		defaultSessionName(
 			settings({sessionNameStyle: 'ask', sessionNameFallback: 'title'}),

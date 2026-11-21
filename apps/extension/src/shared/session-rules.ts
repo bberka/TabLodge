@@ -1,7 +1,3 @@
-/*
-How a new session is named and when an idle session is archived. The extension and the Android app share both, so the
-Session name and Archive settings mean the same on each (#424).
-*/
 import {
 	DEFAULT_SETTINGS,
 	SESSION_NAME_TEMPLATE_MAX,
@@ -10,10 +6,6 @@ import {
 } from './library-normalize';
 import type {Folder, Session, Settings} from './types';
 
-/**
-The style that builds the name: `ask` falls back to its fallback style whenever a session is named without asking
-(or the answer was left empty).
-*/
 export function builtNameStyle(settings: {
 	sessionNameStyle: Settings['sessionNameStyle'];
 	sessionNameFallback: Settings['sessionNameFallback'];
@@ -32,24 +24,14 @@ const SESSION_NAME_STYLE_TEMPLATES: Record<string, string> = {
 export type SessionNameParts = {
 	style: Settings['sessionNameFallback'];
 	template: string;
-	/**
-	Title and address of the first saved tab.
-	*/
 	title: string;
 	url: string;
 	count: number;
-	/**
-	1-based window number when saving all windows; 0 or omitted otherwise.
-	*/
 	windowNumber?: number;
 	now: Date;
 	locale: string;
 };
 
-/**
-The name for a new session. `{date}` is "Sat, Oct 25" (no year: a new session is always named for today),
-`{time}` the locale's short time, `{weekday}` a short weekday. Unknown `{...}` tokens stay as typed.
-*/
 export function formatSessionName(parts: SessionNameParts): string {
 	const format = (options: Intl.DateTimeFormatOptions) => {
 		try {
@@ -62,11 +44,7 @@ export function formatSessionName(parts: SessionNameParts): string {
 	let host = '';
 	try {
 		host = new URL(parts.url).hostname.replace(/^www\./i, '');
-	} catch {
-		/*
-		A page without a usable address has no domain.
-		*/
-	}
+	} catch {}
 
 	const values: Record<string, () => string> = {
 		date: () => format({weekday: 'short', month: 'short', day: 'numeric'}),
@@ -91,17 +69,12 @@ export function formatSessionName(parts: SessionNameParts): string {
 			.replaceAll(/\{(\w+)\}/g, (token, key: string) =>
 				Object.hasOwn(values, key) ? values[key]() : token,
 			)
-			// Narrow no-break spaces from the time format, and gaps left by an empty placeholder
 			.replaceAll(/\s+/g, ' '),
 		'Saved session',
 		120,
 	);
 }
 
-/**
-The sessions that were not opened, saved, or edited in the last `days` days and are not in the Archived folder yet.
-Nothing for `days` of 0, which is "never".
-*/
 export function staleSessions(
 	sessions: readonly Session[],
 	folders: ReadonlyArray<Pick<Folder, 'id' | 'name'>>,

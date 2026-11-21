@@ -1,6 +1,3 @@
-/*
-The default name of a session this phone makes from saved links, by the same Session name settings as the extension.
-*/
 import {
 	builtNameStyle,
 	formatSessionName,
@@ -15,10 +12,6 @@ const phoneLocale = (): string => {
 	}
 };
 
-/**
-The name for a new session holding `urls`, the first with its page `title`. An `ask` style falls back to its fallback
-style, since the name field on the save sheet is where the phone asks and an empty one asks for the default.
-*/
 export function defaultSessionName(
 	settings: LinkSettings,
 	links: ReadonlyArray<{url: string; title?: string}>,
