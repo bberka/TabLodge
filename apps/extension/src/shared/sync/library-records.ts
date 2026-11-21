@@ -56,7 +56,6 @@ const PORTABLE_PREFERENCES = [
 	'restoreTarget',
 	'restoreWindowBounds',
 	'restoreMode',
-	'singleTabBehavior',
 	'unloadRestoredTabs',
 	'unloadRestoredTabsThreshold',
 	'restoreSplitTabs',
