@@ -15,7 +15,19 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../shared/ui';
-import type {ActionFailure, ActionResult, TabLodgeState} from '../shared/types';
+import type {
+	ActionFailure,
+	ActionResult,
+	SaveResult,
+	TabLodgeState,
+} from '../shared/types';
+import {
+	REOPEN_FAILED,
+	reopenedMessage,
+	saveMessage,
+	saveOutcomeOf,
+	UNDO_LABEL,
+} from '../shared/save-feedback';
 import {webUrl} from '../shared/web-url';
 import {hostIsExcluded} from '../shared/excluded-sites';
 import {PrivateWindowMark} from './private-window-appearance';
@@ -561,10 +573,85 @@ export function forceAddAction(
 }
 
 /**
-The note for a save that left duplicates out, such as " 2 duplicates not saved." (empty when none).
+Reports a finished SAVE_TABS the same way on every page (save-feedback.ts has the wording): success, a skipped
+duplicate, or the tabs left open for Force add. A save that closed its tabs offers **Undo**, which reopens them from the
+new session; a save with rejected duplicates offers Force add instead, because a toast holds one button.
 */
-export const duplicatesNote = (skipped: number) =>
-	skipped ? ` ${plural(skipped, 'duplicate')} not saved.` : '';
+export function reportSessionSave(
+	result: Pick<
+		SaveResult,
+		'count' | 'groups' | 'skipped' | 'rejectedTabIds' | 'groupId'
+	>,
+	options: {
+		closeOnSave: boolean;
+		showStatus: ShowStatus;
+		reload: () => unknown;
+	},
+) {
+	const {showStatus, reload} = options;
+	const {groupId} = result;
+	const forceable = result.rejectedTabIds.length > 0;
+	const closed =
+		options.closeOnSave &&
+		!forceable &&
+		groupId !== null &&
+		result.groups === 1 &&
+		result.count > 0;
+	const outcome = saveOutcomeOf(
+		{ok: true, count: result.count, skipped: result.skipped},
+		'tab',
+		{closed},
+	);
+	const message = saveMessage(outcome);
+	if (forceable) {
+		showStatus(message, false, {
+			action: forceAddAction(result.rejectedTabIds, showStatus, reload),
+		});
+		return;
+	}
+
+	if (closed && groupId) {
+		showStatus(message, false, {
+			action: {
+				label: UNDO_LABEL,
+				async onClick() {
+					const reopened = await send('RESTORE_GROUP', {
+						groupId,
+						restoreTarget: 'current-window',
+						restoreMode: 'keep',
+						activate: false,
+					});
+					showStatus(
+						reopened?.ok
+							? reopenedMessage(reopened.count)
+							: reopened?.error || REOPEN_FAILED,
+						!reopened?.ok,
+						{toast: true},
+					);
+				},
+			},
+		});
+		return;
+	}
+
+	showStatus(message, outcome.kind === 'failed', {toast: true});
+}
+
+/**
+Reports a save that stored nothing. A skipped duplicate is a plain notice (it never reads as success, and it is not an
+error either); anything else is the error toast.
+*/
+export function showSaveFailure(
+	showStatus: ShowStatus,
+	result: {error?: string; duplicate?: true} | undefined,
+	fallback: string,
+) {
+	showStatus(
+		result?.error || fallback,
+		!result?.duplicate,
+		result?.duplicate ? {toast: true} : undefined,
+	);
+}
 
 export function useStatus(): [Status | null, ShowStatus] {
 	const [status, setStatus] = useState<Status | null>(null);

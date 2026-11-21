@@ -401,7 +401,8 @@ describe('large libraries', () => {
 		assert.equal(reopened.counts.bookmarks, 20_000);
 		assert.ok(built < 10_000);
 		assert.ok(read < 10_000);
-	});
+		// Making 20,000 bookmarks one by one (each save checks for a duplicate) takes a few seconds before the timed part, so the default 5 s test limit would fail it; `built` and `read` hold the real bounds.
+	}, 30_000);
 
 	test('more sessions than the extension holds are reported as left out, not silently dropped', async () => {
 		const {bytes} = buildFullBackup(

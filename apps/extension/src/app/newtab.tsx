@@ -97,6 +97,7 @@ import {
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
 import {removedByEdit, shownTags} from '../shared/bookmark-tags';
+import {duplicatesNote, saveMessage} from '../shared/save-feedback';
 import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
@@ -124,8 +125,8 @@ import {
 	plural,
 	useTabLodgeState,
 	useTabSelection,
-	forceAddAction,
-	duplicatesNote,
+	reportSessionSave,
+	showSaveFailure,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
@@ -835,7 +836,7 @@ function NewTab() {
 				await reload();
 				setDialog(null);
 				offerUndo(
-					`Created a session with ${plural(result.count, 'link')}.${skippedNote(result.skipped)}`,
+					`Created a session with ${plural(result.count, 'link')}.${duplicatesNote(result.skipped)}`,
 					result.undoId,
 					showStatus,
 					reload,
@@ -867,7 +868,13 @@ function NewTab() {
 				pastedNewColumn.name ||
 				UNFILED_COLUMN.name;
 			offerUndo(
-				`Added ${plural(result.count, 'bookmark')} to “${name}”.${skippedNote(result.skipped)}`,
+				saveMessage({
+					kind: 'saved',
+					count: result.count,
+					skipped: result.skipped,
+					noun: 'bookmark',
+					into: `“${name}”`,
+				}),
 				result.undoId,
 				showStatus,
 				reload,
@@ -897,44 +904,10 @@ function NewTab() {
 		}
 
 		await reload();
-		if (result.rejectedTabIds.length > 0) {
-			showStatus(
-				`${result.count > 0 ? `Saved ${plural(result.count, 'tab')}.` : 'Nothing saved.'}${duplicatesNote(result.skipped)}`,
-				false,
-				{action: forceAddAction(result.rejectedTabIds, showStatus, reload)},
-			);
-			return;
-		}
-
-		// With "Close tabs after saving" the window just lost its tabs: Undo reopens them from the new session.
-		if (
-			settings.closeOnSave === false ||
-			!result.groupId ||
-			result.count === 0
-		) {
-			return;
-		}
-
-		const {groupId} = result;
-		showStatus(`Saved ${plural(result.count, 'tab')} and closed them.`, false, {
-			action: {
-				label: 'Undo',
-				async onClick() {
-					const reopened = await send('RESTORE_GROUP', {
-						groupId,
-						restoreTarget: 'current-window',
-						restoreMode: 'keep',
-						activate: false,
-					});
-					showStatus(
-						reopened?.ok
-							? `Reopened ${plural(reopened.count, 'tab')}.`
-							: reopened?.error || 'Could not reopen the tabs.',
-						!reopened?.ok,
-						{toast: true},
-					);
-				},
-			},
+		reportSessionSave(result, {
+			closeOnSave: settings.closeOnSave !== false,
+			showStatus,
+			reload,
 		});
 	}
 
@@ -1030,7 +1003,7 @@ function NewTab() {
 				: await send('ADD_BOOKMARK', {bookmark: fields});
 			if (!result?.ok) {
 				await reload();
-				showStatus(result?.error || 'Could not save that bookmark.', true);
+				showSaveFailure(showStatus, result, 'Could not save that bookmark.');
 				return;
 			}
 
@@ -1598,9 +1571,10 @@ function NewTab() {
 			links: [{url: bookmark.url, title: bookmark.title}],
 		});
 		if (!result?.ok) {
-			showStatus(
-				result?.error || 'Could not add the link to that session.',
-				true,
+			showSaveFailure(
+				showStatus,
+				result,
+				'Could not add the link to that session.',
 			);
 			return;
 		}
@@ -1662,7 +1636,13 @@ function NewTab() {
 
 		await reload();
 		offerUndo(
-			`Added ${plural(result.added, 'link')} to “${name}”.${skippedNote(result.skipped)}`,
+			saveMessage({
+				kind: 'saved',
+				count: result.added,
+				skipped: result.skipped,
+				noun: 'link',
+				into: `“${name}”`,
+			}),
 			result.undoId,
 			showStatus,
 			reload,
@@ -1681,19 +1661,23 @@ function NewTab() {
 			links: selected,
 		});
 		if (!result?.ok) {
-			showStatus(
-				result?.error || 'Could not add bookmarks to that session.',
-				true,
+			showSaveFailure(
+				showStatus,
+				result,
+				'Could not add bookmarks to that session.',
 			);
 			return;
 		}
 
 		await reload();
-		const skipped = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
 		offerUndo(
-			`Added ${plural(result.added, 'link')} to “${target.name}”.${skipped}`,
+			saveMessage({
+				kind: 'saved',
+				count: result.added,
+				skipped: result.skipped,
+				noun: 'link',
+				into: `“${target.name}”`,
+			}),
 			result.undoId,
 			showStatus,
 			reload,
@@ -1891,7 +1875,13 @@ function NewTab() {
 					true,
 				);
 				offerUndo(
-					`Added ${plural(result.count, 'link')} to “${column.name}”.${skippedNote(result.skipped)}`,
+					saveMessage({
+						kind: 'saved',
+						count: result.count,
+						skipped: result.skipped,
+						noun: 'link',
+						into: `“${column.name}”`,
+					}),
 					result.undoId,
 					showStatus,
 					reload,
@@ -3711,9 +3701,6 @@ function NewTab() {
 		</LinkPreviewProvider>
 	);
 }
-
-const skippedNote = (skipped: number) =>
-	skipped ? ` ${plural(skipped, 'duplicate')} skipped.` : '';
 
 /**
 Fills missing titles from open tabs showing the same page, then the domain.

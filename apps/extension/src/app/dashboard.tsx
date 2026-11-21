@@ -118,6 +118,7 @@ import {
 	isArchivedFolder,
 	visibleSessionFolders,
 } from '../shared/session-folders';
+import {duplicatesNote, saveMessage} from '../shared/save-feedback';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -131,6 +132,7 @@ import {
 	useStatus,
 	restoreFailureText,
 	plural,
+	showSaveFailure,
 } from './common';
 import {defaultBookmarkColumnId} from './default-column';
 import {ImportDialog, useShareDialog} from './lazy-dialogs';
@@ -885,9 +887,7 @@ export function SessionManager({
 		}
 
 		await reload();
-		const duplicates = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
+		const duplicates = duplicatesNote(result.skipped);
 		offerUndo(
 			mode === 'replace'
 				? `Replaced the links in “${group.name}” with this window: ${plural(result.count, 'link')}, ${result.added} new, ${result.removed} removed.${duplicates}`
@@ -1155,16 +1155,19 @@ export function SessionManager({
 			position,
 		});
 		if (!result?.ok) {
-			showStatus(result?.error || 'Could not add the dropped links.', true);
+			showSaveFailure(showStatus, result, 'Could not add the dropped links.');
 			return;
 		}
 
 		await reload();
-		const duplicates = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
 		offerUndo(
-			`Added ${plural(result.added, 'link')} to “${group.name}”.${duplicates}`,
+			saveMessage({
+				kind: 'saved',
+				count: result.added,
+				skipped: result.skipped,
+				noun: 'link',
+				into: `“${group.name}”`,
+			}),
 			result.undoId,
 			showStatus,
 			reload,
@@ -1430,7 +1433,11 @@ export function SessionManager({
 				},
 			});
 			if (!result?.ok) {
-				showStatus(result?.error || 'Could not bookmark this saved tab.', true);
+				showSaveFailure(
+					showStatus,
+					result,
+					'Could not bookmark this saved tab.',
+				);
 				return;
 			}
 
@@ -1462,9 +1469,10 @@ export function SessionManager({
 				undoable: true,
 			});
 			if (!result?.ok) {
-				showStatus(
-					result?.error || 'Could not bookmark the selected tabs.',
-					true,
+				showSaveFailure(
+					showStatus,
+					result,
+					'Could not bookmark the selected tabs.',
 				);
 				return;
 			}
@@ -1476,11 +1484,14 @@ export function SessionManager({
 				columns.find((column) => column.id === columnId)?.name ||
 				newBookmarkColumn.name.trim() ||
 				'Unfiled';
-			const skipped = result.skipped
-				? ` ${plural(result.skipped, 'duplicate')} skipped.`
-				: '';
 			offerUndo(
-				`Added ${plural(result.count, 'bookmark')} to “${columnName}”.${skipped}`,
+				saveMessage({
+					kind: 'saved',
+					count: result.count,
+					skipped: result.skipped,
+					noun: 'bookmark',
+					into: `“${columnName}”`,
+				}),
 				result.undoId,
 				showStatus,
 				reload,
@@ -1554,9 +1565,7 @@ export function SessionManager({
 		}
 
 		await reload();
-		const duplicates = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
+		const duplicates = duplicatesNote(result.skipped);
 		offerUndo(
 			`Merged “${group.name}” into “${target?.name ?? 'the session'}”: ${plural(result.added, 'link')} added.${duplicates}`,
 			result.undoId,

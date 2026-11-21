@@ -8,6 +8,8 @@ import {addTabsToSession, updateSessionTab} from '../../library/session-edits';
 import {extractUrl, extractUrls} from '../../library/store-shape';
 import {phoneStamp} from '../../platform/device';
 import {edit, editIn, newId} from '../../library/library-store';
+import {saveMessage} from '../../../../extension/src/shared/save-feedback';
+import {bookmarkCount, counted, tabCount} from '../../library/save-outcome';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {Button, Field} from '../../ui/widgets';
@@ -68,7 +70,7 @@ export function AddLinksSheet({
 							return;
 						}
 
-						void edit((current) =>
+						const run = counted(tabCount, (current) =>
 							addTabsToSession(
 								current,
 								session.id,
@@ -76,11 +78,10 @@ export function AddLinksSheet({
 								urls.map(() => newId()),
 								Date.now(),
 							),
-						).then(() => {
+						);
+						void edit(run.change).then(() => {
 							showSnack(
-								urls.length === 1
-									? 'Link added to the session'
-									: `${urls.length} links added to the session`,
+								saveMessage(run.outcome(urls.length, 'link', session.name)),
 							);
 						});
 						onClose();
@@ -134,7 +135,7 @@ export function SaveAsBookmarksSheet({
 						void (async () => {
 							try {
 								const column = await choice.resolve();
-								await editIn(library, (current) => {
+								const run = counted(bookmarkCount, (current) => {
 									let next = current;
 									const now = Date.now();
 									for (const link of target.links) {
@@ -153,10 +154,9 @@ export function SaveAsBookmarksSheet({
 
 									return next;
 								});
+								await editIn(library, run.change);
 								showSnack(
-									count === 1
-										? `Saved to ${column.name}`
-										: `${count} bookmarks saved to ${column.name}`,
+									saveMessage(run.outcome(count, 'bookmark', column.name)),
 								);
 								onClose();
 							} catch {
