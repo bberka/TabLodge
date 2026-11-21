@@ -1,6 +1,6 @@
 # 10. Every setting syncs, and newer ones as their own record kind
 
-Status: accepted, 2026-11-20. Issue #397.
+Status: accepted, 2026-11-20. Issue #397. Amended by [ADR 11](0011-setting-sync-scopes.md): theme and appearance sync between devices of one kind, and `local-settings.ts` is now `setting-scopes.ts`.
 
 ## Context
 

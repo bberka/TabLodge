@@ -11,6 +11,9 @@ the same way as a `tag` record ({tags, hiddenKinds}), for the same reason (ADR 8
 Settings are `preference` records keyed by the setting, for the ones 0.3.0 already synced, and `setting` records for
 every other one: 0.3.0 drops a preference id it does not know and sends that loss back, while it skips a kind it does
 not know (ADR 10). A `setting` record this version does not know is held in `heldSettings` and sent back as it came.
+Settings a host keeps outside the library, such as the extension's theme, are `setting` records too: the host hands
+them in, and `assemble` leaves the ones it names out of the library, while a host that names none holds them like any
+other unknown setting.
 
 Sources settings (which sites are on, each one's column and save mode) are `source` records keyed by the site id, for
 the same reason. They live outside the library, so the host hands them in and takes them back as they are: a site or
@@ -31,7 +34,7 @@ import type {
 import type {TombstoneKind} from '../library-sync';
 import {tagFields} from '../bookmark-tags';
 import {bookmarkNotes, DEFAULT_SETTINGS} from '../library-normalize';
-import {EXTENSION_LOCAL_SETTINGS} from '../local-settings';
+import {LIBRARY_SETTINGS} from '../setting-scopes';
 import {canonicalJson, isRecord} from '../library-values';
 import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
 import {recordKey} from './changes';
@@ -109,18 +112,23 @@ const PORTABLE_PREFERENCES = [
 	'mobileApp',
 ] as const satisfies ReadonlyArray<keyof Settings>;
 
+// Every library setting has a scope: a new key without one in `setting-scopes.ts` fails to compile here.
+const scopes: Record<
+	Exclude<keyof Settings, 'heldSettings'>,
+	(typeof LIBRARY_SETTINGS)[keyof typeof LIBRARY_SETTINGS]
+> = LIBRARY_SETTINGS;
+
 /**
 Every other setting that syncs, as a `setting` record: each key of `DEFAULT_SETTINGS` that is neither a 0.3.0
-preference nor listed in `local-settings.ts`. A new setting lands here by itself. Like preferences, these follow
-the user to every connected browser unless settings sync is turned off on a device.
+preference nor scoped to the device in `setting-scopes.ts`. Like preferences, these follow the user to every
+connected device unless settings sync is turned off on one.
 */
 export const SETTING_KEYS: ReadonlyArray<keyof Settings> = (
-	Object.keys(DEFAULT_SETTINGS) as Array<keyof Settings>
+	Object.keys(scopes) as Array<keyof typeof scopes>
 ).filter(
 	(key) =>
-		key !== 'heldSettings' &&
-		!(PORTABLE_PREFERENCES as readonly string[]).includes(key) &&
-		!Object.hasOwn(EXTENSION_LOCAL_SETTINGS, key),
+		scopes[key][0] !== 'device' &&
+		!(PORTABLE_PREFERENCES as readonly string[]).includes(key),
 );
 
 const SESSION_LOCAL_FIELDS = [
@@ -137,14 +145,26 @@ export type LibraryRecord = {
 };
 
 /**
-A `setting` record that still holds its default. Never synced, it is not sent: a phone or a new browser holds every
-default without anyone choosing it, and sent first it would overwrite the values another browser chose.
+A `setting` record that still holds its default, from `DEFAULT_SETTINGS` or the host's `defaults` for settings it
+keeps outside the library. Never synced, it is not sent: a phone or a new browser holds every default without anyone
+choosing it, and sent first it would overwrite the values another device chose.
 */
-export const isUntouchedDefault = (record: LibraryRecord) =>
-	record.kind === 'setting' &&
-	Object.hasOwn(DEFAULT_SETTINGS, record.id) &&
-	canonicalJson(record.value) ===
-		canonicalJson(DEFAULT_SETTINGS[record.id as keyof Settings]);
+export function isUntouchedDefault(
+	record: LibraryRecord,
+	defaults: Readonly<Record<string, unknown>> = {},
+) {
+	if (record.kind !== 'setting') {
+		return false;
+	}
+
+	const own = Object.hasOwn(defaults, record.id)
+		? defaults
+		: (DEFAULT_SETTINGS as Readonly<Record<string, unknown>>);
+	return (
+		Object.hasOwn(own, record.id) &&
+		canonicalJson(record.value) === canonicalJson(own[record.id])
+	);
+}
 
 /**
 The order group of a record kind; tabs are ordered within their session.
@@ -191,13 +211,14 @@ One site's Sources choices as they sync: present while the site is on, with a va
 export type SyncedSource = {id: string; value: Record<string, unknown>};
 
 /**
-The library's records in display order, keyed by `recordKey`, the trash entries small enough to send, and the
-Sources choices.
+The library's records in display order, keyed by `recordKey`, the trash entries small enough to send, the Sources
+choices, and the settings the host keeps outside the library.
 */
 export function splitLibrary(
 	store: Store,
 	trash: readonly TrashEntry[] = [],
 	sources: readonly SyncedSource[] = [],
+	outside: Readonly<Record<string, unknown>> = {},
 ): Map<string, LibraryRecord> {
 	const records = new Map<string, LibraryRecord>();
 	const add = (record: LibraryRecord) => records.set(recordKey(record), record);
@@ -248,6 +269,10 @@ export function splitLibrary(
 		}
 	}
 
+	for (const [id, value] of Object.entries(outside)) {
+		add({kind: 'setting', id, value});
+	}
+
 	for (const entry of trash) {
 		const value = syncedTrash(entry);
 		if (value) {
@@ -294,12 +319,14 @@ export function trashOf(records: Iterable<LibraryRecord>): TrashEntry[] {
 
 /**
 A library from records in display order, with this device's own fields and settings taken from `local`. Record
-values came from other devices, so the result must still go through the worker's normalization.
+values came from other devices, so the result must still go through the worker's normalization. `outside` names the
+settings the host keeps outside the library, which it takes from the records itself.
 */
 export function assemble(
 	records: Iterable<LibraryRecord>,
 	local: Store,
 	syncSettings = true,
+	outside: ReadonlySet<string> = new Set(),
 ): Store {
 	const localSessions = new Map(
 		local.groups.map((session) => [session.id, session]),
@@ -397,7 +424,10 @@ export function assemble(
 
 				if ((SETTING_KEYS as readonly string[]).includes(record.id)) {
 					settings[record.id] = record.value;
-				} else if (!Object.hasOwn(DEFAULT_SETTINGS, record.id)) {
+				} else if (
+					!Object.hasOwn(DEFAULT_SETTINGS, record.id) &&
+					!outside.has(record.id)
+				) {
 					held[record.id] = record.value;
 				}
 

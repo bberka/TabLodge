@@ -185,14 +185,15 @@ They sync as one record of kind `tag`, keyed by the bookmark id, with the value 
 
 ### Settings sync
 
-Settings are records keyed by the setting. The ones 0.3.0 already synced are `preference` records, from a closed list in `library-records.ts`. Every other key of `DEFAULT_SETTINGS` is a `setting` record (`SETTING_KEYS`), unless `src/shared/local-settings.ts` lists it with the reason it stays on the device. That file is the one list of local settings for both apps, and `tests/local-settings.test.ts` fails when a setting neither syncs nor is listed. [ADR 10](adr/0010-settings-sync.md) explains the choice.
+Settings are records keyed by the setting. The ones 0.3.0 already synced are `preference` records, from a closed list in `library-records.ts`. Every other key of `DEFAULT_SETTINGS` is a `setting` record (`SETTING_KEYS`), unless it is scoped `device`. `src/shared/setting-scopes.ts` gives every setting of both apps one scope with its reason: `all` (both apps read it), `platform` (all browsers or all phones), or `device` (never syncs). `tests/setting-scopes.test.ts` fails for a setting without one, for one that syncs against it, and for a library setting the phone reads that is not `all`. [ADR 10](adr/0010-settings-sync.md) and [ADR 11](adr/0011-setting-sync-scopes.md) explain the choice.
 
 * **Old clients and servers.** 0.3.0 skips the `setting` kind, so it keeps its own values and erases nothing. Clients sync `setting` records only when the server lists `settings` among its `features`.
 * **First contact.** Until a pull has taken `setting` records once (`SyncState.pulled`), capture leaves the kind alone, so the server's value wins over a local one that never synced, and the settings the server lacks go out after the pull. A setting that never synced and still holds its default is never sent (`isUntouchedDefault`), so a device nobody configured cannot overwrite a chosen value.
 * **Taking effect.** Settings that arrive through sync go through `applySettingsChange` in the worker, like an edit in Settings, so the snapshot and backup alarms, the toolbar, and the menus follow them.
 * **Held settings.** A `setting` this version does not know is kept in `settings.heldSettings` and sent back unchanged. `normalizeSettings` reads a held value for a key it now knows.
 * **The switch.** **Sync settings** off leaves both kinds alone, as before.
-* **Android.** The phone's own preferences still travel in the `mobileApp` setting. `preference-schema.ts` syncs every preference not in `ANDROID_LOCAL_PREFERENCES`.
+* **Outside the library.** The extension's theme, accent, and private window accent keep their own storage keys and sync as `setting` records through the host's `outsideSettings`, like Sources. A host without it, such as the phone, holds them in `heldSettings`.
+* **Android.** The phone's own preferences still travel in the `mobileApp` setting, which only phones read. `preference-schema.ts` syncs every preference that `ANDROID_PREFERENCES` does not scope to the device.
 
 ### Sources settings sync
 

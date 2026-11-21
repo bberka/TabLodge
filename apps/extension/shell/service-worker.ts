@@ -1143,6 +1143,17 @@ function mutate<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 /*
+The theme and accents sync between browsers (`platform` in src/shared/setting-scopes.ts) as settings kept outside the
+library: pages store the theme and accent themselves (src/shared/theme.tsx), and the private window accent sits in the
+private config, whose other fields stay on this device.
+*/
+const OUTSIDE_SETTING_DEFAULTS = {
+	uiTheme: 'system',
+	uiAccent: 'default',
+	privateAccent: 'teal',
+} as const;
+
+/*
 Sync with a self hosted server (src/shared/sync/client.ts). Private workers never sync: their library is separate
 and may be temporary. The client runs its own library reads and writes inside the mutation queue.
 */
@@ -1162,6 +1173,11 @@ const syncClient = privateContext
 			trash: {read: readSyncTrash, apply: applySyncTrash},
 			// Sources belong to the browser, so only this client carries them, never private sync.
 			sources: {read: readSyncSources, apply: applySyncSources},
+			outsideSettings: {
+				defaults: OUTSIDE_SETTING_DEFAULTS,
+				read: readOutsideSettings,
+				apply: applyOutsideSettings,
+			},
 			async writeLibrary(store) {
 				// The records came from other devices: normalized like an import before they are stored.
 				const before = (await getStore()).settings;
@@ -1181,7 +1197,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		return;
 	}
 
-	if (Object.hasOwn(changes, SYNC_NUDGE_KEY)) {
+	if (
+		[SYNC_NUDGE_KEY, UI_THEME_KEY, UI_ACCENT_KEY, PRIVATE_CONFIG_KEY].some(
+			(key) => Object.hasOwn(changes, key),
+		)
+	) {
 		syncClient?.localChanged();
 	}
 
@@ -9776,6 +9796,56 @@ async function stopSource(source: SiteSource) {
 			[SOURCE_CATCH_UP_KEY]: catchUpValue({...answers, [source.id]: []}),
 		});
 	});
+}
+
+async function readOutsideSettings(): Promise<Record<string, unknown>> {
+	const stored = await chrome.storage.local.get([
+		UI_THEME_KEY,
+		UI_ACCENT_KEY,
+		PRIVATE_CONFIG_KEY,
+	]);
+	return {
+		uiTheme: asTheme(stored[UI_THEME_KEY]),
+		uiAccent: asAccent(stored[UI_ACCENT_KEY]),
+		privateAccent: normalizePrivateConfig(stored[PRIVATE_CONFIG_KEY]).accent,
+	};
+}
+
+/**
+Values from other browsers. One that is not valid here is left out, and one changed in this browser during the round
+stays as it is.
+*/
+async function applyOutsideSettings(
+	put: Record<string, unknown>,
+	was: Readonly<Record<string, unknown>>,
+) {
+	const now = await readOutsideSettings();
+	const takes = (id: string) =>
+		Object.hasOwn(put, id) && (was[id] === undefined || was[id] === now[id]);
+	const writes: Record<string, unknown> = {};
+	if (takes('uiTheme') && asTheme(put.uiTheme) === put.uiTheme) {
+		writes[UI_THEME_KEY] = put.uiTheme;
+	}
+
+	if (takes('uiAccent') && isAccent(put.uiAccent)) {
+		writes[UI_ACCENT_KEY] = put.uiAccent;
+	}
+
+	if (takes('privateAccent') && isPrivateAccent(put.privateAccent)) {
+		const config = (await chrome.storage.local.get([PRIVATE_CONFIG_KEY]))[
+			PRIVATE_CONFIG_KEY
+		];
+		// Like SET_PRIVATE_ACCENT: the whole config, with the fields this browser has.
+		writes[PRIVATE_CONFIG_KEY] = {
+			...normalizePrivateConfig(config),
+			...(isRecord(config) && config),
+			accent: put.privateAccent,
+		};
+	}
+
+	if (Object.keys(writes).length > 0) {
+		await chrome.storage.local.set(writes);
+	}
 }
 
 /**

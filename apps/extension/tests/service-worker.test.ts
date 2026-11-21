@@ -11948,6 +11948,52 @@ const remoteSource = (id: string, value?: Record<string, unknown>) => ({
 	...(value ? {value} : {deleted: true as const}),
 });
 
+test('the theme and accents from another browser apply here, and the rest of the private config stays', async () => {
+	const server = syncServer();
+	const remoteSetting = (id: string, value: unknown) => ({
+		kind: 'setting' as const,
+		id,
+		h: stampAt(Date.now() + 60_000),
+		d: 'other-browser',
+		value,
+	});
+	assert.deepEqual(
+		server.log.push(
+			[
+				remoteSetting('uiTheme', 'dark'),
+				remoteSetting('uiAccent', 'not-an-accent'),
+				remoteSetting('privateAccent', 'violet'),
+			],
+			Date.now(),
+		),
+		['applied', 'applied', 'applied'],
+	);
+	const privateConfig = {
+		mode: 'saved',
+		configured: true,
+		redirectNewTabs: false,
+		accent: 'teal',
+	};
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+		storage: {
+			...regularSync,
+			uiAccent: 'rose',
+			'tablodge.private.config': privateConfig,
+		},
+	});
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	assert.equal(harness.extraStorage.uiTheme, 'dark');
+	assert.equal(harness.extraStorage.uiAccent, 'rose', 'a value not valid here');
+	assert.deepEqual(
+		structuredClone(harness.extraStorage['tablodge.private.config']),
+		{
+			...privateConfig,
+			accent: 'violet',
+		},
+	);
+});
+
 test('Sources choices pulled from another browser show as on there, not here', async () => {
 	const server = syncServer();
 	assert.deepEqual(

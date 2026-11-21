@@ -269,10 +269,20 @@ type Device = {
 	Runs as sync applies Sources choices; true stands for an edit made here meanwhile, which the host keeps instead.
 	*/
 	editedDuringApply?: () => boolean;
+	/**
+	Settings kept outside the library, for a device whose host has them (the extension's theme and accents).
+	*/
+	outside: Record<string, unknown>;
 	storage: Map<string, unknown>;
 	backups: string[];
 	client: ReturnType<typeof createSyncClient>;
 	edit(change: (store: Store) => Store): void;
+};
+
+const OUTSIDE_DEFAULTS = {
+	uiTheme: 'system',
+	uiAccent: 'default',
+	privateAccent: 'teal',
 };
 
 function makeDevice(
@@ -281,6 +291,7 @@ function makeDevice(
 	{
 		withTrash = false,
 		withSources = false,
+		withOutside = false,
 		beforeNotes = false,
 		storage = new Map<string, unknown>(),
 		codec = undefined as SyncCodec | undefined,
@@ -292,6 +303,7 @@ function makeDevice(
 		store,
 		trash: [],
 		sources: [],
+		outside: {...OUTSIDE_DEFAULTS},
 		storage,
 		backups,
 		client: createSyncClient({
@@ -371,6 +383,19 @@ function makeDevice(
 								...device.sources.filter(({id}) => !gone.has(id)),
 								...structuredClone(put),
 							];
+						},
+					}
+				: undefined,
+			outsideSettings: withOutside
+				? {
+						defaults: OUTSIDE_DEFAULTS,
+						read: async () => structuredClone(device.outside),
+						async apply(put, was) {
+							for (const [id, value] of Object.entries(put)) {
+								if (was[id] === undefined || was[id] === device.outside[id]) {
+									device.outside[id] = value;
+								}
+							}
 						},
 					}
 				: undefined,
@@ -708,6 +733,97 @@ test('a setting added since 0.3.0 syncs like the others, and stays put while thi
 	await b.client.syncNow();
 	await a.client.syncNow();
 	assert.equal(a.store.settings.snapshotKeep, 10);
+});
+
+test('the theme and accents sync between browsers, and a phone holds them without taking them', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withOutside: true});
+	const b = makeDevice(server, emptyStore(), {withOutside: true});
+	const phoneLook = {theme: 'light', 'at.theme': 1};
+	const phone = makeDevice(server, withSettings({mobileApp: phoneLook}));
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	await phone.client.connect(URL_BASE, TOKEN);
+
+	a.outside = {uiTheme: 'dark', uiAccent: 'rose', privateAccent: 'same'};
+	a.client.localChanged();
+	await until(() => b.outside.uiTheme === 'dark');
+	assert.deepEqual(b.outside, a.outside);
+
+	await phone.client.syncNow();
+	assert.deepEqual(
+		phone.store.settings.mobileApp,
+		phoneLook,
+		"the phone's own look",
+	);
+	assert.equal(
+		phone.store.settings.heldSettings?.uiTheme,
+		'dark',
+		'held, not read',
+	);
+
+	// What the phone sends back leaves the browsers' theme as it was.
+	phone.edit((store) => ({...store, bookmarks: [bookmark('p1')]}));
+	await phone.client.syncNow();
+	await b.client.syncNow();
+	assert.equal(b.outside.uiTheme, 'dark');
+	assert.match((await settingLine(server, 'uiTheme')) ?? '', /"value":"dark"/);
+});
+
+test("the phone's look syncs between phones and leaves the browsers' theme alone", async () => {
+	const server = makeServer();
+	const browser = makeDevice(server, emptyStore(), {withOutside: true});
+	browser.outside.uiTheme = 'light';
+	const one = makeDevice(server);
+	const two = makeDevice(server);
+	await browser.client.connect(URL_BASE, TOKEN);
+	await one.client.connect(URL_BASE, TOKEN);
+	await two.client.connect(URL_BASE, TOKEN);
+
+	const look = {theme: 'dark', 'at.theme': 5, look: 'ios', 'at.look': 5};
+	one.edit((store) => ({
+		...store,
+		settings: {...store.settings, mobileApp: look},
+	}));
+	await until(() => two.store.settings.mobileApp?.theme === 'dark');
+	assert.deepEqual(two.store.settings.mobileApp, look);
+	await browser.client.syncNow();
+	assert.equal(browser.outside.uiTheme, 'light');
+});
+
+test('a browser at the default theme that syncs first does not overwrite one another browser chose', async () => {
+	const server = makeServer();
+	const chose = makeDevice(server, emptyStore(), {withOutside: true});
+	chose.outside.uiTheme = 'dark';
+	await chose.client.connect(URL_BASE, TOKEN);
+	const fresh = makeDevice(server, emptyStore(), {withOutside: true});
+	await fresh.client.connect(URL_BASE, TOKEN);
+	await fresh.client.syncNow();
+	await chose.client.syncNow();
+	assert.equal(fresh.outside.uiTheme, 'dark');
+	assert.equal(chose.outside.uiTheme, 'dark');
+});
+
+test('the theme stays in each browser while Sync settings is off there, and on a 0.3.0 browser', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withOutside: true});
+	const off = makeDevice(server, emptyStore(), {withOutside: true});
+	const old = makeDevice(server, emptyStore(), {
+		withOutside: true,
+		beforeNotes: true,
+	});
+	off.storage.set(SYNC_SETTINGS_KEY, false);
+	await a.client.connect(URL_BASE, TOKEN);
+	await off.client.connect(URL_BASE, TOKEN);
+	await old.client.connect(URL_BASE, TOKEN);
+	a.outside.uiTheme = 'dark';
+	a.client.localChanged();
+	await a.client.syncNow();
+	await off.client.syncNow();
+	await old.client.syncNow();
+	assert.equal(off.outside.uiTheme, 'system');
+	assert.equal(old.outside.uiTheme, 'system');
+	assert.match((await settingLine(server, 'uiTheme')) ?? '', /"value":"dark"/);
 });
 
 test('a setting that stays on each device never leaves it', async () => {

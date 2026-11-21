@@ -27,7 +27,7 @@ What each app does, as the user sees it. Name the extension, the Android app, an
 - [ ] One observable result per line, checkable as pass or fail, with the proof that shows it (test, screenshot, console output).
 
 ## Feature triage
-The answers from cross-app.md, including the `Entry points:` line.
+The answers from cross-app.md, including the `Entry points:` and `Settings:` lines.
 
 ## Out of scope
 What a reader might expect and will not get.
