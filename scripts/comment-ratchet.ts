@@ -31,6 +31,8 @@ export function scanComments(path: string, text: string): Comment[] {
 		path.endsWith('x') ? ts.ScriptKind.TSX : undefined,
 	);
 	const seen = new Set<number>();
+	const jsxText: Array<[number, number]> = [];
+	const pending: ts.Node[] = [];
 	const found: Comment[] = [];
 	const collect = (node: ts.Node) => {
 		const ranges = [
@@ -38,7 +40,10 @@ export function scanComments(path: string, text: string): Comment[] {
 			...(ts.getTrailingCommentRanges(text, node.end) ?? []),
 		];
 		for (const range of ranges) {
-			if (seen.has(range.pos)) {
+			if (
+				seen.has(range.pos) ||
+				jsxText.some(([start, end]) => range.pos >= start && range.pos < end)
+			) {
 				continue;
 			}
 
@@ -61,8 +66,12 @@ export function scanComments(path: string, text: string): Comment[] {
 
 	const walk = (node: ts.Node) => {
 		const children = node.getChildren(source);
+		if (node.kind === ts.SyntaxKind.JsxText) {
+			jsxText.push([node.getFullStart(), node.end]);
+		}
+
 		if (children.length === 0) {
-			collect(node);
+			pending.push(node);
 		} else {
 			for (const child of children) {
 				walk(child);
@@ -71,6 +80,10 @@ export function scanComments(path: string, text: string): Comment[] {
 	};
 
 	walk(source);
+	for (const node of pending) {
+		collect(node);
+	}
+
 	return found.toSorted((a, b) => a.line - b.line);
 }
 
@@ -141,10 +154,13 @@ function resolveBase(args: string[]): string | undefined {
 }
 
 function touchedFiles(base: string): string[] {
-	const changed = git('diff', '--name-only', base).split('\n');
-	const untracked = git('ls-files', '--others', '--exclude-standard').split(
-		'\n',
-	);
+	const changed = git('diff', '--name-only', '-z', base).split('\0');
+	const untracked = git(
+		'ls-files',
+		'-z',
+		'--others',
+		'--exclude-standard',
+	).split('\0');
 	return [...new Set([...changed, ...untracked])].filter(
 		(path) => path !== '' && isCounted(path),
 	);
@@ -194,8 +210,8 @@ function report(): number {
 		string,
 		{files: number; comments: number; lines: number}
 	>();
-	const tracked = git('ls-files')
-		.split('\n')
+	const tracked = git('ls-files', '-z')
+		.split('\0')
 		.filter((path) => isCounted(path));
 	for (const path of tracked) {
 		const counted = scanComments(path, readFileSync(path, 'utf8')).filter(

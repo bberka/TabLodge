@@ -43,6 +43,17 @@ test('counts line, block, trailing, and JSX comments', () => {
 	assert.equal(countComments('x.tsx', text), 4);
 });
 
+test('rendered JSX text that looks like a comment is not a comment', () => {
+	assert.equal(
+		countComments('x.tsx', 'const a = <div>/* example */ // text</div>;'),
+		0,
+	);
+	assert.equal(
+		countComments('x.tsx', 'const a = <div>text {/* real */}</div>;'),
+		1,
+	);
+});
+
 test('ignores comment markers inside strings, templates, and regular expressions', () => {
 	const text = [
 		"const url = 'https://example.com';",

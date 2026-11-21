@@ -111,7 +111,7 @@ jobs:
       - if: ${{ github.event_name == 'pull_request' }}
         env:
           BASE: origin/${{ github.base_ref }}
-        run: node scripts/comment-ratchet.ts --base "$BASE"
+        run: node scripts/comment-ratchet.ts --base "$(git merge-base HEAD "$BASE")"
       - if: ${{ github.event_name != 'pull_request' }}
         run: node scripts/comment-ratchet.ts --base HEAD^
 

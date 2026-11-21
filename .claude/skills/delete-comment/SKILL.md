@@ -13,5 +13,5 @@ Remove every comment under `$ARGUMENTS`. Load `docs/agents/comments.md` first: i
 4. **Excuses.** File one issue for the area (`gh issue create`, into `bberka/TabLodge`) listing each hack with `file:line`, why it is a hack, and a fix sketch.
 5. **Delete.** Remove the comments. Give each `eslint-disable` that lacks one a reason (`eslint-disable-next-line rule -- reason`). Make no other edit.
 6. **Lower the ratchet.** `node scripts/comment-ratchet.ts --write`, then `node scripts/comment-ratchet.ts` passes and `pnpm exec xo <path>` is clean.
-7. **Prove nothing else changed.** `git diff -w` shows only removed comment lines, reasons added to directives, and the ADR; `vp run check` and `vp run build` pass.
+7. **Prove nothing else changed.** `git diff -w` shows only removed comment lines, reasons added to directives, the ADR, and the lowered `scripts/comment-baseline.json`; `vp run check` and `vp run build` pass.
 8. **Open the pull request** per `docs/agents/workflow.md`. The body has the category table with counts, the ADR path, the issue, and the new ratchet total.
