@@ -1053,6 +1053,10 @@ export type ActionFailure = {
 	*/
 	locked?: true;
 	/**
+	Set when nothing was saved because every link was already saved (a skipped duplicate): shown as a notice, never as success.
+	*/
+	duplicate?: true;
+	/**
 	Set when connecting to a sync server failed because of one form field, so the page can show the error there.
 	*/
 	field?: 'url' | 'token' | 'credential' | 'serverCredential';

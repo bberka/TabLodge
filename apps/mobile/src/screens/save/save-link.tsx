@@ -18,6 +18,11 @@ import {
 	parseTagInput,
 	removedByEdit,
 } from '../../../../extension/src/shared/bookmark-tags';
+import {
+	type SaveOutcome,
+	saveMessage,
+} from '../../../../extension/src/shared/save-feedback';
+import {bookmarkCount, counted, tabCount} from '../../library/save-outcome';
 import {showSnack} from '../../ui/snackbar';
 import {type TagEdit, TagsField} from '../bookmarks/tags';
 import {
@@ -80,7 +85,7 @@ export function SaveLinkForm({
 	*/
 	onQuote?: () => void;
 	/**
-	Called when the drawer should close; `saved` is the column name when a link was saved.
+	Called when the drawer should close; `saved` is the message to show when a link was saved (`save-feedback.ts`).
 	*/
 	onDone: (saved?: string) => void;
 }) {
@@ -120,6 +125,8 @@ export function SaveLinkForm({
 	const [tagDraft, setTagDraft] = useState('');
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
+	// A skipped duplicate is a plain notice, not an error.
+	const [notice, setNotice] = useState('');
 
 	const url = extractUrl(text);
 	const excludedSites = useRegularLibrary().settings.excludedOrigins ?? [];
@@ -134,6 +141,19 @@ export function SaveLinkForm({
 		}
 	}, [preview?.title, titleEdited]);
 
+	// A save that stored nothing (a skipped duplicate) is not success: the drawer stays open and says why.
+	const finish = (outcome: SaveOutcome) => {
+		if (outcome.kind === 'saved') {
+			onDone(saveMessage(outcome));
+			return true;
+		}
+
+		(outcome.kind === 'duplicate' ? setNotice : setProblem)(
+			saveMessage(outcome),
+		);
+		return false;
+	};
+
 	const save = async () => {
 		if (!url) {
 			return;
@@ -141,6 +161,7 @@ export function SaveLinkForm({
 
 		setSaving(true);
 		setProblem('');
+		setNotice('');
 		try {
 			const saved = {
 				url: getPreferences().cleanOnSave ? stripTrackingParameters(url) : url,
@@ -152,7 +173,7 @@ export function SaveLinkForm({
 						? sessionName.trim() || saved.title || hostOf(saved.url)
 						: (sessions.find((session) => session.id === sessionId)?.name ??
 							'the session');
-				await editIn(library, (current) =>
+				const run = counted(tabCount, (current) =>
 					sessionId === NEW_SESSION
 						? addSession(
 								current,
@@ -175,7 +196,8 @@ export function SaveLinkForm({
 								[saved.title],
 							),
 				);
-				onDone(label);
+				await editIn(library, run.change);
+				finish(run.outcome(1, 'link', label));
 				return;
 			}
 
@@ -188,7 +210,7 @@ export function SaveLinkForm({
 			const tagEdit =
 				!editing || tagsTouched || tagDraft.trim() !== '' ? tags : {};
 
-			await editIn(library, (current) =>
+			const run = counted(bookmarkCount, (current) =>
 				editing
 					? updateBookmark(
 							current,
@@ -209,8 +231,14 @@ export function SaveLinkForm({
 							Date.now(),
 						),
 			);
+			await editIn(library, run.change);
+			if (editing) {
+				onDone();
+			} else if (!finish(run.outcome(1, 'bookmark', name))) {
+				return;
+			}
+
 			setPreferences({lastColumnId: target});
-			onDone(name);
 			const removed = editing && tagsTouched && removedByEdit(editing, tags);
 			if (editing && removed) {
 				// Taking a tag away is done at once, with Undo, as every removal in the library is.
@@ -407,6 +435,11 @@ export function SaveLinkForm({
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
 						{problem}
+					</Text>
+				)}
+				{notice !== '' && (
+					<Text accessibilityLiveRegion="polite" style={{color: colors.muted}}>
+						{notice}
 					</Text>
 				)}
 				<Button

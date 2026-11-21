@@ -61,8 +61,7 @@ import {
 	send,
 	useStatus,
 	useTabLodgeState,
-	forceAddAction,
-	duplicatesNote,
+	reportSessionSave,
 	plural,
 	switchSummary,
 	useHasSavableTabs,
@@ -626,10 +625,7 @@ function SidePanel() {
 		}, 'Could not switch to this session.');
 	}
 
-	async function saveTabs(
-		request: {scope?: 'window'; tabIds?: number[]},
-		done: string,
-	) {
+	async function saveTabs(request: {scope?: 'window'; tabIds?: number[]}) {
 		const answer = await askSessionName(request);
 		if (!answer) {
 			return;
@@ -644,42 +640,11 @@ function SidePanel() {
 				throw new Error(result?.error || 'Could not save these tabs.');
 			}
 
-			const {groupId} = result;
-			if (result.rejectedTabIds.length > 0) {
-				showStatus(
-					`${result.count > 0 ? `Saved ${plural(result.count, 'tab')}.` : 'Nothing saved.'}${duplicatesNote(result.skipped)}`,
-					false,
-					{action: forceAddAction(result.rejectedTabIds, showStatus, reload)},
-				);
-			} else if (
-				settings?.closeOnSave !== false &&
-				groupId &&
-				result.count > 0
-			) {
-				// Saved tabs were closed: Undo reopens them in this window from the new session.
-				showStatus(done, false, {
-					action: {
-						label: 'Undo',
-						async onClick() {
-							const reopened = await send('RESTORE_GROUP', {
-								groupId,
-								restoreTarget: 'current-window',
-								restoreMode: 'keep',
-								activate: false,
-							});
-							showStatus(
-								reopened?.ok
-									? 'Tabs reopened.'
-									: reopened?.error || 'Could not reopen the tabs.',
-								!reopened?.ok,
-								{toast: true},
-							);
-						},
-					},
-				});
-			} else {
-				showStatus(done, false, {toast: true});
-			}
+			reportSessionSave(result, {
+				closeOnSave: settings?.closeOnSave !== false,
+				showStatus,
+				reload,
+			});
 
 			setSelected(new Set());
 			await reload();
@@ -717,7 +682,7 @@ function SidePanel() {
 				id: 'save',
 				label: 'Save this tab',
 				icon: Save,
-				onSelect: () => void saveTabs({tabIds: [id]}, 'Tab saved.'),
+				onSelect: () => void saveTabs({tabIds: [id]}),
 			},
 			{
 				id: 'copy',
@@ -1128,12 +1093,7 @@ function SidePanel() {
 						size="sm"
 						className="flex-1"
 						disabled={selectedIds.length === 0}
-						onClick={() =>
-							void saveTabs(
-								{tabIds: selectedIds},
-								`Saved ${selectedIds.length} ${selectedIds.length === 1 ? 'tab' : 'tabs'}.`,
-							)
-						}
+						onClick={() => void saveTabs({tabIds: selectedIds})}
 					>
 						<Save className="h-4 w-4" />
 						Save selected
@@ -1142,7 +1102,7 @@ function SidePanel() {
 					<Button
 						size="sm"
 						className="flex-1"
-						onClick={() => void saveTabs({scope: 'window'}, 'Window saved.')}
+						onClick={() => void saveTabs({scope: 'window'})}
 					>
 						<Save className="h-4 w-4" />
 						Save all

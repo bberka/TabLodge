@@ -884,7 +884,8 @@ test('bookmarking a link into a column uses the link text, falls back to the hos
 	);
 	assert.deepEqual(
 		harness.badges.filter((badge) => badge.text).map((badge) => badge.text),
-		['✓', '✓', '✓'],
+		['✓', '✓', '='],
+		'a skipped duplicate flashes its own mark, never the success tick',
 	);
 	assert.equal(
 		harness.badges[0].tabId,
@@ -955,10 +956,10 @@ test('image and video menus list the columns under one root each', async () => {
 	);
 });
 
-test('Bookmark image to saves the image address, and skips one saved in any column or in the trash', async () => {
+test('Bookmark image to saves the image address, and skips one saved in any column (when duplicates are rejected) or in the trash', async () => {
 	const harness = createHarness(
 		baseState(
-			{},
+			{saveDuplicateHandling: 'reject'},
 			{
 				bookmarks: [
 					{
@@ -1021,8 +1022,50 @@ test('Bookmark image to saves the image address, and skips one saved in any colu
 	]);
 	assert.deepEqual(
 		harness.badges.filter((badge) => badge.text).map((badge) => badge.text),
-		['✓', '✓', '✓', '!'],
+		['✓', '=', '=', '!'],
 	);
+});
+
+test('Bookmark image to follows the duplicate setting: allowed in another column, never twice in one', async () => {
+	const harness = createHarness(
+		baseState(
+			{saveDuplicateHandling: 'allow'},
+			{
+				bookmarks: [
+					{
+						id: 'b0',
+						title: 'Old image',
+						url: 'https://cdn.example/old.png',
+						columnId: 'bookmark-default',
+						createdAt: 1,
+						updatedAt: 1,
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	const save = async (srcUrl: string) =>
+		harness.click({
+			menuItemId: 'tablodge-image-bookmark:column-reading',
+			mediaType: 'image',
+			srcUrl,
+			pageUrl: 'https://www.photos.example/album/2',
+		});
+	await save('https://cdn.example/old.png');
+	await save('https://cdn.example/old.png');
+	assert.deepEqual(
+		harness.state.bookmarks.map(({url, columnId}) => ({url, columnId})),
+		[
+			{url: 'https://cdn.example/old.png', columnId: 'bookmark-default'},
+			{url: 'https://cdn.example/old.png', columnId: 'column-reading'},
+		],
+	);
+	assert.deepEqual(
+		harness.badges.filter((badge) => badge.text).map((badge) => badge.text),
+		['✓', '='],
+	);
+	assert.deepEqual(harness.warnings, []);
 });
 
 test('Bookmark video to saves a video file by its address and a stream by its page', async () => {
@@ -1959,3 +2002,173 @@ for (const [browser, options] of [
 		assert.deepEqual(harness.warnings, []);
 	});
 }
+
+const SAVED_CURRENT = sessionEntry('seen', 'Seen', 5, {
+	tabs: [{id: 'seen-tab', title: 'Old', url: 'https://current.example/page'}],
+});
+const markOf = (harness: ReturnType<typeof createHarness>) =>
+	harness.badges.filter((badge) => badge.text).map((badge) => badge.text);
+
+test('the save-window shortcut reports a save, a skipped duplicate, and a failure on the badge', async () => {
+	const harness = createHarness(
+		baseState(
+			{saveDuplicateHandling: 'reject', closeOnSave: false},
+			{groups: []},
+		),
+	);
+	await harness.install();
+	harness.fire('onCommand', 'save-window', harness.tabs[0]);
+	await wait(100);
+	harness.fire('onCommand', 'save-window', harness.tabs[0]);
+	await wait(100);
+	assert.deepEqual(markOf(harness), ['✓', '=']);
+	assert.equal(harness.state.groups.length, 1, 'the duplicate is not stored');
+	assert.deepEqual(harness.warnings, [], 'a skipped duplicate is not an error');
+
+	const empty = createHarness(baseState({closeOnSave: false}), []);
+	await empty.install();
+	empty.fire('onCommand', 'save-window', {id: 1, windowId: 10});
+	await wait(100);
+	assert.deepEqual(markOf(empty), ['!']);
+	assert.equal(empty.warnings.length, 1);
+});
+
+test('the toolbar button reports the same three results, and a skipped duplicate leaves its tab open', async () => {
+	const harness = createHarness(
+		baseState(
+			{
+				saveDuplicateHandling: 'reject',
+				closeOnSave: true,
+				actionMode: 'current-tab-to-group',
+			},
+			{groups: [SAVED_CURRENT]},
+		),
+	);
+	await harness.install();
+	harness.fire('actionClicked', harness.tabs[0]);
+	await wait(100);
+	assert.deepEqual(markOf(harness), ['=']);
+	assert.equal(harness.tabs.length, 1, 'the duplicate tab is not closed');
+	assert.equal(harness.state.groups[0].tabs.length, 1);
+
+	const allowing = createHarness(
+		baseState(
+			{
+				saveDuplicateHandling: 'allow',
+				closeOnSave: false,
+				actionMode: 'current-tab-to-group',
+			},
+			{groups: [sessionEntry('other', 'Other', 5)]},
+		),
+	);
+	await allowing.install();
+	allowing.fire('actionClicked', allowing.tabs[0]);
+	await wait(100);
+	assert.deepEqual(markOf(allowing), ['✓']);
+});
+
+test('sending the current tab without a chosen session skips Archived sessions', async () => {
+	const harness = createHarness(
+		baseState(
+			{closeOnSave: false, actionMode: 'current-tab-to-group'},
+			{
+				folders: [
+					{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true},
+					{id: 'archive', name: 'Archived', createdAt: 0},
+				],
+				groups: [
+					sessionEntry('archived', 'Archived one', 900, {folderId: 'archive'}),
+					sessionEntry('live', 'Live', 10),
+				],
+			},
+		),
+	);
+	await harness.install();
+	harness.fire('actionClicked', harness.tabs[0]);
+	await wait(100);
+	assert.equal(
+		harness.state.groups.find((group) => group.id === 'live')!.tabs.length,
+		2,
+	);
+	assert.equal(
+		harness.state.groups.find((group) => group.id === 'archived')!.tabs.length,
+		1,
+	);
+});
+
+test('adding links to a session follows the duplicate setting and reports a skipped duplicate as one', async () => {
+	const groups = [
+		sessionEntry('a', 'Alpha', 10),
+		sessionEntry('b', 'Beta', 20),
+	];
+	for (const handling of ['allow', 'reject'] as const) {
+		const harness = createHarness(
+			baseState({saveDuplicateHandling: handling}, {groups}),
+		);
+		await harness.install();
+		const same = await harness.send({
+			type: 'ADD_LINKS_TO_SESSION',
+			groupId: 'a',
+			links: [{url: 'https://a.example/', title: 'Again'}],
+		});
+		assert.equal(same.ok, false, 'its own session never holds a link twice');
+		assert.equal(same.duplicate, true);
+		const other = await harness.send({
+			type: 'ADD_LINKS_TO_SESSION',
+			groupId: 'a',
+			links: [{url: 'https://b.example/', title: 'Beta'}],
+		});
+		assert.equal(other.ok, handling === 'allow');
+		assert.equal(other.duplicate, handling === 'reject' ? true : undefined);
+	}
+});
+
+test('adding bookmarks follows the duplicate setting on every path', async () => {
+	const bookmark = {
+		id: 'b0',
+		title: 'Seen',
+		url: 'https://seen.example/',
+		columnId: 'bookmark-default',
+		createdAt: 1,
+		updatedAt: 1,
+	};
+	for (const handling of ['allow', 'reject'] as const) {
+		const harness = createHarness(
+			baseState({saveDuplicateHandling: handling}, {bookmarks: [bookmark]}),
+		);
+		await harness.install();
+		const sameColumn = await harness.send({
+			type: 'ADD_BOOKMARK',
+			bookmark: {
+				url: 'https://seen.example/',
+				title: 'Again',
+				columnId: 'bookmark-default',
+			},
+		});
+		assert.equal(sameColumn.ok, false);
+		assert.equal(sameColumn.duplicate, true);
+		const otherColumn = await harness.send({
+			type: 'ADD_BOOKMARK',
+			bookmark: {
+				url: 'https://seen.example/',
+				title: 'Again',
+				columnId: 'column-reading',
+			},
+		});
+		assert.equal(otherColumn.ok, handling === 'allow');
+		const many = await harness.send({
+			type: 'ADD_BOOKMARKS',
+			bookmarks: [{url: 'https://seen.example/', title: 'Again'}],
+			columnId: 'column-reading',
+		});
+		assert.equal(many.ok, false);
+		assert.equal(many.duplicate, true);
+		// A link menu save of the same address into a third place reports the duplicate on the badge, never a tick.
+		await harness.click({
+			menuItemId: 'tablodge-link-bookmark:bookmark-default',
+			linkUrl: 'https://seen.example/',
+		});
+		assert.equal(markOf(harness).at(-1), '=');
+		assert.deepEqual(harness.warnings, []);
+	}
+});

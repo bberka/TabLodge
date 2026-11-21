@@ -9301,7 +9301,12 @@ test('saving is refused with a clear error when it would exceed 1000 sessions, a
 
 test('adding into a full session is refused for a move and for saving the current tab', async () => {
 	const state = reorderState();
-	state.groups[0] = {...state.groups[0], ...filler('A', 1000)};
+	// The default target is the most recently updated session, so make the full one that.
+	state.groups[0] = {
+		...state.groups[0],
+		...filler('A', 1000),
+		updatedAt: 9_999_999_999_999,
+	};
 	const harness = createWorkerHarness(state);
 	const moved = await harness.sendMessage({
 		type: 'MOVE_TAB',
