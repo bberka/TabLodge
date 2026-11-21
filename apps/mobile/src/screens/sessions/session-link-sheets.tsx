@@ -8,6 +8,7 @@ import {addTabsToSession, updateSessionTab} from '../../library/session-edits';
 import {extractUrl, extractUrls} from '../../library/store-shape';
 import {phoneStamp} from '../../platform/device';
 import {edit, editIn, newId} from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {saveMessage} from '../../../../extension/src/shared/save-feedback';
 import {bookmarkCount, counted, tabCount} from '../../library/save-outcome';
 import {showSnack} from '../../ui/snackbar';
@@ -223,7 +224,7 @@ export function EditLinkSheet({
 					disabled={!address}
 					onPress={() => {
 						if (target) {
-							void edit((current) =>
+							void editWithUndo(editDone('UPDATE_TAB'), (current) =>
 								updateSessionTab(
 									current,
 									target.session.id,
