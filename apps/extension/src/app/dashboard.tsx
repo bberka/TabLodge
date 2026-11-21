@@ -103,7 +103,6 @@ import type {
 	Settings,
 	TabLodgeState,
 } from '../shared/types';
-import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
 import {hostOf, webUrl} from '../shared/web-url';
 import {
@@ -172,6 +171,7 @@ import {
 import {
 	canOpenPrivateWindow,
 	openInPrivateWindow,
+	linkDestination,
 	openLink,
 	privateWindowFailure,
 	resolveLinkTarget,
@@ -1042,9 +1042,7 @@ export function SessionManager({
 		const opened: number[] = [];
 		try {
 			for (const tab of tabs) {
-				const destination = settings.removeTrackingParameters
-					? stripTrackingParameters(tab.url)
-					: tab.url;
+				const destination = linkDestination(tab.url, settings);
 				const created = await chrome.tabs.create({
 					url: destination,
 					active: false,
@@ -1083,9 +1081,7 @@ export function SessionManager({
 	async function copyTabLink(tab: SavedTabRecord) {
 		try {
 			await writeClipboard({
-				text: settings.removeTrackingParameters
-					? stripTrackingParameters(tab.url)
-					: tab.url,
+				text: linkDestination(tab.url, settings),
 				html: null,
 			});
 		} catch {
@@ -3911,11 +3907,7 @@ const SavedTab = memo(
 							<LinkPreview url={tab.url}>
 								<a
 									className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-									href={
-										settings.removeTrackingParameters
-											? stripTrackingParameters(tab.url)
-											: tab.url
-									}
+									href={linkDestination(tab.url, settings)}
 									target="_blank"
 									rel="noopener noreferrer"
 									title={previews ? undefined : urlOnly ? tab.url : label}
