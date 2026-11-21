@@ -22,7 +22,6 @@ import {
 	Save,
 	Square,
 	SquareCheck,
-	Tags,
 	Copy,
 	FolderPlus,
 	Inbox,
@@ -233,7 +232,6 @@ type BookmarkAction =
 	| 'open-new'
 	| 'open-private'
 	| 'edit'
-	| 'edit-tags'
 	| 'move'
 	| 'move-up'
 	| 'move-down'
@@ -255,10 +253,6 @@ type BookmarkDraft = {
 	notes?: string;
 	tags?: string[];
 	hiddenKinds?: Bookmark['hiddenKinds'];
-	/**
-	The editor was opened from Edit tags…, so it starts in the Tags field.
-	*/
-	focusTags?: boolean;
 	/**
 	The person changed the tags. Only then does a save send them, so tags that sync brought in while the editor was
 	open are not overwritten with the ones it opened with.
@@ -952,7 +946,6 @@ function NewTab() {
 	function openBookmarkEditor(
 		bookmark: Bookmark | null = null,
 		preferredColumn = defaultColumnId || NEW_COLUMN,
-		focusTags = false,
 	) {
 		// A bookmark left in the board's Unfiled area has no column to show, so it starts on the preferred one.
 		const own = columns.some((column) => column.id === bookmark?.columnId)
@@ -965,7 +958,6 @@ function NewTab() {
 			notes: bookmark?.notes ?? '',
 			tags: bookmark?.tags,
 			hiddenKinds: bookmark?.hiddenKinds,
-			focusTags,
 			columnId: own || preferredColumn,
 		});
 		setDialog('bookmark');
@@ -1748,8 +1740,8 @@ function NewTab() {
 			return;
 		}
 
-		if (action === 'edit' || action === 'edit-tags') {
-			openBookmarkEditor(bookmark, undefined, action === 'edit-tags');
+		if (action === 'edit') {
+			openBookmarkEditor(bookmark);
 			return;
 		}
 
@@ -3098,21 +3090,7 @@ function NewTab() {
 					open={dialog === 'bookmark'}
 					onOpenChange={(open) => !open && setDialog(null)}
 				>
-					<DialogContent
-						onOpenAutoFocus={(event) => {
-							// Edit tags… starts in the Tags field instead of the first one.
-							const tags = bookmarkEdit?.focusTags
-								? document.querySelector<HTMLInputElement>('#bookmark-tags')
-								: null;
-							// A field full of tags is disabled; then the dialog's own first field takes the focus.
-							if (!tags || tags.disabled) {
-								return;
-							}
-
-							event.preventDefault();
-							tags.focus();
-						}}
-					>
+					<DialogContent>
 						<form onSubmit={saveBookmark}>
 							<DialogHeader>
 								<DialogTitle>
@@ -4339,12 +4317,6 @@ const BookmarkCard = memo(
 				onSelect: act('select'),
 			},
 			edit,
-			{
-				id: 'edit-tags',
-				label: 'Edit tags…',
-				icon: Tags,
-				onSelect: act('edit-tags'),
-			},
 			{
 				id: 'move',
 				label: 'Move to',

@@ -136,14 +136,12 @@ export function TagsField({
 	onChange,
 	draft,
 	onDraftChange: setDraft,
-	autoFocus = false,
 }: {
 	url: string;
 	value: TagEdit;
 	onChange: (value: TagEdit) => void;
 	draft: string;
 	onDraftChange: (draft: string) => void;
-	autoFocus?: boolean;
 }) {
 	const colors = useColors();
 	const own = value.tags ?? [];
@@ -185,7 +183,6 @@ export function TagsField({
 			<Field
 				label="Tags (optional)"
 				icon="pricetag-outline"
-				autoFocus={autoFocus}
 				editable={!full}
 				placeholder={full ? `Up to ${MAX_TAGS} tags` : 'Add a tag'}
 				autoCapitalize="none"

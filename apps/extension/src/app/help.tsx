@@ -349,7 +349,7 @@ function Help() {
 				},
 				{
 					title: 'Tags',
-					body: 'Each bookmark shows its tags as small labels under its name. One tag comes from the address: movie (IMDb, Letterboxd), show, video (YouTube, Vimeo), music (Spotify, SoundCloud, Bandcamp), image, pdf, repo (GitHub, GitLab, Codeberg), read (Medium, Substack, dev.to), docs, discussion (Reddit, Hacker News, Stack Overflow, X, Bluesky), shop, or recipe. It is worked out on this device from the address alone, so nothing is fetched and older bookmarks get it too. Add your own in the Tags field when you add or edit a bookmark, or choose Edit tags… in a bookmark’s menu: type a tag and press Enter or a comma. Remove the automatic tag there with its × to keep it off that bookmark; Show automatic tag puts it back. Saving an edit that removes a tag shows Undo. The tag button next to the bookmark search lists every tag with how many bookmarks have it, and picking tags filters the board. Your own tags go into JSON, CSV, and browser bookmark exports (TAGS=) and full backups, come in from Raindrop, Pinboard, Linkwarden, Karakeep, wallabag, and browser files, and sync with the Android app through a sync server that supports tags.',
+					body: 'Each bookmark shows its tags as small labels under its name. One tag comes from the address: movie (IMDb, Letterboxd), show, video (YouTube, Vimeo), music (Spotify, SoundCloud, Bandcamp), image, pdf, repo (GitHub, GitLab, Codeberg), read (Medium, Substack, dev.to), docs, discussion (Reddit, Hacker News, Stack Overflow, X, Bluesky), shop, or recipe. It is worked out on this device from the address alone, so nothing is fetched and older bookmarks get it too. Add your own in the Tags field when you add or edit a bookmark: type a tag and press Enter or a comma. Remove the automatic tag there with its × to keep it off that bookmark; Show automatic tag puts it back. Saving an edit that removes a tag shows Undo. The tag button next to the bookmark search lists every tag with how many bookmarks have it, and picking tags filters the board. Your own tags go into JSON, CSV, and browser bookmark exports (TAGS=) and full backups, come in from Raindrop, Pinboard, Linkwarden, Karakeep, wallabag, and browser files, and sync with the Android app through a sync server that supports tags.',
 					searchText:
 						'tag tags label labels kind type automatic movie film show video music repo article read docs discussion shop recipe filter edit tags remove undo',
 				},
@@ -549,17 +549,18 @@ function Help() {
 							and the site can&apos;t use the save for its recommendations. To
 							save only on the site, remove the site from Sources. The notice in
 							the page offers Undo and Also save on the site, which passes the
-							same click on to the site; press Tab to reach them. Hold Shift as
-							you click to save on the site and in {PROJECT.name} once. If{' '}
-							{PROJECT.name} can&apos;t read which item you saved, or can&apos;t
-							save it, the click goes on to the site, so a save is never lost.
-							The site&apos;s own keyboard shortcuts still save there.{' '}
-							{PROJECT.name} blocks no network requests, hides nothing on the
-							site, and doesn&apos;t stop the site learning from anything else
-							you do there. Items you saved on the site before stay saved there.
-							Medium doesn&apos;t offer the choice: its bookmark button opens
-							Medium&apos;s Save to list panel, and the page doesn&apos;t say
-							whether the story is already in a list, so stopping the click
+							same click on to the site; press Tab to reach them. Notices stack
+							in the corner, up to three, and each keeps its own Undo. Hold
+							Shift as you click to save on the site and in {PROJECT.name} once.
+							If {PROJECT.name} can&apos;t read which item you saved, or
+							can&apos;t save it, the click goes on to the site, so a save is
+							never lost. The site&apos;s own keyboard shortcuts still save
+							there. {PROJECT.name} blocks no network requests, hides nothing on
+							the site, and doesn&apos;t stop the site learning from anything
+							else you do there. Items you saved on the site before stay saved
+							there. Medium doesn&apos;t offer the choice: its bookmark button
+							opens Medium&apos;s Save to list panel, and the page doesn&apos;t
+							say whether the story is already in a list, so stopping the click
 							would also stop you moving or removing it.
 						</>
 					),
