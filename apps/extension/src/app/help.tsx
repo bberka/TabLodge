@@ -254,7 +254,7 @@ function Help() {
 				},
 				{
 					title: 'Site icons',
-					body: 'With a sync server connected, a bookmark or saved tab whose site the browser has no icon for, such as an imported link, gets its icon from your server. The server fetches it, so the site never sees this browser, and the icon is kept on this device. Settings › Site icons is Through my server by default, like the Android app; choose Browser only to show just the browser’s own icons. Without a server nothing is asked.',
+					body: 'With a sync server connected, a bookmark or saved tab whose site the browser has no icon for, such as an imported link, gets its icon from your server. The server fetches it, so the site never sees this browser, and the icon is kept on this device. Settings › Site icons is Through my server by default; choose Browser only to show just the browser’s own icons. It is one setting with the Android app, where Browser only is Letter tiles only, and with Sync settings on a change here reaches your phone and your other browsers. Without a server nothing is asked.',
 					searchText:
 						'site icons favicon missing imported links letter tile globe sync server through my server browser only',
 				},
