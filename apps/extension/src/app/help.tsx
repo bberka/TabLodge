@@ -219,7 +219,7 @@ function Help() {
 			title: 'Restoring sessions',
 			icon: RotateCcw,
 			intro:
-				'Restore a whole session or open one saved tab. You can keep the original session and choose where tabs open.',
+				'Restore a whole session. You can keep the original session and choose where tabs open.',
 			keywords: [
 				'restore tabs',
 				'duplicate tabs',
@@ -306,10 +306,10 @@ function Help() {
 						'ctrl control command cmd meta click keep original session shift click new window',
 				},
 				{
-					title: 'Restore one tab or a split view',
-					body: 'For one tab, Settings chooses whether it becomes active or opens in the background. Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split. Firefox has no split view, so the pair opens as neighboring tabs.',
+					title: 'Split view',
+					body: 'Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split. Firefox has no split view, so the pair opens as neighboring tabs.',
 					searchText:
-						'single tab active background split view side by side chromium 155 separate neighboring tabs',
+						'split view side by side chromium 155 separate neighboring tabs',
 				},
 			],
 			action: {
@@ -349,7 +349,7 @@ function Help() {
 				},
 				{
 					title: 'Tags',
-					body: 'Each bookmark shows its tags as small labels under its name. One tag comes from the address: movie (IMDb, Letterboxd), show, video (YouTube, Vimeo), music (Spotify, SoundCloud, Bandcamp), image, pdf, repo (GitHub, GitLab, Codeberg), read (Medium, Substack, dev.to), docs, discussion (Reddit, Hacker News, Stack Overflow, X, Bluesky), shop, or recipe. It is worked out on this device from the address alone, so nothing is fetched and older bookmarks get it too. Add your own in the Tags field when you add or edit a bookmark, or choose Edit tags… in a bookmark’s menu: type a tag and press Enter or a comma. Remove the automatic tag there with its × to keep it off that bookmark; Show automatic tag puts it back. Saving an edit that removes a tag shows Undo. The tag button next to the bookmark search lists every tag with how many bookmarks have it, and picking tags filters the board. Your own tags go into JSON, CSV, and browser bookmark exports (TAGS=) and full backups, come in from Raindrop, Pinboard, Linkwarden, Karakeep, wallabag, and browser files, and sync with the Android app through a sync server that supports tags.',
+					body: 'Each bookmark shows its tags as small labels under its name. One tag comes from the address: movie (IMDb, Letterboxd), show, video (YouTube, Vimeo), music (Spotify, SoundCloud, Bandcamp), image, pdf, repo (GitHub, GitLab, Codeberg), read (Medium, Substack, dev.to), docs, discussion (Reddit, Hacker News, Stack Overflow, X, Bluesky), shop, or recipe. It is worked out on this device from the address alone, so nothing is fetched and older bookmarks get it too. Add your own in the Tags field when you add or edit a bookmark: type a tag and press Enter or a comma. Remove the automatic tag there with its × to keep it off that bookmark; Show automatic tag puts it back. Saving an edit that removes a tag shows Undo. The tag button next to the bookmark search lists every tag with how many bookmarks have it, and picking tags filters the board. Your own tags go into JSON, CSV, and browser bookmark exports (TAGS=) and full backups, come in from Raindrop, Pinboard, Linkwarden, Karakeep, wallabag, and browser files, and sync with the Android app through a sync server that supports tags.',
 					searchText:
 						'tag tags label labels kind type automatic movie film show video music repo article read docs discussion shop recipe filter edit tags remove undo',
 				},
