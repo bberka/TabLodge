@@ -58,6 +58,7 @@ export const RESETS = new Map<Row, Reset>([
 	[ROWS.markLocal, {synced: ['markLocalLinks']}],
 	[ROWS.spacing, {synced: ['bookmarkDensity'], on: isCompact}],
 	[ROWS.showAll, {synced: ['showAllBookmarks']}],
+	[ROWS.sortBookmarks, {synced: ['bookmarkSort']}],
 	[ROWS.openWith, {prefs: ['openWith']}],
 	[ROWS.openApp, {prefs: ['openApp']}],
 	[ROWS.privateOpenWith, {prefs: ['privateOpenWith']}],

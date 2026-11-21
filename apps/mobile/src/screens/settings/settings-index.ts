@@ -137,6 +137,10 @@ export const ROWS = {
 		hint: 'The first item, listing every bookmark. Shared with the extension',
 	},
 	sortSessions: {label: 'Sort sessions'},
+	sortBookmarks: {
+		label: 'Sort bookmarks',
+		hint: 'Only Manual order can be rearranged',
+	},
 	sessionName: {
 		label: 'Session name',
 		hint: 'How a new session is named. The name field on the save sheet wins when you type one',
@@ -270,6 +274,7 @@ export const SECTIONS = {
 			ROWS.showUnder,
 			ROWS.spacing,
 			ROWS.showAll,
+			ROWS.sortBookmarks,
 			ROWS.siteIcons,
 			ROWS.savePreview,
 		],

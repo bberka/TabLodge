@@ -82,10 +82,7 @@ export const LIBRARY_SETTINGS = {
 	stretchBookmarkColumns: ['platform', BOARD],
 	bookmarkColumnWidth: ['platform', BOARD],
 	bookmarkColumnsPerRow: ['platform', BOARD],
-	bookmarkSort: [
-		'platform',
-		'The phone shows the stored order until it has a sort of its own (#440).',
-	],
+	bookmarkSort: ['all', BOTH],
 	bookmarkDensity: ['all', BOTH],
 	limitBookmarksPerColumn: [
 		'platform',
