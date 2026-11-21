@@ -700,7 +700,7 @@ export async function duplicateBookmarksCheck(env: Env, theme: Theme) {
 			await page.reload();
 			await setTheme(page, theme);
 			const trigger = page.getByRole('button', {
-				name: 'Import, back up and share bookmarks',
+				name: 'Dashboard menu',
 			});
 			await openMenuItemByKeyboard(page, trigger, 'Find duplicate bookmarks');
 			const dialog = page.getByRole('dialog', {
@@ -728,8 +728,8 @@ export async function duplicateBookmarksCheck(env: Env, theme: Theme) {
 			await until(
 				async () =>
 					(await page.locator(':focus').getAttribute('aria-label')) ===
-					'Import, back up and share bookmarks',
-				'focus returns to the bookmark menu button',
+					'Dashboard menu',
+				'focus returns to the dashboard menu button',
 			);
 			await openMenuItemByKeyboard(page, trigger, 'Find duplicate bookmarks');
 			await dialog.waitFor();

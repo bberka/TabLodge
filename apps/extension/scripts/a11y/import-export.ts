@@ -341,12 +341,8 @@ export async function importScrollingCheck(env: Env, theme: Theme) {
 		await page.reload();
 		await setTheme(page, theme);
 		await page.setViewportSize({width: 1440, height: 900});
-		await page
-			.getByRole('button', {name: 'Import, back up and share bookmarks'})
-			.click();
-		await page
-			.getByRole('menuitem', {name: 'Import bookmarks', exact: true})
-			.click();
+		await page.getByRole('button', {name: 'Dashboard menu'}).click();
+		await page.getByRole('menuitem', {name: 'Import', exact: true}).click();
 		await page.locator('input[type="file"]').setInputFiles({
 			name: 'bookmarks.txt',
 			mimeType: 'text/plain',
@@ -501,12 +497,8 @@ export async function importNewColumnCheck(env: Env, theme: Theme) {
 		await setTheme(page, theme);
 		const name = `Imported ${theme}`;
 		for (const save of [false, true]) {
-			await page
-				.getByRole('button', {name: 'Import, back up and share bookmarks'})
-				.click();
-			await page
-				.getByRole('menuitem', {name: 'Import bookmarks', exact: true})
-				.click();
+			await page.getByRole('button', {name: 'Dashboard menu'}).click();
+			await page.getByRole('menuitem', {name: 'Import', exact: true}).click();
 			await page.locator('input[type="file"]').setInputFiles({
 				name: 'links.txt',
 				mimeType: 'text/plain',
@@ -697,13 +689,9 @@ export async function browserBookmarksImportCheck(env: Env, theme: Theme) {
 				await seed(page);
 				await page.reload();
 				await setTheme(page, theme);
+				await page.getByRole('button', {name: 'Dashboard menu'}).press('Enter');
 				await page
-					.getByRole('button', {
-						name: 'Import, back up and share bookmarks',
-					})
-					.press('Enter');
-				await page
-					.getByRole('menuitem', {name: 'Import bookmarks', exact: true})
+					.getByRole('menuitem', {name: 'Import', exact: true})
 					.press('Enter');
 				await page
 					.getByRole('button', {name: 'Read bookmarks', exact: true})

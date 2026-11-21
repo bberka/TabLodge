@@ -229,7 +229,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'showTrashBinButton',
 				label: 'Show Trash bin button in the header',
-				help: 'Hide this shortcut to keep the header compact. The Trash bin remains in the Sessions menu, Bookmarks menu, side panel, and search palette.',
+				help: 'Hide this shortcut to keep the header compact. The Trash bin remains in the dashboard menu, side panel, and search palette.',
 				type: 'switch',
 			},
 			{

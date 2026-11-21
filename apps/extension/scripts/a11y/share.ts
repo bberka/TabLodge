@@ -249,7 +249,7 @@ export async function sharePreviewCheck(env: Env) {
 export async function shareAllSessionsCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
 	await check(
-		`share all sessions from the Sessions menu (${theme})`,
+		`share all sessions from the dashboard menu (${theme})`,
 		async () => {
 			const page = await openPage(context, extensionId, 'newtab');
 			await setTheme(page, theme);
@@ -262,11 +262,15 @@ export async function shareAllSessionsCheck(env: Env, theme: Theme) {
 			const groupsLabel =
 				currentSessions.groups.length === 1 ? 'group' : 'groups';
 			const trigger = page.getByRole('button', {
-				name: 'Import and back up sessions',
+				name: 'Dashboard menu',
 			});
-			await openMenuItemByKeyboard(page, trigger, 'Share and export sessions');
+			await openMenuItemByKeyboard(page, trigger, 'Share and export');
 			const dialog = page.getByRole('dialog');
 			await dialog.waitFor();
+			if (currentSessions.bookmarks.length > 0) {
+				await pick(page, dialog, 'What to share', /^All sessions/);
+			}
+
 			await dialog
 				.getByText(
 					`${linkCount} ${linksLabel} in ${currentSessions.groups.length} ${groupsLabel}`,
