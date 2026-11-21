@@ -863,11 +863,27 @@ export function createLibraryState(
 		});
 	}
 
+	async function dropGarbage(): Promise<void> {
+		const current = await getOne(STATE_KEY);
+		if (!isRecordsEntry(current)) {
+			return;
+		}
+
+		const {garbage} = parseIndex(current);
+		if (garbage.length === 0) {
+			return;
+		}
+
+		await removeKeys(garbage);
+		await backend.set({[STATE_KEY]: {...current, garbage: []}});
+	}
+
 	return {
 		read,
 		readMeta,
 		write,
 		remove,
+		dropGarbage,
 		verify,
 		migrate,
 		pruneRecoveryCopy,

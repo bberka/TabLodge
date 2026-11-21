@@ -5,6 +5,7 @@ import {
 	FileDown,
 	FileText,
 	FolderInput,
+	FolderLock,
 	History,
 	Pencil,
 	Trash2,
@@ -25,4 +26,5 @@ export const ACTION_ICONS = {
 	edit: Pencil,
 	remove: Trash2,
 	move: FolderInput,
+	sendPrivate: FolderLock,
 } as const;

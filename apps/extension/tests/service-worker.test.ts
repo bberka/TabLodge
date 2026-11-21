@@ -15256,3 +15256,293 @@ test('a reel saved from its own page is not missing from the Instagram saved pag
 		{ok: true, missing: 0, ask: false},
 	);
 });
+
+const INBOX_KEY = 'tablodge.sendprivate.key';
+const INBOX_ENTRY = 'tablodge.sendprivate.entry.';
+const SENT_URL = 'https://saved.example/article';
+const inboxEntries = (storage: Record<string, unknown>) =>
+	Object.keys(storage).filter((key) => key.startsWith(INBOX_ENTRY));
+const sendSavedTab = (harness: ReturnType<typeof createWorkerHarness>) =>
+	harness.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: [{kind: 'tab', sessionId: 'session-1', tabId: 'saved-tab-1'}],
+	});
+
+async function lockedPrivateLibrary({storage, ...extra}: HarnessOptions = {}) {
+	const privateWorker = await plainPrivateLibrary(extra, storage);
+	assert.equal((await enableLock(privateWorker)).ok, true);
+	await eventually(() => privateWorker.extraStorage[INBOX_KEY] !== undefined);
+	assert.equal(typeof privateWorker.extraStorage[INBOX_KEY], 'string');
+	return privateWorker;
+}
+
+function regularBeside(
+	privateWorker: ReturnType<typeof createWorkerHarness>,
+	extra: HarnessOptions = {},
+) {
+	const shared = structuredClone(privateWorker.extraStorage);
+	for (const key of Object.keys(shared)) {
+		if (
+			key.startsWith('tablodge.') &&
+			!key.startsWith(PRIVATE_PREFIX) &&
+			key !== INBOX_KEY
+		) {
+			Reflect.deleteProperty(shared, key);
+		}
+	}
+
+	return createWorkerHarness(stateWithSession(), undefined, {
+		...extra,
+		storage: {...shared, ...extra.storage},
+	});
+}
+
+test('Send to private storage is offered only when private windows use a separate saved library', async () => {
+	for (const config of [
+		undefined,
+		{mode: 'shared', configured: true},
+		{mode: 'temporary', configured: true},
+		{mode: 'saved', configured: false},
+	]) {
+		const regular = createWorkerHarness(stateWithSession(), undefined, {
+			storage: config ? {'tablodge.private.config': config} : {},
+		});
+		const state = await regular.sendMessage({type: 'SEND_TO_PRIVATE_STATE'});
+		assert.equal(state.state, 'hidden', JSON.stringify(config));
+		assert.equal((await sendSavedTab(regular)).ok, false);
+		assert.equal(regular.state.groups[0]?.tabs.length, 1);
+	}
+
+	const notYet = createWorkerHarness(stateWithSession(), undefined, {
+		storage: {'tablodge.private.config': {mode: 'saved', configured: true}},
+	});
+	assert.equal(
+		(await notYet.sendMessage({type: 'SEND_TO_PRIVATE_STATE'})).state,
+		'needs-private-window',
+	);
+	const refused = await sendSavedTab(notYet);
+	assert.equal(refused.ok, false);
+	assert.match(String(refused.error), /private window/);
+	assert.equal(notYet.state.groups[0]?.tabs.length, 1);
+
+	const privateWorker = await lockedPrivateLibrary();
+	assert.equal(
+		(await privateWorker.sendMessage({type: 'SEND_TO_PRIVATE_STATE'})).state,
+		'hidden',
+	);
+	assert.equal(
+		(
+			await regularBeside(privateWorker).sendMessage({
+				type: 'SEND_TO_PRIVATE_STATE',
+			})
+		).state,
+		'ready',
+	);
+});
+
+test('a link sent from a regular window leaves no readable copy behind and arrives when the private library unlocks', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	const sent = await sendSavedTab(regular);
+	assert.equal(sent.ok, true, sent.error);
+	assert.equal(sent.count, 1);
+	assert.ok(sent.undoId);
+	assert.equal(regular.state.groups.length, 0, 'the emptied session went');
+	assert.equal(trashOf(regular).length, 0, 'the trash syncs, so it is skipped');
+	assert.equal(inboxEntries(regular.extraStorage).length, 1);
+
+	assert.equal(
+		(await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)}))
+			.ok,
+		true,
+	);
+	assert.equal(regular.extraStorage['tablodge.undo'], undefined);
+	const stored = JSON.stringify(regular.extraStorage);
+	assert.equal(stored.includes('saved.example'), false);
+	assert.equal(stored.includes('Saved page'), false);
+	assert.equal(
+		(await regular.sendMessage({type: 'UNDO', id: String(sent.undoId)})).ok,
+		false,
+	);
+
+	const locked = restartPrivate(
+		{...privateWorker, extraStorage: regular.extraStorage},
+		{browserRestart: true},
+	);
+	await settle();
+	assert.equal((await locked.sendMessage({type: 'GET_STATE'})).locked, true);
+	assert.equal(inboxEntries(locked.extraStorage).length, 1);
+
+	const unlocked = await locked.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(unlocked.ok, true, unlocked.error);
+	assert.equal(inboxEntries(locked.extraStorage).length, 0);
+	const library = await locked.sendMessage({type: 'GET_STATE'});
+	const column = library.bookmarkColumns?.find(
+		(entry) => entry.id === 'sent-from-regular-windows',
+	);
+	assert.equal(column?.name, 'Sent from regular windows');
+	assert.deepEqual(
+		structuredClone(
+			library.bookmarks
+				?.filter((bookmark) => bookmark.columnId === column?.id)
+				.map((bookmark) => [bookmark.title, bookmark.url]),
+		),
+		[['Saved page', SENT_URL]],
+	);
+	assert.equal(
+		JSON.stringify(locked.extraStorage).includes('saved.example'),
+		false,
+		'the private library holds it sealed',
+	);
+});
+
+test('Undo of a send brings the link back and withdraws the sealed entry', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	const sent = await sendSavedTab(regular);
+	assert.equal(sent.ok, true, sent.error);
+	const undone = await regular.sendMessage({
+		type: 'UNDO',
+		id: String(sent.undoId),
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(regular.state.groups[0]?.tabs[0]?.url, SENT_URL);
+	assert.equal(inboxEntries(regular.extraStorage).length, 0);
+});
+
+test('an unlocked private library waits for the Undo toast before taking a sent link in', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	const sent = await sendSavedTab(regular);
+	assert.equal(sent.ok, true, sent.error);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const live = restartPrivate({
+		...privateWorker,
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: regular.extraStorage[entry],
+		},
+	});
+	await eventually(() =>
+		live.alarmCalls.some((call) =>
+			call.startsWith('create:tablodge-send-to-private'),
+		),
+	);
+	assert.equal(
+		inboxEntries(live.extraStorage).length,
+		1,
+		'still held for Undo',
+	);
+
+	await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)});
+	const released = restartPrivate({
+		...live,
+		extraStorage: {...live.extraStorage, [entry]: regular.extraStorage[entry]},
+	});
+	await eventually(() => inboxEntries(released.extraStorage).length === 0);
+	assert.equal(inboxEntries(released.extraStorage).length, 0);
+	const library = await released.sendMessage({type: 'GET_STATE'});
+	assert.ok(library.bookmarks?.some((bookmark) => bookmark.url === SENT_URL));
+});
+
+test('a sent link reaches the regular server only as a delete and the private server only sealed', async () => {
+	const server = syncServer();
+	const privateWorker = await lockedPrivateLibrary({
+		fetch: server.fetch,
+		storage: regularSync,
+	});
+	const privateOn = await privateWorker.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	assert.equal(privateOn.ok, true, privateOn.error);
+
+	const regular = regularBeside(privateWorker, {
+		fetch: server.fetch,
+		storage: regularSync,
+	});
+	assert.equal((await regular.sendMessage({type: 'SYNC_NOW'})).ok, true);
+	const pushedBefore = server.log.cursor;
+	const sent = await sendSavedTab(regular);
+	assert.equal(sent.ok, true, sent.error);
+	await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)});
+	assert.equal((await regular.sendMessage({type: 'SYNC_NOW'})).ok, true);
+	const page = server.log.pull(pushedBefore, 1000);
+	const after = page.resync ? [] : page.changes;
+	assert.ok(after.some((change) => change.deleted));
+	assert.equal(JSON.stringify(after).includes('saved.example'), false);
+
+	const [entry] = inboxEntries(regular.extraStorage);
+	const receiving = restartPrivate(
+		{
+			...privateWorker,
+			extraStorage: {
+				...privateWorker.extraStorage,
+				[entry]: regular.extraStorage[entry],
+			},
+		},
+		{browserRestart: true},
+		{fetch: server.fetch},
+	);
+	const unlocked = await receiving.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(unlocked.ok, true, unlocked.error);
+	await receiving.sendMessage({type: 'SYNC_NOW'});
+	const privateValuesNow = privateValues(server.privateLog);
+	assert.ok(privateValuesNow.length > 0);
+	assert.ok(privateValuesNow.every((value) => isSealedValue(value)));
+	assert.equal(
+		JSON.stringify(privateValuesNow).includes('saved.example'),
+		false,
+	);
+
+	const other = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	assert.equal((await enableLock(other)).ok, true);
+	assert.equal(
+		(
+			await other.sendMessage({
+				type: 'PRIVATE_SYNC_ENABLE',
+				credential: lockPassword,
+			})
+		).ok,
+		true,
+	);
+	const otherLibrary = await other.sendMessage({type: 'GET_STATE'});
+	assert.ok(
+		otherLibrary.bookmarks?.some(
+			(bookmark) =>
+				bookmark.url === SENT_URL &&
+				bookmark.columnId === 'sent-from-regular-windows',
+		),
+	);
+});
+
+test('erasing the private library removes its public key and every sealed entry', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const erasing = restartPrivate({
+		...privateWorker,
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: regular.extraStorage[entry],
+		},
+	});
+	const erased = await erasing.sendMessage({type: 'RESET_PRIVATE_LIBRARY'});
+	assert.equal(erased.ok, true, erased.error);
+	assert.equal(erasing.extraStorage[INBOX_KEY], undefined);
+	assert.equal(inboxEntries(erasing.extraStorage).length, 0);
+});

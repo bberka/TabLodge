@@ -532,6 +532,7 @@ export type Status = {
 export type StatusAction = {
 	label: string;
 	onClick: () => void | Promise<void>;
+	onClose?: () => void;
 };
 export type StatusOptions = {
 	/**
@@ -767,6 +768,10 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 		}
 	}, [shown]);
 	const undoAction = shown ? visible?.action : undefined;
+	useEffect(() => {
+		const onClose = undoAction?.onClose;
+		return onClose ? () => onClose() : undefined;
+	}, [undoAction]);
 	useEffect(() => {
 		if (!undoAction) {
 			return undefined;

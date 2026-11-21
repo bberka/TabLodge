@@ -6,6 +6,7 @@ import type {SharedPage} from './sync/shared-pages-client';
 import type {PageCopy} from './page-copy';
 import type {LinkKind} from './link-kind';
 import type {ToastDuration, ToastPosition} from './toast-prefs';
+import type {SendTarget} from './send-to-private';
 
 export type ActionMode =
 	| 'popup'
@@ -959,6 +960,9 @@ export type TabLodgeMessages = {
 	Puts back what an action with an `undoId` changed, if that was under two minutes ago and nothing else has changed that data since.
 	*/
 	UNDO: {id: string};
+	DROP_UNDO: {id: string};
+	SEND_TO_PRIVATE: {targets: SendTarget[]};
+	SEND_TO_PRIVATE_STATE: {};
 	GET_STORAGE_USAGE: {};
 	SYNC_STATUS: {};
 	/**
@@ -1164,6 +1168,8 @@ export type BrowserBookmarkImportResult = {
 `undoId`: set when the action can be undone with `UNDO` for a short while.
 */
 type Undoable = {undoId?: string};
+
+export type SendToPrivateState = 'hidden' | 'needs-private-window' | 'ready';
 
 /**
 `revoked`: the browser took the site's permission away, so the source went off in this browser. `unreadable`: the user saved
@@ -1409,6 +1415,9 @@ export type TabLodgeResponses = {
 	DELETE_TRASH: Undoable;
 	EMPTY_TRASH: {count: number} & Undoable;
 	UNDO: {label: string};
+	DROP_UNDO: {};
+	SEND_TO_PRIVATE: {count: number} & Undoable;
+	SEND_TO_PRIVATE_STATE: {state: SendToPrivateState};
 	GET_STORAGE_USAGE: {usage: StorageUsage};
 	SYNC_STATUS: {status: SyncStatus};
 	SYNC_CONNECT: {status: SyncStatus};
