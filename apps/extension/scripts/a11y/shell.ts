@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {fromRoot} from '../vite-shared.ts';
 import {check, type Env, type Theme, until} from './harness.ts';
-import {focusedLabel, openPage, setTheme} from './pages.ts';
+import {
+	focusedLabel,
+	openMenuItemByKeyboard,
+	openPage,
+	setTheme,
+} from './pages.ts';
 
 export async function narrowHeaderCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
@@ -11,7 +16,48 @@ export async function narrowHeaderCheck(env: Env, theme: Theme) {
 		async () => {
 			const page = await openPage(context, extensionId, 'newtab');
 			await setTheme(page, theme);
-			for (const width of [320, 480]) {
+			assert.equal(
+				await page
+					.getByRole('button', {name: 'Import and back up sessions'})
+					.count(),
+				0,
+				'sessions section has no three-dot menu',
+			);
+			assert.equal(
+				await page
+					.getByRole('button', {name: 'Import, back up and share bookmarks'})
+					.count(),
+				0,
+				'bookmarks section has no three-dot menu',
+			);
+			const menuTrigger = page.getByRole('button', {
+				name: 'Dashboard menu',
+				exact: true,
+			});
+			assert.equal(
+				await menuTrigger.count(),
+				1,
+				'dashboard has one top bar menu',
+			);
+			for (const item of [
+				'Import',
+				'Share and export',
+				'Shared pages',
+				'Find duplicate bookmarks',
+				'Trash bin',
+			]) {
+				await openMenuItemByKeyboard(page, menuTrigger, item);
+				const dialog = page.getByRole('dialog');
+				await dialog.waitFor();
+				await page.keyboard.press('Escape');
+				await dialog.waitFor({state: 'hidden'});
+				await until(
+					async () => (await focusedLabel(page)) === 'Dashboard menu',
+					`focus returns to Dashboard menu after closing ${item}`,
+				);
+			}
+
+			for (const width of [320, 440, 480]) {
 				await page.setViewportSize({width, height: 900});
 				await mkdir(fromRoot('.dev/evidence'), {recursive: true});
 				await page.screenshot({

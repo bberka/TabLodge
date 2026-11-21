@@ -266,7 +266,7 @@ function Help() {
 				},
 				{
 					title: 'Share a page by link',
-					body: 'With a sync server connected, Share › HTML page also offers Get a link. Your server keeps the page and gives it a link with random characters that cannot be guessed; the link is copied. Anyone who has the link can open the page, so send it only to people you mean to. The page shows the date, a list of its columns or sessions to jump to, and an Add to TabLodge button for people who use TabLodge. To update the page, share again: each upload makes a new link. A column’s or session’s Share lists the links made from it, and Shared pages in the Bookmarks and Sessions menus (and Settings › Sync) lists every page on the server; Delete asks, then takes the page down so the link stops working. Private windows never upload. An older server does not offer it; update the server first. On Cloudflare’s free plan, page views count against the same daily limit as sync.',
+					body: 'With a sync server connected, Share › HTML page also offers Get a link. Your server keeps the page and gives it a link with random characters that cannot be guessed; the link is copied. Anyone who has the link can open the page, so send it only to people you mean to. The page shows the date, a list of its columns or sessions to jump to, and an Add to TabLodge button for people who use TabLodge. To update the page, share again: each upload makes a new link. A column’s or session’s Share lists the links made from it, and Shared pages in the dashboard menu (and Settings › Sync) lists every page on the server; Delete asks, then takes the page down so the link stops working. Private windows never upload. An older server does not offer it; update the server first. On Cloudflare’s free plan, page views count against the same daily limit as sync.',
 					searchText:
 						'share link upload server publish public web page html page shared pages delete copy link url get a link',
 				},
@@ -411,16 +411,16 @@ function Help() {
 					title: 'Find duplicate bookmarks',
 					body: (
 						<>
-							Use the <MenuLocation label="Bookmarks toolbar" /> and choose Find
-							duplicate bookmarks to list web addresses saved more than once on
-							the board, in any column. Each address shows its copies and the
-							column each is in. The oldest copy is kept unless you choose
-							another. Remove extra copies moves the rest to the trash bin, and
-							Undo restores them. Nothing is removed until you choose it.
-							Sessions are not checked, because the same address in two sessions
-							is normal. Share and export and Find duplicate bookmarks are
-							greyed out while there are no bookmarks, and Share and export is
-							greyed out on the dashboard while there are no sessions.
+							Use the <MenuLocation label="Dashboard" /> at the top of the page
+							and choose Find duplicate bookmarks to list web addresses saved
+							more than once on the board, in any column. Each address shows its
+							copies and the column each is in. The oldest copy is kept unless
+							you choose another. Remove extra copies moves the rest to the
+							trash bin, and Undo restores them. Nothing is removed until you
+							choose it. Sessions are not checked, because the same address in
+							two sessions is normal. Find duplicate bookmarks is greyed out
+							while there are no bookmarks, and Share and export is greyed out
+							while there are no bookmarks or sessions.
 						</>
 					),
 					searchText:
@@ -430,15 +430,15 @@ function Help() {
 					title: 'Import or export bookmarks',
 					body: (
 						<>
-							On the dashboard, use the{' '}
-							<MenuLocation label="Bookmarks toolbar" /> to import a file or
-							your browser bookmarks, or to share and export bookmarks. Import
-							reads JSON, browser bookmark HTML, CSV, Markdown, and plain URL
-							lists, and lets you skip or add duplicates again. With Columns
-							from folders, bookmark folders become columns; folders with the
-							same name merge, and links without a folder go in the first
-							column. One column puts every link in a column you choose. Use a
-							column’s menu to export that column or all bookmarks.
+							On the dashboard, use the <MenuLocation label="Dashboard" /> at
+							the top of the page to import a file or your browser bookmarks, or
+							to share and export bookmarks. Import reads JSON, browser bookmark
+							HTML, CSV, Markdown, and plain URL lists, and lets you skip or add
+							duplicates again. With Columns from folders, bookmark folders
+							become columns; folders with the same name merge, and links
+							without a folder go in the first column. One column puts every
+							link in a column you choose. Use a column’s menu to export that
+							column or all bookmarks.
 						</>
 					),
 					searchText:
@@ -907,10 +907,11 @@ function Help() {
 					title: 'Export or import data',
 					body: (
 						<>
-							Session import and export are in the{' '}
-							<MenuLocation label="Sessions" />. It can also share all sessions,
-							including archived sessions. Session import also reads exports
-							from OneTab, Session Buddy, Tab Session Manager, and Toby.
+							Import and Share and export live in the{' '}
+							<MenuLocation label="Dashboard" /> at the top of the page. Share
+							and export lets you pick all bookmarks, all sessions (including
+							archived sessions), or everything. Session import also reads
+							exports from OneTab, Session Buddy, Tab Session Manager, and Toby.
 							Bookmark import also reads a Raindrop.io export (CSV or HTML): its
 							collections become columns, its tags come along, and its
 							highlights are not imported. It also reads the JSON exports of
@@ -923,10 +924,8 @@ function Help() {
 							Pinboard becomes its bookmark note, and tags from Linkwarden,
 							Karakeep, wallabag, and Pinboard come along. The bookmarks HTML
 							exports of Karakeep and Pinboard import as browser bookmark files.
-							A session menu can export just that session in any format.
-							Bookmark import and export are in the{' '}
-							<MenuLocation label="Bookmarks toolbar" />. Both menus have Share
-							and export, where one dropdown picks what to share and another
+							A session menu can export just that session in any format. In
+							Share and export, one dropdown picks what to share and another
 							picks the format, with Download and, for pages, Markdown, and
 							plain links, Copy. Its Everything choice makes a full ZIP backup
 							with settings, excluded sites, theme, snapshots, and the trash
@@ -986,19 +985,18 @@ function Help() {
 							trash until their retention period ends. Settings controls how
 							long. With sync turned on, the trash is shared with your other
 							devices, so you can restore on one what you deleted on another. On
-							the dashboard, open it from the Sessions menu, or turn on Show
-							Trash bin button in the header in Settings › Dashboard. You can
-							also open the bin from the{' '}
-							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
-							the side panel header, or the search palette. Dashboard deletes,
-							imports, actions that open many tabs, and closing duplicate tabs
-							also offer Undo for a few seconds. Settings › Dashboard has Toast
-							position, which moves these messages (and the notice Sources shows
-							on a site, and the one after Save quote) to a corner or the top,
-							and Messages stay, which makes them last twice as long or until
-							you close them. Settings › Recovery &amp; backups has a Trash bin
-							button too, and Empty trash bin at the bottom of the bin deletes
-							everything in it for good.
+							the dashboard, open it from the <MenuLocation label="Dashboard" />{' '}
+							at the top of the page, or turn on Show Trash bin button in the
+							header in Settings › Dashboard. You can also open the bin from the
+							Trash bin icon in the side panel header or the search palette.
+							Dashboard deletes, imports, actions that open many tabs, and
+							closing duplicate tabs also offer Undo for a few seconds. Settings
+							› Dashboard has Toast position, which moves these messages (and
+							the notice Sources shows on a site, and the one after Save quote)
+							to a corner or the top, and Messages stay, which makes them last
+							twice as long or until you close them. Settings › Recovery &amp;
+							backups has a Trash bin button too, and Empty trash bin at the
+							bottom of the bin deletes everything in it for good.
 						</>
 					),
 					searchText:

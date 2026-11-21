@@ -25,7 +25,6 @@ import {
 	History,
 	LayoutGrid,
 	ListPlus,
-	MoreHorizontal,
 	MoreVertical,
 	PanelLeft,
 	PanelTop,
@@ -44,7 +43,6 @@ import {
 	Upload,
 	X,
 	type LucideIcon,
-	Link2,
 } from 'lucide-react';
 import {
 	Badge,
@@ -57,11 +55,6 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
 	ExpandingSearch,
 	Input,
 	IconTooltip,
@@ -135,7 +128,7 @@ import {
 } from './common';
 import {claimUndo} from './message-client';
 import {defaultBookmarkColumnId} from './default-column';
-import {ImportDialog, SharedPagesDialog, useShareDialog} from './lazy-dialogs';
+import {ImportDialog, useShareDialog} from './lazy-dialogs';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
@@ -396,7 +389,6 @@ export function SessionManager({
 	const [, setBusy] = useState('');
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
-	const [sharedPagesOpen, setSharedPagesOpen] = useState(false);
 	const dragItemRef = useRef<DragItem | null>(null);
 	// Drag state lives outside React state: only the cards a drag touches re-render, not the whole list.
 	const [dragStore] = useState(() => new DragStore());
@@ -1846,52 +1838,6 @@ export function SessionManager({
 								</Button>
 							</IconTooltip>
 						)}
-						<DropdownMenu>
-							<IconTooltip label="Import and back up sessions">
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8"
-										aria-label="Import and back up sessions"
-									>
-										<MoreHorizontal />
-									</Button>
-								</DropdownMenuTrigger>
-							</IconTooltip>
-							<DropdownMenuContent align="end">
-								<DropdownMenuItem onSelect={() => setImportOpen(true)}>
-									<Upload className="h-4 w-4" />
-									Import sessions
-								</DropdownMenuItem>
-								<DropdownMenuItem
-									disabled={groups.length === 0}
-									onSelect={() =>
-										openShare({
-											title: 'Shared sessions',
-											sources: [allSessionsSource()],
-											backup: true,
-										})
-									}
-								>
-									<Share2 className="h-4 w-4" />
-									Share and export sessions
-								</DropdownMenuItem>
-								<DropdownMenuItem onSelect={() => setSharedPagesOpen(true)}>
-									<Link2 className="h-4 w-4" />
-									Shared pages
-								</DropdownMenuItem>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem
-									onSelect={() =>
-										emitRecoveryEvent({type: 'trash', filter: 'sessions'})
-									}
-								>
-									<Trash2 className="h-4 w-4" />
-									Trash bin
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
 					</div>
 				</div>
 
@@ -2374,11 +2320,6 @@ export function SessionManager({
 			<StatusLine status={status} />
 
 			{shareDialog}
-			<SharedPagesDialog
-				open={sharedPagesOpen}
-				showStatus={showStatus}
-				onOpenChange={setSharedPagesOpen}
-			/>
 			<TargetPickerDialog
 				request={targetPicker}
 				onClose={() => setTargetPicker(null)}

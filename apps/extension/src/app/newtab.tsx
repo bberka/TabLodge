@@ -56,6 +56,11 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
 	Input,
 	Label,
 	RadioCard,
@@ -2085,15 +2090,27 @@ function NewTab() {
 		shareBookmarks();
 	}
 
-	function shareBookmarks(column?: BookmarkColumnData) {
-		const groupFor = (entry: BookmarkColumnData | ColumnRef) => ({
+	function bookmarkShareGroup(entry: BookmarkColumnData | ColumnRef) {
+		return {
 			name: entry.name,
 			tabs: bookmarks.filter((bookmark) => bookmark.columnId === entry.id),
-		});
-		const everything = [
-			...columns.map((entry) => groupFor(entry)),
-			groupFor(UNFILED_COLUMN),
-		].filter((group) => group.tabs.length > 0);
+		};
+	}
+
+	function allBookmarksSource(id: string) {
+		return {
+			id,
+			label: 'All bookmarks',
+			pageTitle: 'Shared bookmarks',
+			groups: [
+				...columns.map((entry) => bookmarkShareGroup(entry)),
+				bookmarkShareGroup(UNFILED_COLUMN),
+			].filter((group) => group.tabs.length > 0),
+			data: {kind: 'bookmarks' as const, columns, bookmarks},
+		};
+	}
+
+	function shareBookmarks(column?: BookmarkColumnData) {
 		openShare({
 			title: column ? column.name : 'Shared bookmarks',
 			sources: [
@@ -2104,7 +2121,7 @@ function NewTab() {
 								label: 'Selected column',
 								description: column.name,
 								pageSource: sharedPageSource('column', column.id),
-								groups: [groupFor(column)],
+								groups: [bookmarkShareGroup(column)],
 								data: {
 									kind: 'bookmarks' as const,
 									columns: [column],
@@ -2115,13 +2132,30 @@ function NewTab() {
 							},
 						]
 					: []),
-				{
-					id: 'all',
-					label: 'All bookmarks',
-					pageTitle: 'Shared bookmarks',
-					groups: everything,
-					data: {kind: 'bookmarks', columns, bookmarks},
-				},
+				allBookmarksSource('all'),
+			],
+			backup: true,
+		});
+	}
+
+	function shareLibrary() {
+		const sessions = state?.groups ?? [];
+		const folders = state?.folders ?? [];
+		openShare({
+			title: 'Shared links',
+			sources: [
+				...(bookmarks.length > 0 ? [allBookmarksSource('bookmarks')] : []),
+				...(sessions.length > 0
+					? [
+							{
+								id: 'sessions',
+								label: 'All sessions',
+								pageTitle: 'Shared sessions',
+								groups: sessions,
+								data: {kind: 'sessions' as const, groups: sessions, folders},
+							},
+						]
+					: []),
 			],
 			backup: true,
 		});
@@ -2595,54 +2629,6 @@ function NewTab() {
 							<Plus />
 						</Button>
 					</IconTooltip>
-					<ActionDropdownMenu
-						trigger={
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8"
-								aria-label="Import, back up and share bookmarks"
-							>
-								<MoreHorizontal />
-							</Button>
-						}
-						actions={[
-							{
-								id: 'import',
-								label: 'Import bookmarks',
-								icon: Upload,
-								onSelect: () => setImportOpen(true),
-							},
-							{
-								id: 'share',
-								label: 'Share and export bookmarks',
-								icon: Share2,
-								disabled: bookmarks.length === 0,
-								onSelect: () => shareBookmarks(),
-							},
-							{
-								id: 'shared-pages',
-								label: 'Shared pages',
-								icon: Link2,
-								onSelect: () => setSharedPagesOpen(true),
-							},
-							{type: 'separator'},
-							{
-								id: 'duplicates',
-								label: 'Find duplicate bookmarks',
-								icon: Copy,
-								disabled: bookmarks.length === 0,
-								onSelect: () => setDuplicatesOpen(true),
-							},
-							{
-								id: 'trash',
-								label: 'Trash bin',
-								icon: Trash2,
-								onSelect: () =>
-									emitRecoveryEvent({type: 'trash', filter: 'bookmarks'}),
-							},
-						]}
-					/>
 				</div>
 			</div>
 			{selectedBookmarkIds.length > 0 && (
@@ -3127,6 +3113,56 @@ function NewTab() {
 							</Button>
 						</IconTooltip>
 					)}
+					<DropdownMenu>
+						<IconTooltip label="Dashboard menu">
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									aria-label="Dashboard menu"
+								>
+									<MoreHorizontal />
+								</Button>
+							</DropdownMenuTrigger>
+						</IconTooltip>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem onSelect={() => setImportOpen(true)}>
+								<Upload className="h-4 w-4" />
+								Import
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								disabled={
+									bookmarks.length === 0 && (state?.groups?.length ?? 0) === 0
+								}
+								onSelect={() => shareLibrary()}
+							>
+								<Share2 className="h-4 w-4" />
+								Share and export
+							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => setSharedPagesOpen(true)}>
+								<Link2 className="h-4 w-4" />
+								Shared pages
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								disabled={bookmarks.length === 0}
+								onSelect={() => setDuplicatesOpen(true)}
+							>
+								<Copy className="h-4 w-4" />
+								Find duplicate bookmarks
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onSelect={() => {
+									setTrashFilter('all');
+									setTrashOpen(true);
+								}}
+							>
+								<Trash2 className="h-4 w-4" />
+								Trash bin
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</AppHeader>
 
 				<FinderPalette
