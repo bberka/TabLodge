@@ -47,6 +47,7 @@ import {useSettledText} from '../../ui/search-count';
 import {Empty, Header, IconButton} from '../../ui/widgets';
 import {copyActions, withCopyActions} from '../copy/copy-actions';
 import {useCopyUrls} from '../../library/page-copies';
+import {useSharedPagesAction} from '../settings/shared-pages-settings';
 import {FolderEditSheet} from './folder-sheet';
 import {FolderChips, folderMenuFor, useFolderLook} from './folder-chips';
 import {
@@ -89,6 +90,7 @@ export function SessionsScreen({
 	const insets = useSafeAreaInsets();
 	const space = useRoomBelow(useBarSpace());
 	const store = useLibrary();
+	const sharedPagesAction = useSharedPagesAction();
 	const links = useLinkSettings();
 	const view = useView();
 	const copyUrls = useCopyUrls();
@@ -199,6 +201,7 @@ export function SessionsScreen({
 				setEditingFolder({});
 			},
 		},
+		...sharedPagesAction,
 	];
 	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
 	const look = useFolderLook();

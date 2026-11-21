@@ -9,6 +9,7 @@ import {createApi, DEFAULT_LIMITS, type Limits} from '../src/api';
 import {sqlite} from '../src/node-sqlite';
 import {SqlChangeLog} from '../src/sql-change-log';
 import {SqlPageStore} from '../src/shared-pages';
+import {newSharedPageId} from '../../extension/src/shared/sync/shared-pages';
 import {shareHtmlPage} from '../../extension/src/shared/share-formats';
 import {
 	deleteSharedPage,
@@ -245,17 +246,95 @@ test('a device that knows nothing of shared pages syncs as before, and pages nev
 	assert.deepEqual(pulled.changes, [change]);
 });
 
+test('a page keeps the id and source its device sent, so it can carry its own link', async () => {
+	const {fetch} = nodeServer();
+	const id = newSharedPageId();
+	const page = await uploadSharedPage(fetch, target, 'Reading', PAGE, {
+		id,
+		source: 'session:s1',
+	});
+	assert.equal(page.url, `${BASE}/p/${id}`);
+	assert.deepEqual(
+		(await listSharedPages(fetch, target)).map((entry) => [
+			entry.id,
+			entry.source,
+		]),
+		[[id, 'session:s1']],
+	);
+	const served = await fetch(page.url, {
+		headers: {Origin: 'chrome-extension://x'},
+	});
+	assert.equal(served.status, 200);
+	assert.equal(served.headers.get('access-control-allow-origin'), '*');
+
+	await assert.rejects(
+		uploadSharedPage(fetch, target, 'Again', PAGE, {id}),
+		/already has a page with this link/,
+	);
+	const post = (body: unknown) =>
+		fetch(`${BASE}/v1/pages`, {
+			...authorized(),
+			method: 'POST',
+			body: JSON.stringify(body),
+		});
+	assert.equal((await post({title: 'x', html: PAGE, id: 'short'})).status, 400);
+	assert.equal(
+		(await post({title: 'x', html: PAGE, source: 's'.repeat(101)})).status,
+		400,
+	);
+	const plain = await uploadSharedPage(fetch, target, 'Plain', PAGE);
+	assert.notEqual(plain.id, id);
+	assert.equal(plain.source, '');
+});
+
+test('a pages table from before sources upgrades on start and keeps its pages', async () => {
+	const sql = sqlite(':memory:');
+	sql.all(`CREATE TABLE pages (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		html TEXT NOT NULL,
+		size INTEGER NOT NULL,
+		created INTEGER NOT NULL
+	)`);
+	sql.all(
+		'INSERT INTO pages (id, title, html, size, created) VALUES (?, ?, ?, ?, ?)',
+		'AAAAAAAAAAAAAAAAAAAAAA',
+		'Old',
+		'<p>old</p>',
+		10,
+		T0,
+	);
+	const store = new SqlPageStore(sql);
+	assert.deepEqual(store.list(), [
+		{
+			id: 'AAAAAAAAAAAAAAAAAAAAAA',
+			title: 'Old',
+			size: 10,
+			createdAt: T0,
+			source: '',
+		},
+	]);
+	assert.equal(store.html('AAAAAAAAAAAAAAAAAAAAAA'), '<p>old</p>');
+	assert.equal(new SqlPageStore(sql).list().length, 1);
+});
+
 test('a server without shared pages says so, and has no page routes', async () => {
 	const {fetch} = nodeServer(undefined, {pages: false});
-	assert.equal(await sharedPagesSupport(fetch, target), 'old');
+	assert.deepEqual(await sharedPagesSupport(fetch, target), {
+		server: 'old',
+		keepsIds: false,
+	});
 	assert.equal((await fetch(`${BASE}/v1/pages`, authorized())).status, 404);
 	assert.equal((await fetch(`${BASE}/p/AAAAAAAAAAAAAAAAAAAAAA`)).status, 404);
-	assert.equal(await sharedPagesSupport(nodeServer().fetch, target), 'ready');
-	assert.equal(
+	assert.deepEqual(await sharedPagesSupport(nodeServer().fetch, target), {
+		server: 'ready',
+		keepsIds: true,
+	});
+	assert.deepEqual(
 		await sharedPagesSupport(async () => {
 			throw new TypeError('Failed to fetch');
 		}, target),
-		'offline',
+		{server: 'offline', keepsIds: false},
 	);
 });
 
@@ -289,11 +368,24 @@ const workerFetch: Fetch = async (url, init) => {
 };
 
 test('on Cloudflare a page is public, strict, deletable, and absent from the private library', async () => {
-	assert.equal(await sharedPagesSupport(workerFetch, target), 'ready');
-	const page = await uploadSharedPage(workerFetch, target, 'Reading', PAGE);
+	assert.deepEqual(await sharedPagesSupport(workerFetch, target), {
+		server: 'ready',
+		keepsIds: true,
+	});
+	const id = newSharedPageId();
+	const page = await uploadSharedPage(workerFetch, target, 'Reading', PAGE, {
+		id,
+		source: 'column:abc',
+	});
+	assert.equal(page.id, id);
+	assert.deepEqual(
+		(await listSharedPages(workerFetch, target)).map((entry) => entry.source),
+		['column:abc'],
+	);
 	const response = await workerFetch(`${BASE}${pathOf(page.url)}`);
 	assert.equal(response.status, 200);
 	assert.equal(await response.text(), PAGE);
+	assert.equal(response.headers.get('access-control-allow-origin'), '*');
 	assert.match(
 		response.headers.get('content-security-policy') ?? '',
 		/sandbox allow-popups allow-popups-to-escape-sandbox$/,
@@ -302,7 +394,10 @@ test('on Cloudflare a page is public, strict, deletable, and absent from the pri
 	assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
 
 	const privateTarget = {url: `${BASE}/private`, token: TOKEN};
-	assert.equal(await sharedPagesSupport(workerFetch, privateTarget), 'old');
+	assert.equal(
+		(await sharedPagesSupport(workerFetch, privateTarget)).server,
+		'old',
+	);
 	assert.equal(
 		(await workerFetch(`${BASE}/private/v1/pages`, authorized())).status,
 		404,

@@ -81,6 +81,7 @@ function PalettePage() {
 			'open-trash': onDashboard('open-trash'),
 			'share-bookmarks': onDashboard('share-bookmarks'),
 			'import-bookmarks': onDashboard('import-bookmarks'),
+			'shared-pages': onDashboard('shared-pages'),
 			'backup-bookmarks': onDashboard('backup-bookmarks'),
 			'import-sessions': onDashboard('import-sessions'),
 			'backup-sessions': onDashboard('backup-sessions'),

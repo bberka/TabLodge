@@ -41,6 +41,7 @@ import {
 	PanelsTopLeft,
 	Upload,
 	ChevronRight,
+	Link2,
 } from 'lucide-react';
 import {
 	ActionContextMenu,
@@ -99,6 +100,7 @@ import {
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
 import {removedByEdit, shownTags} from '../shared/bookmark-tags';
+import {sharedPageSource} from '../shared/sync/shared-pages-client';
 import {duplicatesNote, saveMessage} from '../shared/save-feedback';
 import {useNearViewport, VirtualRows} from './virtual-rows';
 import {SortMenu} from './sort-menu';
@@ -145,6 +147,7 @@ import {syncNowOutcome} from './sync-now';
 import {
 	DuplicateBookmarksDialog,
 	ImportDialog,
+	SharedPagesDialog,
 	SnapshotsDialog,
 	TrashDialog,
 	useShareDialog,
@@ -366,9 +369,14 @@ function NewTab() {
 	const [busy, setBusy] = useState('');
 	// `?q=` (from the "Search … in TabLodge" selection menu) prefills both searches once, then leaves the URL.
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
+	const [openedToImport] = useState(() =>
+		Boolean(webUrl(new URLSearchParams(location.search).get('importLink'))),
+	);
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [importLink, setImportLink] = useState<string>();
+	const [sharedPagesOpen, setSharedPagesOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
@@ -586,7 +594,10 @@ function NewTab() {
 		[settings.bookmarkQuickActions],
 	);
 	const autoOpenFinder =
-		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
+		newTabOn &&
+		settings.autoFocusSearchOnNewTab === true &&
+		!initialQuery &&
+		!openedToImport;
 	const sessionsOnTop = settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
 		const search = parseSearchQuery(bookmarkSearch.trim());
@@ -713,6 +724,23 @@ function NewTab() {
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on purpose
 	}, []);
+
+	const importLinkHandledRef = useRef(false);
+	useEffect(() => {
+		if (!state || importLinkHandledRef.current) {
+			return;
+		}
+
+		importLinkHandledRef.current = true;
+		const link = webUrl(new URLSearchParams(location.search).get('importLink'));
+		if (!link) {
+			return;
+		}
+
+		history.replaceState(null, '', stripSearchParams(location, ['importLink']));
+		setImportLink(link);
+		setImportOpen(true);
+	}, [state]);
 
 	useEffect(() => {
 		if (!state || externalPromptHandled) {
@@ -2044,6 +2072,7 @@ function NewTab() {
 								id: 'column',
 								label: 'Selected column',
 								description: column.name,
+								pageSource: sharedPageSource('column', column.id),
 								groups: [groupFor(column)],
 								data: {
 									kind: 'bookmarks' as const,
@@ -2094,6 +2123,7 @@ function NewTab() {
 		'open-trash': () => emitRecoveryEvent({type: 'trash'}),
 		'share-bookmarks': () => shareBookmarks(),
 		'import-bookmarks': () => setImportOpen(true),
+		'shared-pages': () => setSharedPagesOpen(true),
 		'backup-bookmarks': openBookmarkBackup,
 		'import-sessions': () => emitFinderEvent({type: 'import-sessions'}),
 		'backup-sessions': () => emitFinderEvent({type: 'backup-sessions'}),
@@ -2342,7 +2372,7 @@ function NewTab() {
 				<AppHeader active="dashboard" />
 				<p role="alert" className="text-sm font-medium text-destructive">
 					{error}{' '}
-					<a href="newtab.html" className="underline">
+					<a href={`newtab.html${location.search}`} className="underline">
 						Reload
 					</a>
 				</p>
@@ -2558,6 +2588,12 @@ function NewTab() {
 								icon: Share2,
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
+							},
+							{
+								id: 'shared-pages',
+								label: 'Shared pages',
+								icon: Link2,
+								onSelect: () => setSharedPagesOpen(true),
 							},
 							{type: 'separator'},
 							{
@@ -3096,10 +3132,21 @@ function NewTab() {
 				<ImportDialog
 					open={importOpen}
 					initialKind="bookmarks"
+					initialLink={importLink}
 					state={state}
 					showStatus={showStatus}
-					onOpenChange={setImportOpen}
+					onOpenChange={(open) => {
+						setImportOpen(open);
+						if (!open) {
+							setImportLink(undefined);
+						}
+					}}
 					onImported={() => void reload()}
+				/>
+				<SharedPagesDialog
+					open={sharedPagesOpen}
+					showStatus={showStatus}
+					onOpenChange={setSharedPagesOpen}
 				/>
 				<Dialog
 					open={dialog === 'bookmark'}

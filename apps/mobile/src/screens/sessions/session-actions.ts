@@ -20,6 +20,7 @@ import {showSnack} from '../../ui/snackbar';
 import {type Colors} from '../../ui/theme';
 import {openShare} from '../transfer/transfer-sheets';
 import {linkOpenActions, openIn} from '../open-in';
+import {sharedPageSource} from '../../../../extension/src/shared/sync/shared-pages-client';
 import {type BookmarkLinks} from './session-link-sheets';
 
 /**
@@ -86,6 +87,7 @@ export function runSessionAction(
 		case 'share': {
 			openShare({
 				title: session.name,
+				source: sharedPageSource('session', session.id),
 				data: {kind: 'sessions', groups: [session], folders},
 			});
 			break;

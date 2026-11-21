@@ -4,8 +4,10 @@ The calls a device makes for shared pages (see shared-pages.ts), used by the ext
 import {isRecord} from '../library-values';
 import {callServer, type SyncConfig, SyncError, type SyncHost} from './client';
 import {
+	MAX_SHARED_PAGE_SOURCE,
 	MAX_SHARED_PAGE_TITLE,
 	SHARED_PAGE_ID,
+	SHARED_PAGE_IMPORT_FEATURE,
 	SHARED_PAGE_PREFIX,
 	SHARED_PAGES_FEATURE,
 } from './shared-pages';
@@ -22,7 +24,14 @@ export type SharedPage = {
 	The public link: the server address the device connected with, plus /p/<id>.
 	*/
 	url: string;
+	source: string;
 };
+
+export const sharedPageSource = (kind: 'column' | 'session', id: string) =>
+	`${kind}:${id}`.slice(0, MAX_SHARED_PAGE_SOURCE);
+
+export const sharedPageUrl = (server: string, id: string) =>
+	`${server}${SHARED_PAGE_PREFIX}${id}`;
 
 const ERRORS = new Map([
 	[
@@ -34,6 +43,7 @@ const ERRORS = new Map([
 		'The server holds as many shared pages as it allows. Delete one in Settings › Sync › Shared pages.',
 	],
 	['not_found', 'The server no longer has this page.'],
+	['page_exists', 'The server already has a page with this link. Share again.'],
 ]);
 
 function parsePage(value: unknown, server: string): SharedPage | undefined {
@@ -53,7 +63,8 @@ function parsePage(value: unknown, server: string): SharedPage | undefined {
 		title: value.title,
 		size: value.size,
 		createdAt: value.createdAt,
-		url: `${server}${SHARED_PAGE_PREFIX}${value.id}`,
+		url: sharedPageUrl(server, value.id),
+		source: typeof value.source === 'string' ? value.source : '',
 	};
 }
 
@@ -78,43 +89,51 @@ async function ask(
 
 /**
 Whether the server takes shared pages: `old` for a server from before them, `offline` when it cannot be reached or
-refused the token.
+refused the token. `keepsIds` says it also keeps the id and source a device sends (`shared-page-import`), so a page
+can carry its own link.
 */
 export async function sharedPagesSupport(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
-): Promise<'ready' | 'old' | 'offline'> {
+): Promise<{server: 'ready' | 'old' | 'offline'; keepsIds: boolean}> {
 	try {
 		const body = await ask(send, target, '/v1/status');
-		return isRecord(body) &&
-			Array.isArray(body.features) &&
-			body.features.includes(SHARED_PAGES_FEATURE)
-			? 'ready'
-			: 'old';
+		const features =
+			isRecord(body) && Array.isArray(body.features) ? body.features : [];
+		return features.includes(SHARED_PAGES_FEATURE)
+			? {
+					server: 'ready',
+					keepsIds: features.includes(SHARED_PAGE_IMPORT_FEATURE),
+				}
+			: {server: 'old', keepsIds: false};
 	} catch {
-		return 'offline';
+		return {server: 'offline', keepsIds: false};
 	}
 }
 
 /**
 Uploads a page made by `shareHtmlPage` and returns its new link. Each upload is a new link; the old one stays until
-it is deleted.
+it is deleted. Send `id` and `source` only to a server that keeps them (`keepsIds`): a page built with its own link
+must get the id that link names.
 */
 export async function uploadSharedPage(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
 	title: string,
 	html: string,
+	{id, source}: {id?: string; source?: string} = {},
 ): Promise<SharedPage> {
 	const body = await ask(send, target, '/v1/pages', {
 		method: 'POST',
 		body: JSON.stringify({
 			title: title.slice(0, MAX_SHARED_PAGE_TITLE),
 			html,
+			...(id && {id}),
+			...(source && {source: source.slice(0, MAX_SHARED_PAGE_SOURCE)}),
 		}),
 	});
 	const page = parsePage(body, target.url);
-	if (!page) {
+	if (!page || (id !== undefined && page.id !== id)) {
 		throw new SyncError('server', 'The sync server sent a broken answer.');
 	}
 

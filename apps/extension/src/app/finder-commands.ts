@@ -13,6 +13,7 @@ import {
 	Home,
 	Inbox,
 	KeyRound,
+	Link2,
 	Lock,
 	RefreshCw,
 	Save,
@@ -98,8 +99,28 @@ const COMMANDS = [
 	{
 		id: 'import-bookmarks',
 		title: 'Import',
-		keywords: ['import bookmarks', 'restore', 'load', 'upload', 'file'],
+		keywords: [
+			'import bookmarks',
+			'restore',
+			'load',
+			'upload',
+			'file',
+			'from a link',
+			'shared page',
+		],
 		icon: Upload,
+	},
+	{
+		id: 'shared-pages',
+		title: 'Shared pages',
+		keywords: [
+			'share link',
+			'public',
+			'published',
+			'delete link',
+			'get a link',
+		],
+		icon: Link2,
 	},
 	{
 		id: 'backup-bookmarks',

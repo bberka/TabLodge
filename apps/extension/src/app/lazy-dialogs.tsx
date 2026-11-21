@@ -13,6 +13,7 @@ import type {ShowStatus} from './common';
 import type * as DuplicateBookmarks from './duplicate-bookmarks-dialog';
 import type * as DataTransfer from './data-transfer';
 import type * as Recovery from './recovery';
+import type * as SharedPages from './shared-pages';
 import type * as TabStats from './tab-stats-dialog';
 
 /**
@@ -41,6 +42,10 @@ function lazyDialog<Props extends {open: boolean}>(
 export const ImportDialog = lazyDialog<
 	ComponentProps<typeof DataTransfer.ImportDialog>
 >(async () => (await import('./data-transfer')).ImportDialog);
+
+export const SharedPagesDialog = lazyDialog<
+	ComponentProps<typeof SharedPages.SharedPagesDialog>
+>(async () => (await import('./shared-pages')).SharedPagesDialog);
 
 const ShareDialog = lazyDialog<ComponentProps<typeof DataTransfer.ShareDialog>>(
 	async () => (await import('./data-transfer')).ShareDialog,

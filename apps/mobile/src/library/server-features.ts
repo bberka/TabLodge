@@ -17,7 +17,7 @@ export async function serverFeatures(
 /**
 The optional parts the connected server has (`private`, `key`, `preview`, `trash`, `notes`, `page-source`,
 `shared-pages`), as the sync client last heard at /v1/status, or undefined while it is not known: not connected, or
-not asked yet. Share › HTML page › Upload to my server needs `shared-pages`.
+not asked yet. Share › HTML page › Get a link needs `shared-pages`.
 */
 export function useServerFeatures(): readonly string[] | undefined {
 	const status = useSyncStatus();

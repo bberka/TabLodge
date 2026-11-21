@@ -1,12 +1,6 @@
 import {useMemo, useState, useSyncExternalStore} from 'react';
 import {Share, StyleSheet, Text, View} from 'react-native';
 import {
-	ImportFormatError,
-	type ImportKind,
-	parseImportFile,
-	type ParsedImport,
-} from '../../../../extension/src/shared/import-formats';
-import {
 	buildExport,
 	type ExportData,
 	type ExportKind,
@@ -25,25 +19,23 @@ import {notify, showDialog} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
 import {backupPasswordNote} from '../../transfer/backup-password';
 import {useView} from '../../library/view';
-import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
-import {edit, newId, useLibrary} from '../../library/library-store';
-import {showSnack} from '../../ui/snackbar';
+import {useLibrary} from '../../library/library-store';
 import {uploadPage, useSharedPagesServer} from '../../library/shared-pages';
 import {copyLink} from '../../platform/copy-link';
 import {openLink} from '../../platform/open-links';
 import {useColors} from '../../ui/theme';
-import {
-	importIntoStore,
-	previewFor,
-	shareGroupsOf,
-} from '../../transfer/transfer';
-import {Button, Chips, Field, Switch} from '../../ui/widgets';
+import {shareGroupsOf} from '../../transfer/transfer';
+import {Button, Chips, Field} from '../../ui/widgets';
 import {allCopies} from '../../library/page-copies';
+import {
+	SharedPageRows,
+	useSharedPageList,
+} from '../settings/shared-pages-settings';
 
 const APP_NAME = 'TabLodge';
 
-function Title({children}: {children: string}) {
+export function Title({children}: {children: string}) {
 	const colors = useColors();
 	return (
 		<Text
@@ -52,190 +44,6 @@ function Title({children}: {children: string}) {
 		>
 			{children}
 		</Text>
-	);
-}
-
-export type ImportSource =
-	{mode: 'file'; name: string; text: string} | {mode: 'paste'};
-
-type Reading =
-	{ok: true; parsed: ParsedImport} | {ok: false; message: string} | undefined;
-
-function read(text: string, name: string): Reading {
-	if (text.trim() === '') {
-		return undefined;
-	}
-
-	try {
-		return {ok: true, parsed: parseImportFile(text, name)};
-	} catch (error) {
-		return {
-			ok: false,
-			message:
-				error instanceof ImportFormatError
-					? error.message
-					: 'That could not be read as a list of links.',
-		};
-	}
-}
-
-const hasLinks = (groups: ParsedImport['sessions']) =>
-	groups.some((group) => group.links.length > 0);
-
-/**
-What a file or pasted text would add, and the button that adds it. Skips links that are already saved or in the trash, adds nothing
-else, and removes nothing.
-*/
-export function ImportSheet({
-	source,
-	onClose,
-}: {
-	source: ImportSource | undefined;
-	onClose: () => void;
-}) {
-	const colors = useColors();
-	const store = useLibrary();
-	const trash = useTrash(useView());
-	const [pasted, setPasted] = useState('');
-	const [skip, setSkip] = useState(true);
-	const [picked, setPicked] = useState<ImportKind>();
-	const [busy, setBusy] = useState(false);
-	const text = source?.mode === 'file' ? source.text : pasted;
-	const name = source?.mode === 'file' ? source.name : '';
-	const reading = useMemo(() => read(text, name), [text, name]);
-	const parsed = reading?.ok ? reading.parsed : undefined;
-	const sessions = parsed ? hasLinks(parsed.sessions) : false;
-	const bookmarks = parsed ? hasLinks(parsed.bookmarks) : false;
-	const kind: ImportKind = picked ?? (sessions ? 'sessions' : 'bookmarks');
-	const preview = parsed ? previewFor(store, parsed, kind, trash) : undefined;
-	const addable = preview ? preview.links - (skip ? preview.duplicates : 0) : 0;
-	const run = async () => {
-		if (!parsed) {
-			return;
-		}
-
-		setBusy(true);
-		try {
-			let added = 0;
-			await edit((current) => {
-				const result = importIntoStore(current, parsed, {
-					kind,
-					now: Date.now(),
-					newId,
-					skipDuplicates: skip,
-					trash,
-				});
-				added = result.links;
-				return result.store;
-			});
-			showSnack(
-				added === 0
-					? 'Nothing new to import'
-					: `Imported ${added} ${added === 1 ? 'link' : 'links'}`,
-			);
-			onClose();
-		} catch {
-			notify('Could not import', 'Try again.');
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	return (
-		<BottomSheet
-			visible={source !== undefined}
-			label="Import links"
-			onClose={onClose}
-		>
-			<View style={styles.body}>
-				<Title>
-					{source?.mode === 'file' ? 'Import a file' : 'Import links'}
-				</Title>
-				{source?.mode === 'paste' && (
-					<Field
-						multiline
-						autoFocus
-						label="Links, a list, or an export"
-						value={pasted}
-						placeholder="Paste addresses, Markdown, or what another app exported"
-						autoCapitalize="none"
-						autoCorrect={false}
-						onChangeText={setPasted}
-					/>
-				)}
-				{reading?.ok === false && (
-					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
-						{reading.message}
-					</Text>
-				)}
-				{parsed && sessions && bookmarks && (
-					<Chips
-						items={[
-							{id: 'sessions', name: 'As sessions'},
-							{id: 'bookmarks', name: 'As bookmarks'},
-						]}
-						selected={kind}
-						onSelect={(id) => {
-							setPicked(id as ImportKind);
-						}}
-					/>
-				)}
-				{parsed && preview && (
-					<View style={styles.summary}>
-						<Text style={{color: colors.text, fontWeight: '600'}}>
-							{parsed.label}
-						</Text>
-						<Text style={{color: colors.muted}}>
-							{preview.links} {preview.links === 1 ? 'link' : 'links'} in{' '}
-							{preview.groups}{' '}
-							{kind === 'sessions'
-								? preview.groups === 1
-									? 'session'
-									: 'sessions'
-								: preview.groups === 1
-									? 'column'
-									: 'columns'}
-							{preview.duplicates > 0
-								? `, ${preview.duplicates} already saved or in the trash`
-								: ''}
-							{preview.invalid > 0 ? `, ${preview.invalid} skipped` : ''}
-						</Text>
-						{parsed.warnings.map((warning) => (
-							<Text key={warning} style={{color: colors.warn}}>
-								{warning}
-							</Text>
-						))}
-						{preview.sample.slice(0, 4).map((link) => (
-							<Text
-								key={`${link.group}-${link.url}`}
-								numberOfLines={1}
-								style={{color: colors.muted}}
-							>
-								{link.title}
-							</Text>
-						))}
-					</View>
-				)}
-				{preview && preview.duplicates > 0 && (
-					<Switch
-						label="Skip links I already have"
-						value={skip}
-						onValueChange={setSkip}
-					/>
-				)}
-				<Button
-					label={
-						addable > 0
-							? `Import ${addable} ${addable === 1 ? 'link' : 'links'}`
-							: 'Import'
-					}
-					icon="download-outline"
-					disabled={addable === 0}
-					loading={busy}
-					onPress={() => void run()}
-				/>
-			</View>
-		</BottomSheet>
 	);
 }
 
@@ -248,7 +56,11 @@ function exportData(store: Store, kind: ExportKind): ExportData {
 /**
 One thing to share instead of the whole library: a session, a folder, a column, or some bookmarks.
 */
-export type ShareScope = {title: string; data: ExportData};
+export type ShareScope = {
+	title: string;
+	data: ExportData;
+	source?: string;
+};
 
 let openScope: ShareScope | undefined;
 const scopeListeners = new Set<() => void>();
@@ -355,6 +167,15 @@ export function ShareSheet({
 	const {links} = shareCounts(groups);
 	const title =
 		scope?.title ?? (what === 'bookmarks' ? 'Bookmarks' : 'Sessions');
+	const kind = data.kind === 'bookmarks' ? 'bookmarks' : 'sessions';
+	const pageHtml = (url?: string) =>
+		shareHtmlPage(title, groups, APP_NAME, {kind, sharedAt: Date.now(), url});
+	const listed = useSharedPageList(
+		visible && canUpload && scope?.source !== undefined,
+	);
+	const sourcePages = scope?.source
+		? (listed.pages ?? []).filter((page) => page.source === scope.source)
+		: [];
 	const {problem, hint: weak} = backupPasswordNote(isBackup, password);
 	const run = async () => {
 		setBusy(true);
@@ -390,7 +211,7 @@ export function ShareSheet({
 						await shareTextFile(
 							`${title.replaceAll(/[^\w-]+/g, '-').slice(0, 40) || 'links'}.html`,
 							'text/html',
-							shareHtmlPage(title, groups, APP_NAME),
+							pageHtml(),
 						);
 
 						break;
@@ -415,15 +236,12 @@ export function ShareSheet({
 	const upload = async () => {
 		setUploading(true);
 		try {
-			const page = await uploadPage(
-				title,
-				shareHtmlPage(title, groups, APP_NAME),
-			);
+			const page = await uploadPage(title, pageHtml, scope?.source);
 			onClose();
 			await copyLink(page.url);
 			showDialog(
-				'Page uploaded',
-				`${page.url}\n\nThe link is copied. Anyone with it can open the page. To update it, share again. Delete it in Settings › Sync › Shared pages.`,
+				'Link ready',
+				`${page.url}\n\nThe link is copied. Anyone with it can open the page. Sharing again makes a new link. Delete old ones from Share or Shared pages.`,
 				[
 					{
 						label: 'Open',
@@ -515,13 +333,24 @@ export function ShareSheet({
 				/>
 				{!isBackup && way === 'page' && links > 0 && canUpload && (
 					<Button
-						label="Upload to my server"
+						label="Get a link"
 						icon="cloud-upload-outline"
 						kind="plain"
 						disabled={busy}
 						loading={uploading}
 						onPress={() => void upload()}
 					/>
+				)}
+				{sourcePages.length > 0 && (
+					<>
+						<Text
+							accessibilityRole="header"
+							style={[styles.subtitle, {color: colors.text}]}
+						>
+							Links to this {kind === 'bookmarks' ? 'column' : 'session'}
+						</Text>
+						<SharedPageRows pages={sourcePages} onDelete={listed.remove} />
+					</>
 				)}
 			</View>
 		</BottomSheet>
@@ -531,5 +360,5 @@ export function ShareSheet({
 const styles = StyleSheet.create({
 	body: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	title: {fontSize: 20, fontWeight: '700'},
-	summary: {gap: 4},
+	subtitle: {fontSize: 16, fontWeight: '600'},
 });
