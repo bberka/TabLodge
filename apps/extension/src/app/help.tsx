@@ -505,30 +505,30 @@ function Help() {
 							server connected, the sites you added, their Save to column, and
 							Save to {PROJECT.name} only reach your other browsers. Each
 							browser still asks for its own access: a site added elsewhere
-							shows On in another browser under Sources, with Turn on, and the
-							bookmarks page says so once. Remove asks first, then takes a site
-							out of the list in every connected browser and gives its access
-							back. Removing its access in one browser&apos;s extension settings
-							stops it only there; Settings then says so next to the site and
-							offers Allow again. To catch up on saves you made on your phone or
-							before you added the site, open the site&apos;s saved page: your
-							saved page on Reddit (new or old Reddit), Watch later on YouTube,
-							your bookmarks on X, All posts or a collection under Saved on
-							Instagram, or your own stars on GitHub. When some of the saved
-							items it shows are not in {PROJECT.name}, a notice says how many
-							and offers Add them, which adds them to the site&apos;s column in
-							the order the site lists them, and Not now, which keeps it quiet
-							until something new appears there. It counts only what the page
-							has loaded, so scroll down, or go to the next page, for more; X
-							keeps only the posts near the screen, so it counts those. Saved
-							comments are included on old Reddit only. Someone else&apos;s
-							GitHub stars are never offered. The other sites don&apos;t offer
-							this yet. Hacker News, Letterboxd, Goodreads, and IMDb lists can
-							be public, and telling your own list from someone else&apos;s has
-							not been checked on a signed-in page. The saved pages of Stack
-							Overflow, Lobsters, dev.to, Bluesky, SoundCloud, Spotify, Medium,
-							and Substack have not been checked on a signed-in account with
-							saves.
+							shows On in another browser under Sources, and its row has Turn
+							on, and the bookmarks page says so once. Remove asks first, then
+							takes a site out of the list in every connected browser and gives
+							its access back. Removing its access in one browser&apos;s
+							extension settings stops it only there; Settings then says so next
+							to the site and offers Allow again. To catch up on saves you made
+							on your phone or before you added the site, open the site&apos;s
+							saved page: your saved page on Reddit (new or old Reddit), Watch
+							later on YouTube, your bookmarks on X, All posts or a collection
+							under Saved on Instagram, or your own stars on GitHub. When some
+							of the saved items it shows are not in {PROJECT.name}, a notice
+							says how many and offers Add them, which adds them to the
+							site&apos;s column in the order the site lists them, and Not now,
+							which keeps it quiet until something new appears there. It counts
+							only what the page has loaded, so scroll down, or go to the next
+							page, for more; X keeps only the posts near the screen, so it
+							counts those. Saved comments are included on old Reddit only.
+							Someone else&apos;s GitHub stars are never offered. The other
+							sites don&apos;t offer this yet. Hacker News, Letterboxd,
+							Goodreads, and IMDb lists can be public, and telling your own list
+							from someone else&apos;s has not been checked on a signed-in page.
+							The saved pages of Stack Overflow, Lobsters, dev.to, Bluesky,
+							SoundCloud, Spotify, Medium, and Substack have not been checked on
+							a signed-in account with saves.
 						</>
 					),
 					searchText:
@@ -538,29 +538,29 @@ function Help() {
 					title: 'Keep saves off the site',
 					body: (
 						<>
-							Under each added site in Settings › Sources, When you save on the
-							site offers two choices. Save on the site and in {PROJECT.name},
-							the default, lets the site save as usual and bookmarks the same
-							link. Save to {PROJECT.name} only stops your click on the
-							site&apos;s save control before the site sees it, so the item goes
-							only into the site&apos;s column in {PROJECT.name} (or the one
-							under Save to). The site&apos;s saved list won&apos;t include it,
-							the button doesn&apos;t turn to saved, and the site can&apos;t use
-							the save for its recommendations. To save only on the site, remove
-							the site from Sources. The notice in the page offers Undo and Also
-							save on the site, which passes the same click on to the site;
-							press Tab to reach them. Hold Shift as you click to save on the
-							site and in {PROJECT.name} once. If {PROJECT.name} can&apos;t read
-							which item you saved, or can&apos;t save it, the click goes on to
-							the site, so a save is never lost. The site&apos;s own keyboard
-							shortcuts still save there. {PROJECT.name} blocks no network
-							requests, hides nothing on the site, and doesn&apos;t stop the
-							site learning from anything else you do there. Items you saved on
-							the site before stay saved there. Medium doesn&apos;t offer the
-							choice: its bookmark button opens Medium&apos;s Save to list
-							panel, and the page doesn&apos;t say whether the story is already
-							in a list, so stopping the click would also stop you moving or
-							removing it.
+							Settings › Sources lists each added site as one row. Open a row to
+							see its options. When you save on the site offers two choices.
+							Save on the site and in {PROJECT.name}, the default, lets the site
+							save as usual and bookmarks the same link. Save to {PROJECT.name}{' '}
+							only stops your click on the site&apos;s save control before the
+							site sees it, so the item goes only into the site&apos;s column in{' '}
+							{PROJECT.name} (or the one under Save to). The site&apos;s saved
+							list won&apos;t include it, the button doesn&apos;t turn to saved,
+							and the site can&apos;t use the save for its recommendations. To
+							save only on the site, remove the site from Sources. The notice in
+							the page offers Undo and Also save on the site, which passes the
+							same click on to the site; press Tab to reach them. Hold Shift as
+							you click to save on the site and in {PROJECT.name} once. If{' '}
+							{PROJECT.name} can&apos;t read which item you saved, or can&apos;t
+							save it, the click goes on to the site, so a save is never lost.
+							The site&apos;s own keyboard shortcuts still save there.{' '}
+							{PROJECT.name} blocks no network requests, hides nothing on the
+							site, and doesn&apos;t stop the site learning from anything else
+							you do there. Items you saved on the site before stay saved there.
+							Medium doesn&apos;t offer the choice: its bookmark button opens
+							Medium&apos;s Save to list panel, and the page doesn&apos;t say
+							whether the story is already in a list, so stopping the click
+							would also stop you moving or removing it.
 						</>
 					),
 					searchText:
