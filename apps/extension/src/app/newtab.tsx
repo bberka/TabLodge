@@ -720,7 +720,13 @@ function NewTab() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on purpose
 	}, []);
 
+	const importLinkHandledRef = useRef(false);
 	useEffect(() => {
+		if (!state || importLinkHandledRef.current) {
+			return;
+		}
+
+		importLinkHandledRef.current = true;
 		const link = webUrl(new URLSearchParams(location.search).get('importLink'));
 		if (!link) {
 			return;
@@ -729,7 +735,7 @@ function NewTab() {
 		history.replaceState(null, '', stripSearchParams(location, ['importLink']));
 		setImportLink(link);
 		setImportOpen(true);
-	}, []);
+	}, [state]);
 
 	useEffect(() => {
 		if (!state || externalPromptHandled) {
@@ -2377,7 +2383,7 @@ function NewTab() {
 				<AppHeader active="dashboard" />
 				<p role="alert" className="text-sm font-medium text-destructive">
 					{error}{' '}
-					<a href="newtab.html" className="underline">
+					<a href={`newtab.html${location.search}`} className="underline">
 						Reload
 					</a>
 				</p>
