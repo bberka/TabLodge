@@ -16,7 +16,6 @@ import {
 import {useLinkPreview} from '../../library/link-preview';
 import {phoneStamp} from '../../platform/device';
 import {type QuoteUndo, saveQuote} from '../../library/quote-edits';
-import {stripTrackingParameters} from '../../../../extension/src/shared/tracking-parameters';
 import {extractUrl, hostOf} from '../../library/store-shape';
 import {useView} from '../../library/view';
 import {cleanPageTitle} from '../../library/links';
@@ -65,13 +64,9 @@ export function SaveQuoteForm({
 	const [problem, setProblem] = useState('');
 
 	const link = extractUrl(text);
-	const pageUrl = link ? pageAddress(link) : undefined;
-	const target = pageUrl ? quoteTarget(store, pageUrl) : undefined;
-	const {savePreview, cleanOnSave} = usePreferences();
-	const url =
-		pageUrl && target?.kind === 'new' && cleanOnSave
-			? stripTrackingParameters(pageUrl)
-			: pageUrl;
+	const url = link ? pageAddress(link) : undefined;
+	const target = url ? quoteTarget(store, url) : undefined;
+	const {savePreview} = usePreferences();
 	const {cleanTitles} = useLinkSettings();
 	const {preview} = useLinkPreview(
 		target?.kind === 'new' ? url : undefined,

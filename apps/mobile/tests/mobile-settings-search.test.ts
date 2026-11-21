@@ -55,7 +55,7 @@ describe('settings search', () => {
 	});
 
 	test('a row is found by its own text, and a card name matches without its rows', () => {
-		assert.equal(rowHit(ROWS.cleanOnSave, 'utm'), true);
+		assert.equal(rowHit(ROWS.removeTracking, 'utm'), true);
 		assert.equal(rowHit(ROWS.tap, 'utm'), false);
 		assert.equal(headHit(SECTIONS.bookmarks, 'bookmarks'), true);
 		assert.equal(headHit(SECTIONS.bookmarks, 'utm'), false);

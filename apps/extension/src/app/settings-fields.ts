@@ -315,7 +315,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'closeOnSave',
 				label: 'Close tabs after saving',
-				help: 'Tabs are stored first and checked again before removal. Pinned tabs close only when inclusion is enabled.',
+				help: 'Tabs are stored first and checked again before removal. Pinned tabs close only when inclusion is enabled. Extension only: the phone has no browser tabs to close.',
 				type: 'switch',
 			},
 			{
@@ -369,7 +369,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'sessionNameStyle',
 				label: 'Session name',
-				help: 'How a new session is named. A saved tab group keeps its own title, and a title typed in the popup always wins. “Ask each time” shows a dialog to name the session before it is saved; saving with a shortcut, right-click menu or toolbar button saves first and then opens a small window to rename it.',
+				help: 'How a new session is named. A saved tab group keeps its own title, and a title typed in the popup always wins. “Ask each time” shows a dialog to name the session before it is saved; saving with a shortcut, right-click menu or toolbar button saves first and then opens a small window to rename it. The Android app follows this too: its name field on the save sheet is where it asks.',
 				type: 'select',
 				options: [
 					['title', 'First tab title'],
@@ -549,7 +549,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'autoArchiveDays',
 				label: 'Archive sessions not opened for',
-				help: 'Moves a session to the Archived folder (created if missing) when you have not restored or edited it for this long. Nothing is deleted, and you can move sessions back at any time. Checked daily and at browser start.',
+				help: 'Moves a session to the Archived folder (created if missing) when you have not restored or edited it for this long. Nothing is deleted, and you can move sessions back at any time. Checked daily and at browser start. The Android app follows this too, checking when it starts.',
 				type: 'number-select',
 				options: [
 					['0', 'Never'],
@@ -723,13 +723,13 @@ export const settingsFieldGroups = ({
 			{
 				name: 'limitBookmarksPerColumn',
 				label: 'Limit bookmarks shown at a time',
-				help: 'On by default. Each column in Board and Focus keeps the number below visible and scrolls through the rest. All bookmarks stay loaded. Off keeps the current display behavior.',
+				help: 'On by default. Each column in Board and Focus keeps the number below visible and scrolls through the rest. All bookmarks stay loaded. Off keeps the current display behavior. Extension only: the phone shows one column at a time and scrolls it.',
 				type: 'switch',
 			},
 			{
 				name: 'bookmarkColumnPageSize',
 				label: 'Show at a time',
-				help: 'How many bookmarks fit in a column before it starts scrolling. Defaults to 16.',
+				help: 'How many bookmarks fit in a column before it starts scrolling. Defaults to 16. Extension only.',
 				requires: 'limitBookmarksPerColumn',
 				type: 'number',
 				min: 1,
@@ -758,7 +758,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'pasteLinkToBookmark',
 				label: 'Paste a link to add a bookmark',
-				help: `Pasting a link anywhere on the ${appName} page except a text field opens Add bookmark with the link and its title filled in. Several links, one per line, open a list to add them all. Both dialogs can add to a saved session instead of a column.`,
+				help: `Pasting a link anywhere on the ${appName} page except a text field opens Add bookmark with the link and its title filled in. Several links, one per line, open a list to add them all. Both dialogs can add to a saved session instead of a column. Extension only: the phone saves links from the share sheet and its Add button.`,
 				type: 'switch',
 			},
 		],
@@ -831,7 +831,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'trashRetentionDays',
 				label: 'Keep items in the trash bin for',
-				help: 'Then deleted items are removed for good.',
+				help: 'Then deleted items are removed for good. The Android app follows this too.',
 				type: 'number-select',
 				options: [
 					['7', '7 days'],

@@ -5,7 +5,8 @@ import {confirm} from '../../ui/dialog';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {Button, Empty, Segmented} from '../../ui/widgets';
-import {useRegularLibrary} from '../../library/library-store';
+import {setSyncedSetting, useRegularLibrary} from '../../library/library-store';
+import {useLinkSettings} from '../../library/use-link-settings';
 import {
 	deleteForever,
 	emptyTrash,
@@ -23,7 +24,8 @@ import {
 } from '../../library/trash';
 import {useView} from '../../library/view';
 import {SettingsCard} from './settings-card';
-import {SECTIONS} from './settings-index';
+import {ROWS, SECTIONS} from './settings-index';
+import {SelectRow} from './select-row';
 
 const countLabel = (count: number) =>
 	`${count} ${count === 1 ? 'item' : 'items'}`;
@@ -210,12 +212,25 @@ export function TrashCard() {
 	const [open, setOpen] = useState(false);
 	const name = useView();
 	const items = useTrash(name);
+	const settings = useLinkSettings(true);
 	return (
 		<SettingsCard
 			section={SECTIONS.trash}
 			icon="trash-bin-outline"
 			description="Bring back what you deleted on this phone."
 		>
+			<SelectRow
+				row={ROWS.trashRetention}
+				value={String(settings.trashRetentionDays)}
+				choices={[
+					{id: '7', name: '7 days'},
+					{id: '30', name: '30 days'},
+					{id: '90', name: '90 days'},
+				]}
+				onChange={(value) => {
+					void setSyncedSetting('trashRetentionDays', Number(value));
+				}}
+			/>
 			<Button
 				label={`${name === 'private' ? 'Private trash' : 'Trash'} (${items.length})`}
 				icon="trash-bin-outline"
