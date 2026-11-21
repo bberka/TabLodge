@@ -72,6 +72,7 @@ import {
 	type MenuAction,
 } from '../shared/ui';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
+import {BOOKMARK_SORT_OPTIONS, sortBookmarks} from '../shared/bookmark-rules';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
@@ -81,6 +82,7 @@ import {stripTrackingParameters} from '../shared/tracking-parameters';
 import type {
 	Bookmark,
 	BookmarkBoardView,
+	BookmarkSort,
 	BookmarkColumn as BookmarkColumnData,
 	InsertPosition,
 	LinkEntry,
@@ -97,6 +99,7 @@ import {
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
 import {removedByEdit, shownTags} from '../shared/bookmark-tags';
+import {SortMenu} from './sort-menu';
 import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
@@ -166,6 +169,8 @@ import {
 	handleInternalDragEnd,
 	handleInternalDragStart,
 	acceptsDrop,
+	ALL_BOOKMARKS_ID,
+	dropColumnId,
 	parseDraggedBookmark,
 	parsePastedLinks,
 	previewBookmarkDrop,
@@ -311,7 +316,7 @@ const UNFILED_COLUMN: BookmarkColumnData = {
 The system column of the Focus view that lists every bookmark of every column. It is not stored.
 */
 const ALL_COLUMN: BookmarkColumnData = {
-	id: 'bookmark-all',
+	id: ALL_BOOKMARKS_ID,
 	name: 'All',
 	createdAt: 0,
 	isDefault: false,
@@ -476,6 +481,9 @@ function NewTab() {
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const bookmarkView = settings.bookmarkBoardView ?? 'focus';
+	const bookmarkSort = settings.bookmarkSort ?? 'manual';
+	// Only the stored order can be rearranged; any other sort is a view of it.
+	const manualOrder = bookmarkSort === 'manual';
 	const compactBoard = settings.bookmarkDensity === 'compact';
 	const bookmarkGridTemplateColumns = bookmarkGridTemplate(
 		settings.bookmarkColumnWidth ?? 'default',
@@ -512,6 +520,20 @@ function NewTab() {
 			await reload();
 		},
 		[bookmarkView, reload, showStatus],
+	);
+	const changeBookmarkSort = useCallback(
+		async (value: string) => {
+			const result = await send('UPDATE_SETTINGS', {
+				settings: {bookmarkSort: value as BookmarkSort},
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not save the sort.', true);
+				return;
+			}
+
+			await reload();
+		},
+		[reload, showStatus],
 	);
 	const hideAllBookmarks = useCallback(async () => {
 		const result = await send('UPDATE_SETTINGS', {
@@ -618,7 +640,9 @@ function NewTab() {
 				}
 			}
 
-			for (const [id, list] of grouped) {
+			for (const [id, stored] of grouped) {
+				const list = sortBookmarks(stored, bookmarkSort) as Bookmark[];
+				grouped.set(id, list);
 				const old = before.get(id);
 				if (
 					old?.length === list.length &&
@@ -638,7 +662,7 @@ function NewTab() {
 				: group(filteredBookmarks, previous.shown);
 		previousGroupsRef.current = {all, shown};
 		return {all, shown};
-	}, [bookmarks, filteredBookmarks]);
+	}, [bookmarks, filteredBookmarks, bookmarkSort]);
 	// What the Focus view's All item lists: every column's bookmarks in the columns' order, the Unfiled ones last.
 	const everyBookmark = useMemo(() => {
 		const ids = [...columns.map((column) => column.id), UNFILED_COLUMN.id];
@@ -1852,10 +1876,26 @@ function NewTab() {
 		const targetCard = (event.target as Element).closest<HTMLElement>(
 			'[data-bookmark-id]',
 		);
-		const targetBookmarkId = targetCard?.dataset.bookmarkId || null;
+		// All is not a column: a drop there goes into the column of the card it landed on.
+		const dropColumn = dropColumnId(column.id, targetCard?.dataset.columnId);
+		if (!dropColumn) {
+			return;
+		}
+
+		const target =
+			dropColumn === column.id
+				? column
+				: (columns.find((entry) => entry.id === dropColumn) ?? UNFILED_COLUMN);
+		// A sorted column shows no slots, so a drop goes to its end.
+		const targetBookmarkId = manualOrder
+			? targetCard?.dataset.bookmarkId || null
+			: null;
 		const rect = targetCard?.getBoundingClientRect();
 		const position: InsertPosition =
-			targetCard && rect && event.clientY < rect.top + rect.height / 2
+			manualOrder &&
+			targetCard &&
+			rect &&
+			event.clientY < rect.top + rect.height / 2
 				? 'before'
 				: 'after';
 		if (kind === 'bookmark') {
@@ -1867,7 +1907,20 @@ function NewTab() {
 			const ids = draggedBookmarksRef.current.includes(bookmarkId)
 				? draggedBookmarksRef.current
 				: [bookmarkId];
-			await moveBookmarks(ids, column.id, targetBookmarkId, position);
+			if (
+				!manualOrder &&
+				ids.every(
+					(id) =>
+						bookmarks.find((entry) => entry.id === id)?.columnId === target.id,
+				)
+			) {
+				showStatus(
+					`Bookmarks are sorted (${sortLabel(bookmarkSort)}). Choose Manual order in the sort menu to rearrange them.`,
+				);
+				return;
+			}
+
+			await moveBookmarks(ids, target.id, targetBookmarkId, position);
 
 			return;
 		}
@@ -1885,13 +1938,13 @@ function NewTab() {
 			try {
 				const result = await addDroppedLinks(
 					session.links,
-					column.id,
+					target.id,
 					targetBookmarkId,
 					position,
 					true,
 				);
 				offerUndo(
-					`Added ${plural(result.count, 'link')} to “${column.name}”.${skippedNote(result.skipped)}`,
+					`Added ${plural(result.count, 'link')} to “${target.name}”.${skippedNote(result.skipped)}`,
 					result.undoId,
 					showStatus,
 					reload,
@@ -1914,7 +1967,7 @@ function NewTab() {
 		}
 
 		try {
-			await addDroppedLinks([parsed], column.id, targetBookmarkId, position);
+			await addDroppedLinks([parsed], target.id, targetBookmarkId, position);
 		} catch (reason) {
 			showStatus((reason as Error).message, true);
 		}
@@ -2438,6 +2491,12 @@ function NewTab() {
 						search={bookmarkSearch}
 						onSearch={setBookmarkSearch}
 					/>
+					<SortMenu
+						label="Sort bookmarks"
+						value={bookmarkSort}
+						options={BOOKMARK_SORT_OPTIONS}
+						onChange={(value) => void changeBookmarkSort(value)}
+					/>
 					<IconTooltip
 						label={
 							bookmarkView === 'board'
@@ -2827,6 +2886,7 @@ function NewTab() {
 								autoLoadMore
 								scrollBody={settings.limitBookmarksPerColumn === true}
 								renderAll={settings.limitBookmarksPerColumn === true}
+								manualOrder={manualOrder}
 								bodyMaxHeight={cappedColumnBodyHeight}
 								compact={compactBoard}
 								column={activeFocus.column}
@@ -2914,6 +2974,7 @@ function NewTab() {
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
 							pageSize={bookmarkPageSize}
 							renderAll={settings.limitBookmarksPerColumn === true}
+							manualOrder={manualOrder}
 							scrollBody={settings.limitBookmarksPerColumn === true}
 							bodyMaxHeight={cappedColumnBodyHeight}
 							compact={compactBoard}
@@ -2946,6 +3007,7 @@ function NewTab() {
 									: Math.max(unfiledFiltered.length, 1)
 							}
 							renderAll={settings.limitBookmarksPerColumn === true}
+							manualOrder={manualOrder}
 							scrollBody={settings.limitBookmarksPerColumn === true}
 							bodyMaxHeight={cappedColumnBodyHeight}
 							compact={compactBoard}
@@ -3889,6 +3951,10 @@ type BookmarkColumnProps = {
 	*/
 	renderAll?: boolean;
 	/**
+	The column shows the stored order, so a drop picks a slot between cards and Move up and Move down apply. False while a sort is on.
+	*/
+	manualOrder?: boolean;
+	/**
 	Tighter header, body, and row spacing (the compact bookmark density).
 	*/
 	compact?: boolean;
@@ -3913,6 +3979,8 @@ const MAX_SESSION_TARGETS = 30;
 Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
 */
 const COLUMN_PAGE = 60;
+const sortLabel = (sort: BookmarkSort) =>
+	BOOKMARK_SORT_OPTIONS.find(([value]) => value === sort)?.[1] ?? sort;
 
 const BookmarkColumn = memo(
 	({
@@ -3934,6 +4002,7 @@ const BookmarkColumn = memo(
 		scrollBody = false,
 		bodyMaxHeight,
 		renderAll = false,
+		manualOrder = true,
 		compact = false,
 		simpleHeader = false,
 		headerIcon: HeaderIcon,
@@ -3952,8 +4021,22 @@ const BookmarkColumn = memo(
 			: bookmarks.length > limit
 				? bookmarks.slice(0, limit)
 				: bookmarks;
-		const lastSibling = siblings.at(-1)?.id;
-		const firstSibling = siblings[0]?.id;
+		// The first and last bookmark of each column: All lists several columns, and a bookmark moves only inside its own.
+		const edges = useMemo(() => {
+			const first = new Set<string>();
+			const last = new Set<string>();
+			for (const [index, entry] of siblings.entries()) {
+				if (siblings[index - 1]?.columnId !== entry.columnId) {
+					first.add(entry.id);
+				}
+
+				if (siblings[index + 1]?.columnId !== entry.columnId) {
+					last.add(entry.id);
+				}
+			}
+
+			return {first, last};
+		}, [siblings]);
 		const onDropOver = actions.dropOver;
 		function leaveColumn(event: DragEvent<HTMLElement>) {
 			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -3974,7 +4057,8 @@ const BookmarkColumn = memo(
 		const colorVars = columnColorVars(column.color);
 		const bookmarkDrop =
 			dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
-		const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
+		const showEndInsertion =
+			manualOrder && bookmarkDrop && !bookmarkDrop.targetBookmarkId;
 		const header = simpleHeader ? (
 			<header
 				className={cn(
@@ -4084,8 +4168,8 @@ const BookmarkColumn = memo(
 									dropBefore={targeted && bookmarkDrop.position === 'before'}
 									dropAfter={targeted && bookmarkDrop.position === 'after'}
 									dropActive={targeted}
-									canMoveEarlier={bookmark.id !== firstSibling}
-									canMoveLater={bookmark.id !== lastSibling}
+									canMoveEarlier={manualOrder && !edges.first.has(bookmark.id)}
+									canMoveLater={manualOrder && !edges.last.has(bookmark.id)}
 									urlMode={urlMode}
 									clickOpensMenu={clickOpensMenu}
 									urlSettings={urlSettings}
@@ -4149,7 +4233,13 @@ const BookmarkColumn = memo(
 					)}
 					aria-label={ariaLabel ?? `${column.name} bookmark column`}
 					onDragOver={(event) =>
-						previewBookmarkDrop(event, column.id, onDropOver, allowColumnDrop)
+						previewBookmarkDrop(
+							event,
+							column.id,
+							onDropOver,
+							allowColumnDrop,
+							manualOrder,
+						)
 					}
 					onDragLeave={leaveColumn}
 					onDrop={(event) => {

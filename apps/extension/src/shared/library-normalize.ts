@@ -159,6 +159,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	saveSplitTabs: 'both',
 	paletteLocation: 'page',
 	sessionSort: 'newest',
+	bookmarkSort: 'manual',
 	expandSessionsByDefault: false,
 	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
@@ -978,6 +979,12 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.sessionSort
 			: 'newest',
+		bookmarkSort: isOneOf(
+			['manual', 'newest', 'oldest', 'title', 'site'],
+			raw.bookmarkSort,
+		)
+			? raw.bookmarkSort
+			: 'manual',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
 		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),

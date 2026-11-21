@@ -13,7 +13,6 @@ import {
 	Archive,
 	AppWindow,
 	ArrowDown,
-	ArrowDownUp,
 	ArrowLeftRight,
 	ArrowUp,
 	BookmarkPlus,
@@ -60,9 +59,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 	ExpandingSearch,
@@ -118,6 +114,7 @@ import {
 	isArchivedFolder,
 	visibleSessionFolders,
 } from '../shared/session-folders';
+import {SortMenu} from './sort-menu';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -268,6 +265,14 @@ const NO_SELECTION = new Set<string>();
 Sessions rendered at first; more are added as the list is scrolled (thousands of cards at once are slow).
 */
 const SESSION_PAGE = 40;
+const SESSION_SORT_OPTIONS = [
+	['newest', 'Newest first'],
+	['oldest', 'Oldest first'],
+	['opened', 'Last opened'],
+	['name', 'Name A–Z'],
+	['tabs', 'Most tabs'],
+	['custom', 'Custom order'],
+] as const;
 const setMember = (set: Set<string>, key: string, member: boolean) => {
 	if (member) {
 		set.add(key);
@@ -1810,40 +1815,12 @@ export function SessionManager({
 								{folderList ? <LayoutGrid /> : <PanelLeft />}
 							</Button>
 						</IconTooltip>
-						<DropdownMenu>
-							<IconTooltip label="Sort sessions">
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8"
-										aria-label="Sort sessions"
-									>
-										<ArrowDownUp />
-									</Button>
-								</DropdownMenuTrigger>
-							</IconTooltip>
-							<DropdownMenuContent align="end">
-								<DropdownMenuLabel>Sort sessions</DropdownMenuLabel>
-								<DropdownMenuRadioGroup
-									value={sort}
-									onValueChange={(value) => void changeSort(value)}
-								>
-									{[
-										['newest', 'Newest first'],
-										['oldest', 'Oldest first'],
-										['opened', 'Last opened'],
-										['name', 'Name A–Z'],
-										['tabs', 'Most tabs'],
-										['custom', 'Custom order'],
-									].map(([value, label]) => (
-										<DropdownMenuRadioItem key={value} value={value}>
-											{label}
-										</DropdownMenuRadioItem>
-									))}
-								</DropdownMenuRadioGroup>
-							</DropdownMenuContent>
-						</DropdownMenu>
+						<SortMenu
+							label="Sort sessions"
+							value={sort}
+							options={SESSION_SORT_OPTIONS}
+							onChange={(value) => void changeSort(value)}
+						/>
 						{!inPrivateWindow() && (
 							<IconTooltip label="Recent snapshots">
 								<Button

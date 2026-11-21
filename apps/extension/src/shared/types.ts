@@ -61,6 +61,10 @@ export type RestoreTarget =
 export type RestoreMode = 'keep' | 'remove';
 export type SessionSort =
 	'newest' | 'oldest' | 'opened' | 'name' | 'tabs' | 'custom';
+/**
+How a bookmark column lists its bookmarks. `manual` is the stored order; the others only change what is shown.
+*/
+export type BookmarkSort = 'manual' | 'newest' | 'oldest' | 'title' | 'site';
 export type CopyFormat =
 	'rich' | 'title-url' | 'url-title' | 'url' | 'markdown';
 export type TabGroupColor = `${chrome.tabGroups.Color}`;
@@ -161,6 +165,10 @@ export type Settings = {
 	saveSplitTabs: SaveSplitTabs;
 	paletteLocation: PaletteLocation;
 	sessionSort: SessionSort;
+	/**
+	How bookmark columns are listed (default: manual). Anything else is a view only; the stored order is kept.
+	*/
+	bookmarkSort: BookmarkSort;
 	/**
 	Session cards start expanded on the TabLodge page (default off: collapsed); each can still be toggled during the visit.
 	*/

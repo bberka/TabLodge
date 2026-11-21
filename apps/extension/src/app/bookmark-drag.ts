@@ -94,23 +94,45 @@ export function acceptsDrop(
 	return Boolean(kind) && (allowColumn || kind !== 'column');
 }
 
+/**
+The id of the Focus view's All item. It lists every column's bookmarks but is not a column, so a drop on it has no
+column of its own.
+*/
+export const ALL_BOOKMARKS_ID = 'bookmark-all';
+
+/**
+The column a bookmark, session, or link drop lands in. A real column takes it itself; All takes it into the column of
+the card it landed on, and a drop on All away from every card goes nowhere (null).
+*/
+export function dropColumnId(
+	columnId: string,
+	cardColumnId: string | undefined | null,
+): string | null {
+	return columnId === ALL_BOOKMARKS_ID ? cardColumnId || null : columnId;
+}
+
+/**
+`manualOrder` is false while the column is sorted by something else: the stored order is not shown, so no slot next to
+a card is offered and a drop goes to the end of its column.
+*/
 export function previewBookmarkDrop(
 	event: DragEvent<HTMLElement>,
 	columnId: string,
 	onDropOver: (indicator: DropIndicator | null) => void,
 	allowColumn: boolean,
+	manualOrder = true,
 ) {
 	if (!acceptsDrop(event, allowColumn)) {
 		return;
 	}
 
-	event.preventDefault();
 	const kind = dragPayloadKind(event.dataTransfer.types);
 	if (!kind) {
 		return;
 	}
 
 	if (kind === 'column') {
+		event.preventDefault();
 		const rect = event.currentTarget.getBoundingClientRect();
 		onDropOver({
 			kind,
@@ -120,17 +142,29 @@ export function previewBookmarkDrop(
 		return;
 	}
 
-	event.dataTransfer.dropEffect = kind === 'bookmark' ? 'move' : 'copy';
 	const targetCard = (event.target as Element).closest<HTMLElement>(
 		'[data-bookmark-id]',
 	);
+	// Not a drop target: no line, and the browser shows that the drop is refused.
+	if (dropColumnId(columnId, targetCard?.dataset.columnId) === null) {
+		onDropOver(null);
+		return;
+	}
+
+	event.preventDefault();
+	event.dataTransfer.dropEffect = kind === 'bookmark' ? 'move' : 'copy';
 	const rect = targetCard?.getBoundingClientRect();
 	onDropOver({
 		kind,
 		columnId,
-		targetBookmarkId: targetCard?.dataset.bookmarkId || null,
+		targetBookmarkId: manualOrder
+			? targetCard?.dataset.bookmarkId || null
+			: null,
 		position:
-			targetCard && rect && event.clientY < rect.top + rect.height / 2
+			manualOrder &&
+			targetCard &&
+			rect &&
+			event.clientY < rect.top + rect.height / 2
 				? 'before'
 				: 'after',
 	});

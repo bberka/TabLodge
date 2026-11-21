@@ -3,6 +3,8 @@ import type {DragEvent} from 'react';
 import {describe, test} from 'vite-plus/test';
 import {
 	acceptsDrop,
+	ALL_BOOKMARKS_ID,
+	dropColumnId,
 	parsePastedLinks,
 	previewBookmarkDrop,
 	type DropIndicator,
@@ -54,13 +56,13 @@ describe('parsePastedLinks', () => {
 
 const dragEvent = (
 	types: string[],
-	card?: {id: string; top: number; height: number},
+	card?: {id: string; top: number; height: number; columnId?: string},
 	clientY = 0,
 ) => {
 	const target = {
 		closest: () =>
 			card && {
-				dataset: {bookmarkId: card.id},
+				dataset: {bookmarkId: card.id, columnId: card.columnId},
 				getBoundingClientRect: () => ({top: card.top, height: card.height}),
 			},
 	};
@@ -129,6 +131,78 @@ describe('bookmark drops', () => {
 			kind: 'column',
 			columnId: 'c1',
 			position: 'before',
+		});
+	});
+});
+
+describe('drops on the All item', () => {
+	test('go to the column of the card they land on, and nowhere else', () => {
+		assert.equal(dropColumnId(ALL_BOOKMARKS_ID, 'c2'), 'c2');
+		assert.equal(dropColumnId(ALL_BOOKMARKS_ID, undefined), null);
+		assert.equal(dropColumnId('c1', undefined), 'c1');
+		assert.equal(dropColumnId('c1', 'c2'), 'c1');
+	});
+
+	test('offer no slot away from a card, so the browser refuses the drop', () => {
+		let seen: DropIndicator | null | undefined;
+		let prevented = false;
+		const event = dragEvent([BOOKMARK_DRAG_TYPE]);
+		event.preventDefault = () => {
+			prevented = true;
+		};
+
+		previewBookmarkDrop(
+			event,
+			ALL_BOOKMARKS_ID,
+			(value) => {
+				seen = value;
+			},
+			false,
+		);
+		assert.equal(seen, null);
+		assert.equal(prevented, false);
+	});
+
+	test('offer the slot next to a card in its own column', () => {
+		let seen: DropIndicator | null = null;
+		previewBookmarkDrop(
+			dragEvent(
+				[BOOKMARK_DRAG_TYPE],
+				{id: 'b1', top: 100, height: 40, columnId: 'c2'},
+				110,
+			),
+			ALL_BOOKMARKS_ID,
+			(value) => {
+				seen = value;
+			},
+			false,
+		);
+		assert.deepEqual(seen, {
+			kind: 'bookmark',
+			columnId: ALL_BOOKMARKS_ID,
+			targetBookmarkId: 'b1',
+			position: 'before',
+		});
+	});
+});
+
+describe('drops on a sorted column', () => {
+	test('offer no slot next to a card', () => {
+		let seen: DropIndicator | null = null;
+		previewBookmarkDrop(
+			dragEvent([BOOKMARK_DRAG_TYPE], {id: 'b1', top: 100, height: 40}, 110),
+			'c1',
+			(value) => {
+				seen = value;
+			},
+			true,
+			false,
+		);
+		assert.deepEqual(seen, {
+			kind: 'bookmark',
+			columnId: 'c1',
+			targetBookmarkId: null,
+			position: 'after',
 		});
 	});
 });
