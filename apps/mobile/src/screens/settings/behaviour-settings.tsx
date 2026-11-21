@@ -14,6 +14,7 @@ import {
 	sessionActionLook,
 } from '../../library/row-actions';
 import {useColors} from '../../ui/theme';
+import {BOOKMARK_SORT_CHOICES} from '../../library/bookmark-sort';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {type IconName, Switch} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
@@ -186,6 +187,14 @@ export function BookmarkBehaviourCard() {
 				value={settings.showAllBookmarks}
 				onChange={(value) => {
 					void setSyncedSetting('showAllBookmarks', value);
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sortBookmarks}
+				value={settings.bookmarkSort}
+				choices={BOOKMARK_SORT_CHOICES}
+				onChange={(value) => {
+					void setSyncedSetting('bookmarkSort', value);
 				}}
 			/>
 			<Toggle

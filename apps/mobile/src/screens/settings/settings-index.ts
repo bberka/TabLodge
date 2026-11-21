@@ -141,6 +141,10 @@ export const ROWS = {
 		hint: 'The first item, listing every bookmark. Shared with the extension',
 	},
 	sortSessions: {label: 'Sort sessions'},
+	sortBookmarks: {
+		label: 'Sort bookmarks',
+		hint: 'Only Manual order can be rearranged',
+	},
 	licences: {
 		label: 'Open source licences',
 		hint: 'The third party code this app is built from',
@@ -250,6 +254,7 @@ export const SECTIONS = {
 			ROWS.showUnder,
 			ROWS.spacing,
 			ROWS.showAll,
+			ROWS.sortBookmarks,
 			ROWS.siteIcons,
 			ROWS.savePreview,
 		],
