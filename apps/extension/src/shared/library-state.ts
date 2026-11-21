@@ -37,6 +37,7 @@ import {
 	batches,
 	bookmarksKey,
 	assertStableIds,
+	BOOKMARKS_KEY_PREFIX,
 	contentHash,
 	idsOf,
 	isRecordsEntry,
@@ -51,6 +52,7 @@ import {
 	planState,
 	PREMIGRATION_KEY,
 	referencedKeys,
+	SESSION_KEY_PREFIX,
 	SIDECAR,
 	sessionContent,
 	sessionKey,
@@ -863,11 +865,34 @@ export function createLibraryState(
 		});
 	}
 
+	async function dropGarbage(): Promise<void> {
+		const current = await getOne(STATE_KEY);
+		if (!isRecordsEntry(current)) {
+			return;
+		}
+
+		const index = parseIndex(current);
+		const referenced = new Set(referencedKeys(index));
+		const garbage = index.garbage.filter(
+			(key) =>
+				!referenced.has(key) &&
+				(key.startsWith(SESSION_KEY_PREFIX) ||
+					key.startsWith(BOOKMARKS_KEY_PREFIX)),
+		);
+		if (index.garbage.length === 0) {
+			return;
+		}
+
+		await removeKeys(garbage);
+		await backend.set({[STATE_KEY]: {...current, garbage: []}});
+	}
+
 	return {
 		read,
 		readMeta,
 		write,
 		remove,
+		dropGarbage,
 		verify,
 		migrate,
 		pruneRecoveryCopy,

@@ -27,6 +27,7 @@ const editsWithOwnUndo = [
 	'UPDATE_GROUP_FROM_WINDOW',
 	'SPLIT_GROUP',
 	'MERGE_GROUPS',
+	'SEND_TO_PRIVATE',
 	'SAVE_QUOTE',
 	'ADD_BOOKMARKS',
 	'IMPORT_GROUPS',
@@ -130,6 +131,8 @@ const notLibraryEdits = [
 	'QUOTE_UNDO',
 	'TOAST_PREFS',
 	'UNDO',
+	'DROP_UNDO',
+	'SEND_TO_PRIVATE_STATE',
 ];
 
 test('every message is classified, so a new library edit cannot skip the shared Undo', () => {

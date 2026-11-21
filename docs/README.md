@@ -27,7 +27,7 @@ TabLodge is a browser extension for Chromium browsers and desktop Firefox. Save 
 - **Import and export:** OneTab, Session Buddy, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, Mastodon bookmarks, browser bookmarks, and backups.
 - **Recovery:** crash snapshots, a trash bin, and Undo.
 - **Sync:** keep every browser the same with a server you run yourself ([Self hosting](self-hosting.md)).
-- **Private windows:** a separate library, optionally locked ([Private windows](private-windows.md)).
+- **Private windows:** a separate library, optionally locked, that regular windows can send links to without unlocking it ([Private windows](private-windows.md)).
 - **Android app:** your bookmarks and sessions on your phone ([Android app](android.md)).
 
 The in app Help page explains every feature and setting.

@@ -47,6 +47,8 @@ import {useSettledText} from '../../ui/search-count';
 import {Empty, Header, IconButton} from '../../ui/widgets';
 import {copyActions, withCopyActions} from '../copy/copy-actions';
 import {useCopyUrls} from '../../library/page-copies';
+import {canSendToPrivate} from '../../private/send-to-private';
+import {usePrivateState} from '../../private/private-library';
 import {useSharedPagesAction} from '../settings/shared-pages-settings';
 import {FolderEditSheet} from './folder-sheet';
 import {FolderChips, folderMenuFor, useFolderLook} from './folder-chips';
@@ -93,6 +95,7 @@ export function SessionsScreen({
 	const sharedPagesAction = useSharedPagesAction();
 	const links = useLinkSettings();
 	const view = useView();
+	const privateState = usePrivateState();
 	const copyUrls = useCopyUrls();
 	const {connected} = useSyncStatus();
 	const {refreshing, refresh} = useRefresh();
@@ -272,6 +275,7 @@ export function SessionsScreen({
 						links,
 						edit: setEditingTab,
 						bookmark: setBookmarking,
+						canSendToPrivate: canSendToPrivate(view, privateState),
 					}),
 					copyActions(tabMenuTab.url, {
 						colors,

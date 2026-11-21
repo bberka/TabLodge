@@ -369,6 +369,8 @@ export const SECTIONS = {
 			'change password',
 			'eye',
 			'glasses',
+			'send to private storage',
+			'sent from regular windows',
 		],
 		rows: [
 			ROWS.showPrivateButton,

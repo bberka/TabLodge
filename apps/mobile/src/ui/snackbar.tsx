@@ -22,6 +22,7 @@ type Snack = {
 	message: string;
 	actionLabel?: string;
 	onAction?: () => void;
+	onClose?: () => void;
 };
 
 let current: Snack | undefined;
@@ -37,22 +38,34 @@ const emit = () => {
 	}
 };
 
+function close(): void {
+	const closing = current;
+	current = undefined;
+	closing?.onClose?.();
+}
+
 export function showSnack(
 	message: string,
-	action?: {label: string; run: () => void},
+	action?: {
+		label: string;
+		run: () => void | Promise<void>;
+		closed?: () => void;
+	},
 ): void {
 	counter += 1;
+	close();
 	current = {
 		id: counter,
 		message,
 		actionLabel: action?.label,
 		onAction: action?.run,
+		onClose: action?.closed,
 	};
 	clearTimeout(timer);
 	const ms = toastMs(5000, duration);
 	if (ms !== undefined) {
 		timer = setTimeout(() => {
-			current = undefined;
+			close();
 			emit();
 		}, ms);
 	}
@@ -62,7 +75,7 @@ export function showSnack(
 
 function dismiss() {
 	clearTimeout(timer);
-	current = undefined;
+	close();
 	emit();
 }
 

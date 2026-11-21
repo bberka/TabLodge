@@ -154,6 +154,11 @@ import {
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
+import {
+	SEND_TO_PRIVATE_LABEL,
+	sendLinksToPrivate,
+	useSendToPrivate,
+} from './send-to-private';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {FocusViewHint} from './focus-hint';
 import {
@@ -275,6 +280,7 @@ const NO_COLUMNS: BookmarkColumn[] = [];
 const NO_SETTINGS: Partial<Settings> = {};
 const NO_ORIGINS: readonly string[] = [];
 const NO_SELECTION = new Set<string>();
+const SendPrivateIcon = ACTION_ICONS.sendPrivate;
 /**
 Sessions rendered at first; more are added as the list is scrolled (thousands of cards at once are slow).
 */
@@ -1320,6 +1326,7 @@ export function SessionManager({
 		},
 	};
 
+	const sendState = useSendToPrivate();
 	// One stable object of callbacks for every card: it always calls the latest closures below, so
 	// memoized cards and rows are not re-rendered just because a handler was re-created.
 	const cardActions = useStableCallbacks<CardActions>({
@@ -1353,6 +1360,12 @@ export function SessionManager({
 			}),
 		openTab,
 		openTabPrivately,
+		sendTabToPrivate: (group, tab) =>
+			void sendLinksToPrivate(
+				[{kind: 'tab', sessionId: group.id, tabId: tab.id}],
+				showStatus,
+				reload,
+			),
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
 		deleteGroup: (group) => deleteGroup(group),
@@ -1724,6 +1737,26 @@ export function SessionManager({
 	}
 
 	const selectedCount = selectedTabCount();
+	async function sendSelectedToPrivate() {
+		const sent = await sendLinksToPrivate(
+			selectedGroups().flatMap((group) =>
+				group.tabs.map((tab) => ({
+					kind: 'tab' as const,
+					sessionId: group.id,
+					tabId: tab.id,
+				})),
+			),
+			showStatus,
+			reload,
+		);
+		if (!sent) {
+			return;
+		}
+
+		setSelected(new Set());
+		setAnchor(null);
+	}
+
 	const selectedSources = selectedGroups();
 	// Splitting needs links of one session, and leaves at least one link behind.
 	const splitSource =
@@ -2231,6 +2264,16 @@ export function SessionManager({
 										>
 											<Split className="h-4 w-4" />
 											Split
+										</Button>
+									)}
+									{sendState !== 'hidden' && (
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => void sendSelectedToPrivate()}
+										>
+											<SendPrivateIcon className="h-4 w-4" />
+											{SEND_TO_PRIVATE_LABEL}
 										</Button>
 									)}
 								</div>
@@ -2873,6 +2916,7 @@ type CardActions = {
 	share: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	openTabPrivately: (tab: SavedTabRecord) => void;
+	sendTabToPrivate: (group: Session, tab: SavedTabRecord) => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
 	deleteGroup: (group: Session) => void;
@@ -3710,6 +3754,7 @@ const SavedTab = memo(
 		const compact = displayUrl === null;
 		const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
 		const copyUrls = usePageCopyUrls();
+		const sendState = useSendToPrivate();
 		// Built only when the menu opens.
 		const actions = (): MenuAction[] => [
 			{
@@ -3776,6 +3821,13 @@ const SavedTab = memo(
 				label: 'Bookmark',
 				icon: BookmarkPlus,
 				onSelect: () => handlers.bookmark(tab),
+			},
+			{
+				id: 'send-private',
+				label: SEND_TO_PRIVATE_LABEL,
+				icon: ACTION_ICONS.sendPrivate,
+				hidden: sendState === 'hidden',
+				onSelect: () => handlers.sendTabToPrivate(group, tab),
 			},
 			{type: 'separator'},
 			{

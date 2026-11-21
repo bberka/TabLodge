@@ -108,6 +108,11 @@ import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
+import {
+	SEND_TO_PRIVATE_LABEL,
+	sendLinksToPrivate,
+	useSendToPrivate,
+} from './send-to-private';
 import {AccentPalette} from './accent-palette';
 import {
 	COLUMN_COLOR_BAR,
@@ -250,6 +255,7 @@ type BookmarkAction =
 	| 'copy'
 	| 'select'
 	| 'select-range'
+	| 'send-private'
 	| 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
@@ -328,6 +334,7 @@ const ALL_COLUMN: BookmarkColumnData = {
 	isDefault: false,
 };
 const MoveBookmarkIcon = ACTION_ICONS.move;
+const SendPrivateIcon = ACTION_ICONS.sendPrivate;
 /**
 What each quick-action button on a bookmark row does.
 */
@@ -486,6 +493,7 @@ function NewTab() {
 	// Only the stored order can be rearranged; any other sort is a view of it.
 	const manualOrder = bookmarkSort === 'manual';
 	// In the order shown, so a batch moved under a sort arrives in that order.
+	const sendState = useSendToPrivate();
 	const selectedBookmarkIds = sortBookmarks(
 		bookmarks.filter((bookmark) => selectedBookmarks.has(bookmark.id)),
 		bookmarkSort,
@@ -1456,6 +1464,20 @@ function NewTab() {
 		offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
 	}
 
+	async function sendSelectedBookmarksToPrivate() {
+		const sent = await sendLinksToPrivate(
+			selectedBookmarkIds.map((bookmarkId) => ({
+				kind: 'bookmark' as const,
+				bookmarkId,
+			})),
+			showStatus,
+			reload,
+		);
+		if (sent) {
+			clearBookmarkSelection();
+		}
+	}
+
 	async function deleteSelectedBookmarks() {
 		if (bookmarkBatchRunningRef.current) {
 			return;
@@ -1789,6 +1811,15 @@ function NewTab() {
 				);
 			}
 
+			return;
+		}
+
+		if (action === 'send-private') {
+			await sendLinksToPrivate(
+				[{kind: 'bookmark', bookmarkId: bookmark.id}],
+				showStatus,
+				reload,
+			);
 			return;
 		}
 
@@ -2666,6 +2697,17 @@ function NewTab() {
 							>
 								<ListPlus className="h-4 w-4" />
 								Add to session…
+							</Button>
+						)}
+						{sendState !== 'hidden' && (
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={busy === 'bookmark-batch'}
+								onClick={() => void sendSelectedBookmarksToPrivate()}
+							>
+								<SendPrivateIcon className="h-4 w-4" />
+								{SEND_TO_PRIVATE_LABEL}
 							</Button>
 						)}
 						<Button
@@ -4276,6 +4318,7 @@ const BookmarkCard = memo(
 	}: BookmarkCardProps) => {
 		const [menuOpen, setMenuOpen] = useState(false);
 		const copyUrls = usePageCopyUrls();
+		const sendState = useSendToPrivate();
 		const act = (action: BookmarkAction) => () => {
 			void onAction(action, bookmark);
 		};
@@ -4381,6 +4424,13 @@ const BookmarkCard = memo(
 				icon: ArrowDown,
 				disabled: !canMoveLater,
 				onSelect: act('move-down'),
+			},
+			{
+				id: 'send-private',
+				label: SEND_TO_PRIVATE_LABEL,
+				icon: ACTION_ICONS.sendPrivate,
+				hidden: sendState === 'hidden',
+				onSelect: act('send-private'),
 			},
 			{type: 'separator'},
 			remove,

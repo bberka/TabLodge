@@ -226,6 +226,26 @@ import {
 	sharedPageUrl,
 	uploadSharedPage,
 } from '../src/shared/sync/shared-pages-client';
+import {
+	createInboxKeyPair,
+	INBOX_ENTRY_PREFIX,
+	INBOX_PRIVATE_KEY_NAME,
+	INBOX_PUBLIC_KEY,
+	inboxEntryKey,
+	isInboxEntryKey,
+	openInboxEntry,
+	parseInboxKeyPair,
+	parseInboxPublicKey,
+	sealForInbox,
+	type InboxKeyPair,
+} from '../src/shared/private-inbox';
+import {
+	addSentLinks,
+	MAX_SENT_LINKS,
+	parseSendTargets,
+	takeOutForPrivate,
+	type SentLink,
+} from '../src/shared/send-to-private';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
@@ -239,6 +259,7 @@ type Raw = import('../src/shared/library-normalize').Raw;
 type RawSettings = import('../src/shared/library-normalize').RawSettings;
 type Bookmark = import('../src/shared/types').Bookmark;
 type BookmarkColumn = import('../src/shared/types').BookmarkColumn;
+type SendToPrivateState = import('../src/shared/types').SendToPrivateState;
 type BookmarkFields = import('../src/shared/types').BookmarkFields;
 type DuplicateMode = import('../src/shared/types').DuplicateMode;
 type EraseScope = import('../src/shared/types').EraseScope;
@@ -1738,7 +1759,12 @@ async function joinPrivateServer(
 	}
 
 	const enabled = await enablePrivateSync(credential);
-	return enabled.ok ? {ok: true, ...(await privateLockInfo())} : enabled;
+	if (!enabled.ok) {
+		return enabled;
+	}
+
+	await receiveSentLinks().catch(() => undefined);
+	return {ok: true, ...(await privateLockInfo())};
 }
 
 /**
@@ -8968,6 +8994,250 @@ async function withUndo<K extends TabLodgeMessageType>(
 	}
 }
 
+const ALARM_SEND_TO_PRIVATE = 'tablodge-send-to-private';
+const SEND_CLEANUP_KEY = 'tablodge.sendprivate.cleanup';
+const SEND_HOLD_MS = UNDO_WINDOW_MS + 60_000;
+const SEND_NEEDS_PRIVATE_WINDOW =
+	'Open a private window and unlock it once, then send links to it from here.';
+
+async function sendToPrivateState(): Promise<SendToPrivateState> {
+	await privateConfigReady;
+	if (
+		privateContext ||
+		IS_FIREFOX ||
+		privateConfig.mode !== 'saved' ||
+		!privateConfig.configured
+	) {
+		return 'hidden';
+	}
+
+	const lock = await chrome.storage.local.get([LOCK_RECORD_KEY]);
+	return parseLockRecord(lock[LOCK_RECORD_KEY])?.state === 'encrypted' &&
+		(await inboxPublicKey())
+		? 'ready'
+		: 'needs-private-window';
+}
+
+async function inboxPublicKey(): Promise<string | undefined> {
+	const saved = await chrome.storage.local.get([INBOX_PUBLIC_KEY]);
+	return parseInboxPublicKey(saved[INBOX_PUBLIC_KEY]);
+}
+
+async function sendToPrivate(
+	rawTargets: unknown,
+): Promise<ActionResult<'SEND_TO_PRIVATE'>> {
+	if (Array.isArray(rawTargets) && rawTargets.length > MAX_SENT_LINKS) {
+		return {
+			ok: false,
+			error: `Send at most ${MAX_SENT_LINKS} links at a time. Select fewer.`,
+		};
+	}
+
+	const targets = parseSendTargets(rawTargets);
+	if (!targets) {
+		return {ok: false, error: 'Choose the links to send.'};
+	}
+
+	const state = await sendToPrivateState();
+	if (state === 'hidden') {
+		return {
+			ok: false,
+			error: 'Private windows do not use a separate saved library.',
+		};
+	}
+
+	if (state !== 'ready') {
+		return {ok: false, error: SEND_NEEDS_PRIVATE_WINDOW};
+	}
+
+	const id = makeId();
+	const key = inboxEntryKey(id);
+	return mutate(() =>
+		withUndo('Send to private storage', [STORAGE_KEY, key], async () => {
+			const publicKey = await inboxPublicKey();
+			if (!publicKey) {
+				return {ok: false, error: SEND_NEEDS_PRIVATE_WINDOW};
+			}
+
+			const taken = takeOutForPrivate(await getStore(), targets);
+			if (!taken.ok) {
+				return taken;
+			}
+
+			const entry = await sealForInbox(publicKey, id, taken.links);
+			await library.set({
+				[key]: {...entry, holdUntil: Date.now() + SEND_HOLD_MS},
+			});
+			if ((await inboxPublicKey()) !== publicKey) {
+				await library.remove([key]);
+				return {
+					ok: false,
+					error: 'The private library changed meanwhile. Nothing was sent.',
+				};
+			}
+
+			await library.set({[SEND_CLEANUP_KEY]: true});
+			try {
+				await writeStore(taken.store);
+			} catch (error) {
+				await library.remove([key]).catch(() => undefined);
+				throw error;
+			}
+
+			try {
+				await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
+			} catch {}
+
+			return {ok: true, count: taken.links.length};
+		}),
+	);
+}
+
+async function finishSendCleanup(records: UndoRecord[]): Promise<void> {
+	const sendLive = records.some((record) =>
+		record.keys.some((key) => isInboxEntryKey(key)),
+	);
+	if (sendLive || !(await readKey(SEND_CLEANUP_KEY))) {
+		return;
+	}
+
+	try {
+		await mutate(async () => {
+			await libraryState.dropGarbage();
+			await library.remove([SEND_CLEANUP_KEY]);
+		});
+	} catch {
+		await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 1});
+	}
+}
+
+async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
+	const released = await undoMutate(async () => {
+		const records = await readUndo();
+		const record = records.find((entry) => entry.id === id);
+		if (!record) {
+			return [];
+		}
+
+		const entries = record.keys.filter((key) => isInboxEntryKey(key));
+		await writeUndo(
+			records.filter(
+				(entry) =>
+					entry.id !== id &&
+					(entries.length === 0 ||
+						entry.createdAt > record.createdAt ||
+						!entry.keys.includes(STORAGE_KEY)),
+			),
+		);
+		return entries;
+	});
+	if (released.length > 0) {
+		await mutate(async () => {
+			const stored = await library.get<Raw>(released);
+			const unheld = Object.fromEntries(
+				Object.entries(stored).flatMap(([key, value]) =>
+					isRecord(value) ? [[key, {...value, holdUntil: 0}]] : [],
+				),
+			);
+			await library.set(unheld);
+		});
+		await finishSendCleanup(await undoMutate(async () => readUndo()));
+	}
+
+	return {ok: true};
+}
+
+async function inboxKeyPair(): Promise<InboxKeyPair> {
+	const stored = await library.get<Raw>([INBOX_PRIVATE_KEY_NAME]);
+	const existing = parseInboxKeyPair(stored[INBOX_PRIVATE_KEY_NAME]);
+	const pair = existing ?? (await createInboxKeyPair());
+	if (!existing) {
+		await library.set({[INBOX_PRIVATE_KEY_NAME]: pair});
+	}
+
+	if ((await inboxPublicKey()) !== pair.publicKey) {
+		await chrome.storage.local.set({[INBOX_PUBLIC_KEY]: pair.publicKey});
+	}
+
+	return pair;
+}
+
+const heldUntil = (value: unknown) =>
+	isRecord(value) && typeof value.holdUntil === 'number' ? value.holdUntil : 0;
+
+async function receiveSentLinks(): Promise<void> {
+	if (!privateContext) {
+		return;
+	}
+
+	await privateConfigReady;
+	if (privateConfig.mode !== 'saved') {
+		return;
+	}
+
+	try {
+		await takeInSentLinks();
+	} catch {
+		await chrome.alarms?.create?.(ALARM_SEND_TO_PRIVATE, {delayInMinutes: 1});
+	}
+}
+
+async function takeInSentLinks({
+	ignoreHold = false,
+}: {ignoreHold?: boolean} = {}): Promise<void> {
+	await mutate(async () => {
+		const gate = await lockGate();
+		if (!gate?.key || gate.state !== 'encrypted') {
+			return;
+		}
+
+		const pair = await inboxKeyPair();
+		const stored = await chrome.storage.local.get(null);
+		const now = Date.now();
+		const taken: string[] = [];
+		const links: SentLink[] = [];
+		let wakeAt = Infinity;
+		for (const [key, value] of Object.entries(stored)) {
+			if (!isInboxEntryKey(key)) {
+				continue;
+			}
+
+			const hold = heldUntil(value);
+			if (hold > now && !ignoreHold) {
+				wakeAt = Math.min(wakeAt, hold);
+				continue;
+			}
+
+			const opened = await openInboxEntry(
+				pair,
+				key.slice(INBOX_ENTRY_PREFIX.length),
+				value,
+			);
+			if (!opened) {
+				continue;
+			}
+
+			taken.push(key);
+			links.push(...opened);
+		}
+
+		if (links.length > 0) {
+			const merged = addSentLinks(await getStore(), links);
+			if (merged.added > 0) {
+				await writeStore(merged.store);
+			}
+		}
+
+		if (taken.length > 0) {
+			await chrome.storage.local.remove(taken);
+		}
+
+		if (Number.isFinite(wakeAt)) {
+			await chrome.alarms?.create?.(ALARM_SEND_TO_PRIVATE, {when: wakeAt});
+		}
+	});
+}
+
 function mutateWithUndo<K extends UndoableEdit>(
 	type: K,
 	run: () => Promise<ActionResult<K>>,
@@ -8975,18 +9245,20 @@ function mutateWithUndo<K extends UndoableEdit>(
 	return mutate(() => withUndo(undoableEdit(type)!.label, [STORAGE_KEY], run));
 }
 
-function purgeUndo(): Promise<void> {
-	return undoMutate(async () => {
-		const records = await readUndo();
+async function purgeUndo(): Promise<void> {
+	const records = await undoMutate(async () => {
+		const live = await readUndo();
 		const stored = await readKey<Raw>(UNDO_KEY);
 		if (
 			stored &&
-			(!Array.isArray(stored.records) ||
-				stored.records.length !== records.length)
+			(!Array.isArray(stored.records) || stored.records.length !== live.length)
 		) {
-			await writeUndo(records);
+			await writeUndo(live);
 		}
+
+		return live;
 	});
+	await finishSendCleanup(records);
 }
 
 function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
@@ -9205,6 +9477,11 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 		return;
 	}
 
+	if (alarm.name === ALARM_SEND_TO_PRIVATE) {
+		void receiveSentLinks().catch(() => undefined);
+		return;
+	}
+
 	if (privateContext) {
 		return;
 	}
@@ -9277,7 +9554,17 @@ if (privateContext) {
 	// Private windows that closed while the worker was stopped lock the library as soon as it starts, before any page
 	// asks. A new window never counts as one of them, and the check shares one queue with unlocking in the lock.
 	void privateLock.lockWhenWindowsClosed().catch(() => undefined);
-	void resumePrivateLock().catch(() => undefined);
+	void resumePrivateLock()
+		.then(receiveSentLinks)
+		.catch(() => undefined);
+	chrome.storage.onChanged.addListener((changes, area) => {
+		if (
+			area === 'local' &&
+			Object.keys(changes).some((key) => isInboxEntryKey(key))
+		) {
+			void receiveSentLinks().catch(() => undefined);
+		}
+	});
 	chrome.windows?.onCreated?.addListener?.(() => {
 		void privateLock.lockWhenWindowsClosed().catch(() => undefined);
 	});
@@ -9443,7 +9730,11 @@ async function handlePrivateLockMessage(
 				}
 
 				const {credential} = message;
+				await privateLock.checkCredential(credential);
+				await takeInSentLinks({ignoreHold: true});
 				await mutate(async () => {
+					await library.remove([INBOX_PRIVATE_KEY_NAME]);
+					await chrome.storage.local.remove([INBOX_PUBLIC_KEY]);
 					await privateLock.disable(credential);
 				});
 				invalidateSettings();
@@ -9467,7 +9758,10 @@ async function handlePrivateLockMessage(
 					await chrome.storage.local.remove(
 						Object.keys(stored).filter(
 							(key) =>
-								key.startsWith(PRIVATE_PREFIX) && key !== PRIVATE_CONFIG_KEY,
+								(key.startsWith(PRIVATE_PREFIX) &&
+									key !== PRIVATE_CONFIG_KEY) ||
+								key === INBOX_PUBLIC_KEY ||
+								isInboxEntryKey(key),
 						),
 					);
 				});
@@ -9496,6 +9790,13 @@ async function handlePrivateLockMessage(
 					`${APP_NAME} could not change the private lock.`,
 			}
 		);
+	}
+
+	if (
+		message.type === 'UNLOCK_PRIVATE' ||
+		message.type === 'ENABLE_PRIVATE_LOCK'
+	) {
+		await receiveSentLinks().catch(() => undefined);
 	}
 
 	return {ok: true, ...(await privateLockInfo())};
@@ -10992,6 +11293,18 @@ async function handleMessage(
 
 		case 'UNDO': {
 			return undoAction(message.id);
+		}
+
+		case 'DROP_UNDO': {
+			return dropUndo(String(message.id));
+		}
+
+		case 'SEND_TO_PRIVATE': {
+			return sendToPrivate(message.targets);
+		}
+
+		case 'SEND_TO_PRIVATE_STATE': {
+			return {ok: true, state: await sendToPrivateState()};
 		}
 
 		case 'GET_STORAGE_USAGE': {
