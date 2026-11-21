@@ -878,6 +878,7 @@ export type TabLodgeMessages = {
 	};
 	REORDER_BOOKMARK: {
 		bookmarkId: string;
+		bookmarkIds?: string[];
 		targetColumnId: string;
 		targetBookmarkId?: string | null;
 		position?: InsertPosition;
@@ -1255,11 +1256,11 @@ export type TabLodgeResponses = {
 	`trashId`: the deleted session in the trash, for Undo.
 	*/
 	DELETE_GROUP: {trashId?: string};
-	ARCHIVE_GROUP: {group: Session};
-	UPDATE_GROUP: {group: Session};
-	SET_GROUP_ORDER: {};
-	CREATE_FOLDER: {folder: Folder};
-	UPDATE_FOLDER: {folder: Folder};
+	ARCHIVE_GROUP: {group: Session} & Undoable;
+	UPDATE_GROUP: {group: Session} & Undoable;
+	SET_GROUP_ORDER: Undoable;
+	CREATE_FOLDER: {folder: Folder} & Undoable;
+	UPDATE_FOLDER: {folder: Folder} & Undoable;
 	DELETE_FOLDER: {moved: number} & Undoable;
 	DELETE_TAB: {trashId?: string};
 	MOVE_TAB: {
@@ -1267,7 +1268,7 @@ export type TabLodgeResponses = {
 		Set when the move emptied the source session: it is in the trash under this id.
 		*/
 		trashId?: string;
-	};
+	} & Undoable;
 	ADD_LINKS_TO_SESSION: {added: number; skipped: number} & Undoable;
 	CREATE_SESSION_FROM_LINKS: {
 		groupId: string;
@@ -1287,9 +1288,9 @@ export type TabLodgeResponses = {
 	`groupId`: the new session; `count`: links moved into it.
 	*/
 	SPLIT_GROUP: {groupId: string; count: number} & Undoable;
-	UPDATE_TAB: {shared: number};
+	UPDATE_TAB: {shared: number} & Undoable;
 	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
-	ADD_BOOKMARK: {bookmark: Bookmark};
+	ADD_BOOKMARK: {bookmark: Bookmark} & Undoable;
 	/**
 	`placed`: the column or session the quote went to.
 	*/
@@ -1299,14 +1300,14 @@ export type TabLodgeResponses = {
 		skipped: number;
 		bookmarks: Bookmark[];
 	} & Undoable;
-	UPDATE_BOOKMARK: {bookmark: Bookmark};
+	UPDATE_BOOKMARK: {bookmark: Bookmark} & Undoable;
 	DELETE_BOOKMARK: {trashId?: string};
 	/**
 	`trashIds` are in deletion order; restore them in reverse to put every copy back where it was.
 	*/
 	REMOVE_DUPLICATE_BOOKMARKS: {removed: number; trashIds: string[]};
-	CREATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
-	UPDATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
+	CREATE_BOOKMARK_COLUMN: {column: BookmarkColumn} & Undoable;
+	UPDATE_BOOKMARK_COLUMN: {column: BookmarkColumn} & Undoable;
 	/**
 	`deleted`: bookmarks removed together with the column (only when `discardBookmarks` was set).
 	*/
@@ -1316,8 +1317,8 @@ export type TabLodgeResponses = {
 		deleted: number;
 		trashId?: string;
 	};
-	REORDER_BOOKMARK_COLUMN: {};
-	REORDER_BOOKMARK: {};
+	REORDER_BOOKMARK_COLUMN: Undoable;
+	REORDER_BOOKMARK: Undoable;
 	IMPORT_GROUPS: ImportResult & Undoable;
 	IMPORT_SESSIONS: ImportResult & Undoable;
 	IMPORT_BOOKMARKS_FILE: ImportResult & Undoable;
