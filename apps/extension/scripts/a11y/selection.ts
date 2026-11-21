@@ -466,7 +466,9 @@ export async function moveSelectedToNewColumnCheck(env: Env, theme: Theme) {
 						['dev-bookmark-1', 'dev-bookmark-2'].includes(bookmark.id),
 					)
 					.map((bookmark) => bookmark.columnId);
-				return column && columnIds.every((id) => id === column.id)
+				return column &&
+					columnIds.length === 2 &&
+					columnIds.every((id) => id === column.id)
 					? column.id
 					: undefined;
 			};
