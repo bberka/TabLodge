@@ -37,6 +37,7 @@ export function DuplicateBookmarksDialog({
 	columns,
 	showStatus,
 	onChanged,
+	simplifyUrls,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -44,6 +45,10 @@ export function DuplicateBookmarksDialog({
 	columns: readonly BookmarkColumn[];
 	showStatus: ShowStatus;
 	onChanged: () => unknown;
+	/**
+	The Simplify addresses setting, so the addresses shown follow it.
+	*/
+	simplifyUrls: boolean;
 }) {
 	const groups = useMemo(
 		() => (open ? findDuplicateBookmarks(bookmarks) : []),
@@ -153,7 +158,7 @@ export function DuplicateBookmarksDialog({
 											id={`duplicate-${group.copies[0].id}`}
 											className="mb-1.5 text-sm font-medium wrap-anywhere"
 										>
-											{displayUrl(group.url)}
+											{displayUrl(group.url, simplifyUrls)}
 										</p>
 										<RadioCardGroup
 											aria-labelledby={`duplicate-${group.copies[0].id}`}
@@ -168,7 +173,9 @@ export function DuplicateBookmarksDialog({
 												<RadioCard
 													key={copy.id}
 													value={copy.id}
-													title={copy.title || displayUrl(group.url)}
+													title={
+														copy.title || displayUrl(group.url, simplifyUrls)
+													}
 													badge={
 														copy.id === group.keepId ? (
 															<Badge variant="secondary">Oldest</Badge>

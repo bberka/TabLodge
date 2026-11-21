@@ -43,7 +43,7 @@ import {
 	type OpenTabInfo,
 } from '../shared/global-search';
 import {highlightWords} from '../shared/search-query';
-import {isFirefox} from '../shared/browser';
+import {isFirefox, toolbarOpensSidePanel} from '../shared/browser';
 import {send, useCloseOnEscape, type IconComponent} from './common';
 import {faviconUrl, LinkKindBadge, useServerIcon} from './favicon';
 import {
@@ -56,7 +56,7 @@ import {
 } from './finder-menu';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
 import {PROJECT} from './project';
-import {settingsSections} from './settings-sections';
+import {finderSettings} from './settings-finder';
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
 import {Kbd, SearchTipsButton, type KeyTip} from './search-tips';
@@ -96,7 +96,12 @@ export function emitFinderEvent(detail: FinderEventDetail) {
 const isMac = /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '');
 const SHORTCUT_NAME = isMac ? '⌘K' : 'Ctrl+K';
 
-const SETTINGS = settingsSections(PROJECT.name, isFirefox);
+const SETTINGS = finderSettings({
+	appName: PROJECT.name,
+	firefox: isFirefox,
+	sidePanel: toolbarOpensSidePanel,
+	privateWindows: canOpenPrivateWindow,
+});
 
 const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
 	url: Globe,

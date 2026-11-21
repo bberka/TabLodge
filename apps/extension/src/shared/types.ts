@@ -61,8 +61,6 @@ export type RestoreTarget =
 export type RestoreMode = 'keep' | 'remove';
 export type SessionSort =
 	'newest' | 'oldest' | 'opened' | 'name' | 'tabs' | 'custom';
-export type CopyFormat =
-	'rich' | 'title-url' | 'url-title' | 'url' | 'markdown';
 export type TabGroupColor = `${chrome.tabGroups.Color}`;
 export type DuplicateMode = 'skip' | 'allow';
 export type TitlePolicy = 'existing' | 'latest';
@@ -138,7 +136,7 @@ export type Settings = {
 	newTabFallback: 'browser' | 'blank' | 'custom';
 	newTabFallbackUrl: string;
 	/**
-	The new-tab page opens with an always-visible search box that has focus (default off).
+	Opens the search palette whenever a new tab opens on the new-tab page (default off).
 	*/
 	autoFocusSearchOnNewTab: boolean;
 	actionMode: ActionMode;
@@ -218,7 +216,7 @@ export type Settings = {
 	*/
 	bookmarkQuickActions: BookmarkQuickAction[];
 	/**
-	Show the sessions section above the bookmark board (only when both are enabled).
+	Show the sessions section above the bookmark board (default off).
 	*/
 	sessionsOnTop: boolean;
 	/**
@@ -269,10 +267,6 @@ export type Settings = {
 	Column that receives such bookmarks when added automatically; falls back to the first column if it is gone.
 	*/
 	browserBookmarkColumn: string;
-	/**
-	Kept for stored settings and backups; no longer shown, since Share covers copying session links.
-	*/
-	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
 	/**
 	Remove common tracking parameters when opening or copying saved links and when restoring sessions and snapshots; saved URLs are unchanged (default off).

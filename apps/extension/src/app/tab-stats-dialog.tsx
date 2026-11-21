@@ -57,10 +57,15 @@ export function TabStatsDialog({
 	open,
 	onOpenChange,
 	sessions,
+	simplifyUrls,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	sessions: readonly Session[];
+	/**
+	The Simplify addresses setting, so the idle tabs list follows it.
+	*/
+	simplifyUrls: boolean;
 }) {
 	const [openTabs, setOpenTabs] = useState<OpenTabs | null>(null);
 	const [error, setError] = useState(false);
@@ -167,7 +172,9 @@ export function TabStatsDialog({
 													{tab.title || tab.url || 'Untitled tab'}
 												</p>
 												<p className="truncate text-xs text-muted-foreground">
-													{tab.url ? `${displayUrl(tab.url)} · ` : ''}
+													{tab.url
+														? `${displayUrl(tab.url, simplifyUrls)} · `
+														: ''}
 													used {idleText(openTabs.now, tab.lastAccessed ?? 0)}
 												</p>
 											</li>

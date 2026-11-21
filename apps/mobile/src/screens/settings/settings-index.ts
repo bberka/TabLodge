@@ -32,6 +32,10 @@ export const ROWS = {
 		hint: 'Open them somewhere other than your other links',
 	},
 	privateOpenApp: {label: 'Private browser', hint: 'The app for private links'},
+	deviceName: {
+		label: 'Device name',
+		hint: 'Shown on sessions saved here. Empty uses your phone’s make and model',
+	},
 	syncSettings: {
 		label: 'Sync settings',
 		hint: 'Gestures and choices follow your other phones; the look stays here',
@@ -51,7 +55,7 @@ export const ROWS = {
 	},
 	compactSessions: {
 		label: 'Compact session cards',
-		hint: 'Tighter cards without the tab icon strip',
+		hint: 'Tighter cards: no tab icon strip, description, or Saved on line',
 	},
 	sessionIcons: {
 		label: 'Tab icons on session cards',
@@ -59,7 +63,7 @@ export const ROWS = {
 	},
 	showSavedOn: {
 		label: 'Show where a session was saved',
-		hint: 'The device name on the card',
+		hint: 'The device name on the card. Compact cards hide it',
 	},
 	expandSessions: {
 		label: 'Keep sessions expanded',
@@ -91,12 +95,12 @@ export const ROWS = {
 	sessionSwipeLeft: {label: 'Swipe a session left'},
 	linkSwipeRight: {label: 'Swipe a link right', hint: 'In an open session'},
 	linkSwipeLeft: {label: 'Swipe a link left', hint: 'In an open session'},
-	tap: {label: 'Tap a bookmark'},
+	tap: {label: 'Tap a bookmark', hint: 'Open the link or edit it'},
 	swipeRight: {label: 'Swipe a bookmark right'},
 	swipeLeft: {label: 'Swipe a bookmark left'},
 	cleanOnSave: {
 		label: 'Clean links when saving',
-		hint: 'Removes utm_source and similar',
+		hint: 'Removes utm_source and similar from new bookmarks and sessions. Not shared with the extension',
 	},
 	siteIcons: {
 		label: 'Site icons',
@@ -132,7 +136,10 @@ export const ROWS = {
 		label: 'Show All in the bookmark list',
 		hint: 'The first item, listing every bookmark. Shared with the extension',
 	},
-	sortSessions: {label: 'Sort sessions'},
+	sortSessions: {
+		label: 'Sort sessions',
+		hint: 'Newest, oldest, last opened, name, most tabs, or your order. The extension uses it too',
+	},
 	licences: {
 		label: 'Open source licences',
 		hint: 'The third party code this app is built from',
@@ -343,7 +350,7 @@ export const SECTIONS = {
 			'widget',
 			'battery',
 		],
-		rows: [ROWS.syncPrivate, ROWS.backgroundSync],
+		rows: [ROWS.syncPrivate, ROWS.backgroundSync, ROWS.deviceName],
 	},
 	excluded: {
 		title: 'Excluded websites',

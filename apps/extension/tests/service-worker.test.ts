@@ -4391,7 +4391,7 @@ test("DELETE_BOOKMARK_COLUMN with discardBookmarks deletes the column's bookmark
 function stateWithEverything(): StoredState {
 	const state = stateWithSession({
 		excludedOrigins: ['https://private.example'],
-		copyFormat: 'url',
+		sessionSort: 'oldest',
 	});
 	state.groups.push({
 		id: 'session-2',
@@ -4457,7 +4457,7 @@ test('ERASE_DATA sessions removes sessions and folders but keeps bookmarks and s
 		['column-news'],
 	);
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
-	assert.equal(harness.state.settings.copyFormat, 'url');
+	assert.equal(harness.state.settings.sessionSort, 'oldest');
 });
 
 const UNDO_KEY = 'tablodge.undo';
@@ -4553,7 +4553,7 @@ test('UNDO brings back cleared snapshots and refuses after a new capture', async
 test('UNDO restores a backup restore and reset settings, and resyncs settings', async () => {
 	const harness = createWorkerHarness({
 		...bookmarksState(),
-		settings: {copyFormat: 'url'},
+		settings: {sessionSort: 'oldest'},
 	});
 	const backup = await harness.sendMessage({type: 'BACKUP_NOW'});
 	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
@@ -4569,9 +4569,9 @@ test('UNDO restores a backup restore and reset settings, and resyncs settings', 
 
 	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
 	assert.ok(reset.undoId);
-	assert.notEqual(harness.state.settings.copyFormat, 'url');
+	assert.notEqual(harness.state.settings.sessionSort, 'oldest');
 	await harness.sendMessage({type: 'UNDO', id: reset.undoId});
-	assert.equal(harness.state.settings.copyFormat, 'url');
+	assert.equal(harness.state.settings.sessionSort, 'oldest');
 });
 
 test('ADD_BOOKMARKS skips links already in the column and reports them', async () => {
@@ -4689,7 +4689,7 @@ test('ERASE_DATA all restores fresh-install data while keeping settings and excl
 	assert.deepEqual(harness.state.bookmarks, []);
 	assert.deepEqual(harness.state.bookmarkColumns, freshColumns);
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
-	assert.equal(harness.state.settings.copyFormat, 'url');
+	assert.equal(harness.state.settings.sessionSort, 'oldest');
 
 	const invalid = await harness.sendMessage({
 		type: 'ERASE_DATA',
@@ -8508,7 +8508,7 @@ test('RESTORE_BACKUP brings data back, keeps current settings, and takes its own
 	await harness.sendMessage({type: 'ERASE_DATA', scope: 'all'});
 	await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {copyFormat: 'url'},
+		settings: {sessionSort: 'oldest'},
 	});
 	assert.equal(harness.state.bookmarks.length, 0);
 	const restored = await harness.sendMessage({
@@ -8520,7 +8520,11 @@ test('RESTORE_BACKUP brings data back, keeps current settings, and takes its own
 	assert.equal(restored.bookmarks, 3);
 	assert.equal(harness.state.bookmarks.length, 3);
 	assert.equal(harness.state.groups[0].id, 'session-1');
-	assert.equal(harness.state.settings.copyFormat, 'url', 'settings are kept');
+	assert.equal(
+		harness.state.settings.sessionSort,
+		'oldest',
+		'settings are kept',
+	);
 	// Restoring over data that exists keeps that data as a safety backup first.
 	await harness.sendMessage({
 		type: 'ADD_BOOKMARK',
@@ -8560,7 +8564,7 @@ const fullBackupInput = (overrides: Record<string, unknown> = {}) => ({
 				updatedAt: 1,
 			},
 		],
-		settings: {copyFormat: 'url', excludedOrigins: ['skip.example']},
+		settings: {sessionSort: 'oldest', excludedOrigins: ['skip.example']},
 	},
 	preferences: {uiTheme: 'dark', uiAccent: '#12ab9f'},
 	snapshots: {
@@ -8614,7 +8618,7 @@ test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the the
 		['in-1'],
 	);
 	assert.equal(harness.state.groups.length, 0);
-	assert.equal(harness.state.settings.copyFormat, 'url');
+	assert.equal(harness.state.settings.sessionSort, 'oldest');
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['skip.example']);
 	assert.equal(harness.extraStorage.uiTheme, 'dark');
 	assert.equal(harness.extraStorage.uiAccent, '#12ab9f');

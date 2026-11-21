@@ -366,7 +366,7 @@ export function SyncedSettingsCard() {
 		<SettingsCard
 			section={SECTIONS.extension}
 			icon="link-outline"
-			description="Shared with the extension, so a change here reaches your browser."
+			description="Shared with the extension, so a change here reaches your browser, except Clean links when saving, which only this app has."
 		>
 			<Toggle
 				row={ROWS.cleanTitles}

@@ -8,6 +8,8 @@ import {defaultDeviceName} from '../../platform/device';
 import {setPreferences, usePreferences} from '../../settings/preferences';
 import {useColors} from '../../ui/theme';
 import {Field} from '../../ui/widgets';
+import {useRowVisible} from './settings-card';
+import {ROWS} from './settings-index';
 
 /**
 The name this phone puts on the sessions it saves, so a session list shared between devices says where each one
@@ -18,6 +20,11 @@ export function DeviceNameField() {
 	const {deviceName} = usePreferences();
 	const fallback = defaultDeviceName();
 	const [draft, setDraft] = useState(deviceName);
+	const visible = useRowVisible(ROWS.deviceName);
+	if (!visible) {
+		return null;
+	}
+
 	const commit = () => {
 		const name = cleanDeviceName(draft);
 		setDraft(name);
@@ -29,7 +36,7 @@ export function DeviceNameField() {
 	return (
 		<>
 			<Field
-				label="Device name"
+				label={ROWS.deviceName.label}
 				icon="phone-portrait-outline"
 				value={draft}
 				placeholder={fallback}
@@ -40,7 +47,7 @@ export function DeviceNameField() {
 				onSubmitEditing={commit}
 			/>
 			<Text style={{color: colors.muted}}>
-				Shown on sessions saved here. Empty uses “{fallback}”.
+				{ROWS.deviceName.hint} (“{fallback}”).
 			</Text>
 		</>
 	);

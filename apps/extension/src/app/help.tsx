@@ -613,9 +613,9 @@ function Help() {
 				{
 					title: 'On a page',
 					gesture: {label: 'Right-click the page', icon: MousePointerClick},
-					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, keep a readable copy of the page, or save this tab, its tab group, the whole window, the selected tabs, all tabs except this one, the tabs to its left or right, or the tabs in all windows.',
+					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, keep a readable copy of the page, or save the selected tabs, this window, or the tabs in all windows.',
 					searchText:
-						'right-click page bookmark current tab send tab to session recent new session keep a copy tab group whole window selected tabs except this one left right all windows save',
+						'right-click page bookmark current tab send tab to session recent new session keep a copy whole window selected tabs all windows save',
 				},
 				{
 					title: 'On selected text',
@@ -633,9 +633,9 @@ function Help() {
 						label: `Right-click the ${PROJECT.name} icon`,
 						icon: MousePointerClick,
 					},
-					body: 'Open the dashboard, save this window, exclude the current site from saves, or open Help and Settings. The icon briefly shows a checkmark when an action finishes.',
+					body: 'Open the dashboard, open the side panel (where the browser has one), save this window, exclude the current site from saves, or open Help and Settings. The icon briefly shows a checkmark when an action finishes.',
 					searchText:
-						'right-click toolbar icon dashboard save window exclude website site help settings checkmark done',
+						'right-click toolbar icon dashboard side panel sidebar save window exclude website site help settings checkmark done',
 				},
 				{
 					title: 'On a tab in the tab strip',
@@ -1025,6 +1025,36 @@ function Help() {
 					body: `Set dashboard width, startup behavior, session sorting, and automatic archiving for sessions you have not opened in a while. The Archived folder appears when it contains sessions. Archive an active session with its card button or menu. Archived sessions leave active lists but remain available in that folder. On a window at least 1024 pixels wide, the folder selector can be a vertical list beside the sessions, like the Focus view of bookmarks. It turns into that list by itself once there are more than nine folders. The view button next to the Sessions search, or Settings › Session board › Session folder view, picks the list or the row of chips for good. A banner offers the list when the chips are showing with nine or more folders. Narrow windows always show chips. In Archived, use Move to folder in the session menu to bring a session back. Choose up to five direct menu actions as session card quick actions: Archive, Delete, Share, Edit details, Move up, Move down, and Switch to this session. Archive is selected by default and Delete is off. Expanded cards keep enabled quick actions visible without hovering. Choose up to three direct menu actions as bookmark quick actions, including opening, copying, editing, deleting, and moving a bookmark or changing its order. Open in new tab is selected by default; Open in a private window is off by default and not available in Firefox. You can also set URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. Choose Board or Focus as the bookmark view; Focus shows a column list and one open column. Set the bookmark column width, the most columns per row, and a compact density in Settings › Bookmark board. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
 					searchText:
 						'dashboard width narrow narrower default wider full width columns layout board focus view column list column width columns per row density compact comfortable startup behavior session sorting archive old sessions not opened days archive delete share export edit details move up move down switch session session card quick actions hover expanded menu Archived folder move to folder restore move back bookmark quick actions open in this tab open in new tab copy edit delete move to URL tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
+				},
+				{
+					title: 'New tabs and startup',
+					body: `In Chromium browsers, Use ${PROJECT.name} for new tabs shows the local new tab page; when it is off, choose what new tabs show instead: the browser’s page, a blank page, or a custom address. Focus search when opening a new tab opens the search palette there. Keep ${PROJECT.name} pinned and always open pins one ${PROJECT.name} tab in each window and keeps it open. Open ${PROJECT.name} when the browser starts opens the dashboard, or restores the newest session. When ${PROJECT.name} is already open, choose whether to switch to that tab or move it to this window.`,
+					searchText:
+						'new tab page fallback blank custom address browser page focus search palette auto focus keep pinned always open pin tab startup browser starts launch last session newest session already open switch move window dashboard behavior',
+				},
+				{
+					title: 'Header buttons and addresses',
+					body: 'Show Save this window button and Show Trash bin button in the header hide those two shortcuts on the dashboard; both actions stay in menus, the popup, and the search palette. Show URLs as picks domain only, full address, address instead of title, or nothing under bookmarks and saved tabs. Simplify addresses hides https://, http:// and www. in the dashboard, the bookmark board, the open tab statistics, and the duplicate bookmark list; the side panel and popup always show only the site name. Mark insecure (http) links puts an amber lock beside http addresses, and Also mark local addresses includes localhost and home network ones.',
+					searchText:
+						'header buttons save this window trash bin hide url display domain full url simplify addresses shorten hide https www side panel popup mark insecure http lock amber local localhost home network',
+				},
+				{
+					title: 'Titles and split tabs when saving',
+					body: 'Clean page titles removes notification counts such as (3) from the start of a title when you save tabs and bookmarks. When the active tab is in a split view, choose whether a save keeps both tabs or only the focused one. Unload background restored tabs asks the browser to free the memory of tabs restored in the background, and Only when restoring more than sets how many tabs a restore needs before it does.',
+					searchText:
+						'clean page titles notification counts unread split view save both focused tab unload background restored tabs discard memory only when restoring more than threshold single tabs',
+				},
+				{
+					title: 'Clicks and pasting on the dashboard',
+					body: 'When clicking a saved session link chooses between doing nothing, opening the link in this tab, and opening it in a new tab. Clicking a session title chooses between expanding or collapsing the session, opening its details, and restoring it. Show All in the bookmark list adds an All item that lists every bookmark, in the Focus view and on Android. Paste a link to add a bookmark opens Add bookmark when you paste a link on the dashboard outside a text field.',
+					searchText:
+						'click saved session link session title click action open this tab new tab expand collapse session details restore show all bookmark list focus view android paste link add bookmark clipboard ctrl v',
+				},
+				{
+					title: 'Snapshot and backup counts',
+					body: 'Add to the history every sets how often a crash-recovery snapshot joins Recent snapshots, and Snapshots to keep and Backups to keep set how many of each are kept before the oldest is dropped.',
+					searchText:
+						'snapshots to keep backups to keep how many count interval history recent snapshots automatic backups oldest dropped',
 				},
 				{
 					title: 'Control saved data',

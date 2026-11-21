@@ -1,7 +1,9 @@
 // The sections of the Settings page as the finder lists them. The Settings page names its section anchors with
 // `sectionId`, and the a11y check (scripts/a11y/settings.ts) fails when a section it renders is missing here or an
 // entry here points at no section, so a new Settings section must be added to this list. No browser APIs here: that
-// check imports this file in Node, so it imports nothing either; its entries are global-search.ts's FinderSetting.
+// check imports this file in Node, so it imports nothing either; its entries are global-search.ts's FinderSetting. The fields in the sections are listed by
+// settings-finder.ts. The fields in the sections are listed by
+// settings-finder.ts.
 
 export const sectionId = (title: string) =>
 	`settings-${title.toLowerCase().replaceAll(/[^0-9a-z]+/g, '-')}`;
@@ -41,10 +43,10 @@ const sections = (appName: string, firefox: boolean): Section[] => [
 		title: `Opening ${appName}`,
 		keywords: ['new tab', 'startup', 'pinned tab', 'palette', 'toolbar button'],
 	},
-	{title: 'Dashboard', keywords: ['layout', 'view', 'quotes']},
+	{title: 'Dashboard', keywords: ['layout', 'view', 'links', 'addresses']},
 	{
 		title: 'When saving',
-		keywords: ['save tabs', 'duplicates', 'tracking parameters', 'close tabs'],
+		keywords: ['save tabs', 'duplicates', 'close tabs'],
 	},
 	{title: 'Right-click menus', keywords: ['context menu']},
 	{title: 'When restoring', keywords: ['restore session', 'open', 'window']},
