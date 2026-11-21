@@ -373,9 +373,9 @@ function Help() {
 				},
 				{
 					title: 'Move and add links',
-					body: 'Drag bookmarks between columns to move or reorder them. The page scrolls on its own while you hold a drag near the top or bottom edge of the window or of a scrolling column, faster the closer you get. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to column… and Add to session… open a searchable list, so a bookmark reaches any of your columns or sessions without scrolling a menu. Type to narrow the list, use the arrow keys and Enter to choose, and press Escape to close it without a change. Move to column… sends the bookmark to another column, and Add to session… saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark. Choose Session there to add the links to a saved session instead of a column. When you paste several links, choose New session in the session list to save them as a new session, with a name if you like.',
+					body: 'Drag bookmarks between columns to move or reorder them; the All item of the Focus view only lists them, so open a column to reorder. The sort button in the bookmarks toolbar lists a column by Newest, Oldest, Title, or Site; only Manual order can be rearranged by dragging, and the other sorts leave your own order untouched. The page scrolls on its own while you hold a drag near the top or bottom edge of the window or of a scrolling column, faster the closer you get. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to column… and Add to session… open a searchable list, so a bookmark reaches any of your columns or sessions without scrolling a menu. Type to narrow the list, use the arrow keys and Enter to choose, and press Escape to close it without a change. Move to column… sends the bookmark to another column, and Add to session… saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark. Choose Session there to add the links to a saved session instead of a column. When you paste several links, choose New session in the session list to save them as a new session, with a name if you like.',
 					searchText:
-						'drag reorder move scroll edge keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column new session color colour icon palette move to column add to session searchable list picker search type arrow keys enter escape',
+						'drag reorder sort move scroll edge keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column new session color colour icon palette move to column add to session searchable list picker search type arrow keys enter escape',
 				},
 				{
 					title: 'Choose Board or Focus view',
@@ -976,13 +976,17 @@ function Help() {
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
 							imports, actions that open many tabs, and closing duplicate tabs
-							also offer Undo for a few seconds. Settings › Recovery &amp;
-							backups has a Trash bin button too, and Empty trash bin at the
-							bottom of the bin deletes everything in it for good.
+							also offer Undo for a few seconds. Settings › Dashboard has Toast
+							position, which moves these messages (and the notice Sources shows
+							on a site, and the one after Save quote) to a corner or the top,
+							and Messages stay, which makes them last twice as long or until
+							you close them. Settings › Recovery &amp; backups has a Trash bin
+							button too, and Empty trash bin at the bottom of the bin deletes
+							everything in it for good.
 						</>
 					),
 					searchText:
-						'undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
+						'toast position messages stay notification corner top bottom longer until dismissed undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
 				},
 				{
 					title: 'Automatic backups',

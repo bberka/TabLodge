@@ -14,7 +14,9 @@ import {
 	useLibrary,
 	useSyncStatus,
 	resetSyncedSettings,
+	setSyncedSetting,
 } from '../../library/library-store';
+import {useLinkSettings} from '../../library/use-link-settings';
 import {useRoomBelow} from '../../ui/keyboard';
 import {useBarSpace} from '../../ui/tab-bar';
 import {type Colors, useColors} from '../../ui/theme';
@@ -144,6 +146,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const space = useRoomBelow(useBarSpace());
 	const status = useSyncStatus();
 	const prefs = usePreferences();
+	const links = useLinkSettings(true);
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	const [pickingAccent, setPickingAccent] = useState(false);
 	const accentChoices: LeadingChoice[] = [
@@ -328,6 +331,33 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										}}
 									/>
 								)}
+								<SelectRow
+									row={ROWS.messagePosition}
+									value={prefs.messagePosition}
+									choices={[
+										{id: 'top', name: 'Top', icon: 'arrow-up-outline'},
+										{id: 'bottom', name: 'Bottom', icon: 'arrow-down-outline'},
+									]}
+									onChange={(messagePosition) => {
+										setPreferences({messagePosition});
+									}}
+								/>
+								<SelectRow
+									row={ROWS.toastDuration}
+									value={links.toastDuration}
+									choices={[
+										{id: 'default', name: 'A few seconds'},
+										{id: 'longer', name: 'Longer'},
+										{
+											id: 'dismiss',
+											name: 'Until dismissed',
+											hint: 'Tap a message to close it',
+										},
+									]}
+									onChange={(value) => {
+										void setSyncedSetting('toastDuration', value);
+									}}
+								/>
 								<SelectRow
 									row={ROWS.barLabels}
 									value={prefs.barLabels}

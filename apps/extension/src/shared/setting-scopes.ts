@@ -82,6 +82,10 @@ export const LIBRARY_SETTINGS = {
 	stretchBookmarkColumns: ['platform', BOARD],
 	bookmarkColumnWidth: ['platform', BOARD],
 	bookmarkColumnsPerRow: ['platform', BOARD],
+	bookmarkSort: [
+		'platform',
+		'The phone shows the stored order until it has a sort of its own (#440).',
+	],
 	bookmarkDensity: ['all', BOTH],
 	limitBookmarksPerColumn: [
 		'platform',
@@ -95,6 +99,11 @@ export const LIBRARY_SETTINGS = {
 		'platform',
 		'Pasting on the board with a keyboard; the phone saves links from the share sheet and its Add button.',
 	],
+	toastPosition: [
+		'platform',
+		"Where the extension's messages appear; the phone has its own Message position.",
+	],
+	toastDuration: ['all', BOTH],
 	cleanTitles: ['all', BOTH],
 	bookmarkClickAction: ['platform', TABS],
 	sessionLinkClickAction: ['platform', TABS],
@@ -209,6 +218,7 @@ export const ANDROID_PREFERENCES = {
 	barSize: ['platform', PHONE_LOOK],
 	barLabels: ['platform', PHONE_LOOK],
 	glassEffect: ['platform', PHONE_LOOK],
+	messagePosition: ['platform', PHONE_LOOK],
 	theme: ['platform', PHONE_LOOK],
 	accent: ['platform', PHONE_LOOK],
 	compactSessions: ['platform', PHONE_LOOK],

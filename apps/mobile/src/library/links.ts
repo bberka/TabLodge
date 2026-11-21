@@ -29,6 +29,7 @@ export type LinkSettings = Pick<
 	| 'sessionNameFallback'
 	| 'autoArchiveDays'
 	| 'trashRetentionDays'
+	| 'toastDuration'
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
@@ -49,6 +50,7 @@ export const DEFAULTS: LinkSettings = {
 	sessionNameFallback: DEFAULT_SETTINGS.sessionNameFallback,
 	autoArchiveDays: DEFAULT_SETTINGS.autoArchiveDays,
 	trashRetentionDays: DEFAULT_SETTINGS.trashRetentionDays,
+	toastDuration: 'default',
 };
 
 /**
