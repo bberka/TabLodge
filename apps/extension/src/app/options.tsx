@@ -62,6 +62,7 @@ import {
 	PopoverContent,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
+import {BOOKMARK_SORT_OPTIONS} from '../shared/bookmark-rules';
 import {ACCENTS, DEFAULT_ACCENT} from '../shared/accents';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {
@@ -809,6 +810,13 @@ const settingsGroups: Array<{
 					['focus', 'Focus'],
 					['board', 'Board'],
 				],
+			},
+			{
+				name: 'bookmarkSort',
+				label: 'Sort bookmarks',
+				help: 'Manual order is your own order and the only one you can rearrange by dragging. The other sorts change only what is shown. The sort button in the bookmarks toolbar changes this too.',
+				type: 'select',
+				options: BOOKMARK_SORT_OPTIONS.map(([value, label]) => [value, label]),
 			},
 			{
 				name: 'showAllBookmarks',
