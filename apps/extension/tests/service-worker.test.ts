@@ -15422,6 +15422,24 @@ test('a link sent from a regular window leaves no readable copy behind and arriv
 	);
 });
 
+test('closing the send toast also drops older Undo records, which still hold the link', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	const added = await regular.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Other', url: 'https://other.example/'},
+	});
+	assert.ok(added.undoId, 'adding a bookmark keeps an Undo record');
+	const sent = await sendSavedTab(regular);
+	assert.equal(sent.ok, true, sent.error);
+	await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)});
+	assert.equal(regular.extraStorage['tablodge.undo'], undefined);
+	assert.equal(
+		JSON.stringify(regular.extraStorage).includes('saved.example'),
+		false,
+	);
+});
+
 test('Undo of a send brings the link back and withdraws the sealed entry', async () => {
 	const privateWorker = await lockedPrivateLibrary();
 	const regular = regularBeside(privateWorker);

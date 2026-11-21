@@ -9050,8 +9050,15 @@ async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
 			return [];
 		}
 
-		await writeUndo(records.filter((entry) => entry.id !== id));
-		return record.keys.filter((key) => isInboxEntryKey(key));
+		const entries = record.keys.filter((key) => isInboxEntryKey(key));
+		await writeUndo(
+			records.filter(
+				(entry) =>
+					entry.id !== id &&
+					(entries.length === 0 || entry.createdAt > record.createdAt),
+			),
+		);
+		return entries;
 	});
 	if (released.length > 0) {
 		await mutate(async () => {
