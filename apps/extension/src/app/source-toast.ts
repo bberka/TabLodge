@@ -1,4 +1,7 @@
-// The small notice a source save or a saved page catch-up shows in the site's page. It sits in a closed shadow root
+// The small notices a source save or a saved page catch-up shows in the site's page. They stack in one closed shadow root,
+// newest nearest the corner, at most MAX_TOASTS (a 4th closes the oldest), each with its own timer and its own Undo.
+// A notice that answers another is that notice's next text (see ToastAction), so it replaces it in place.
+// Each sits in a closed shadow root
 // and sets every style through the element style object (as palette-overlay.ts does), so the page's CSS and its
 // Content Security Policy and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its buttons at the end of the page.
 // It stays while the pointer or focus is on it, and Escape closes it from there. Closing it while it has focus
@@ -20,6 +23,7 @@ import {isRecord} from '../shared/library-values';
 
 const HOST_ID = 'tablodge-source-toast';
 const VISIBLE_MS = 8000;
+const MAX_TOASTS = 3;
 // A notice that asks something stays longer, so there is time to read it and decide.
 const ASKING_VISIBLE_MS = 20_000;
 const SVG = 'http://www.w3.org/2000/svg';
@@ -195,12 +199,60 @@ function icon(kind: 'done' | 'error', color: string) {
 	return svg;
 }
 
-let latestToast = 0;
-let closeShown: (() => void) | undefined;
+type Stack = {
+	host: HTMLElement;
+	root: ShadowRoot;
+	list: HTMLElement;
+	// Oldest first.
+	closers: Array<() => void>;
+};
+
+let stack: Stack | undefined;
+// Notices render in the order they were asked for, though each reads the theme asynchronously.
+let queue: Promise<void> = Promise.resolve();
+
+function createStack(theme: Theme): Stack {
+	// One left by an earlier copy of this script, after an extension update, is not in `stack`.
+	document.querySelector(`#${HOST_ID}`)?.remove();
+	const host = document.createElement('div');
+	host.id = HOST_ID;
+	set(host, {
+		all: 'initial',
+		position: 'fixed',
+		right: '16px',
+		bottom: '16px',
+		'z-index': '2147483647',
+		display: 'block',
+		width: 'min(448px, calc(100vw - 32px))',
+		'pointer-events': 'none',
+		'color-scheme': theme,
+	});
+	// A press on a notice is not a press on the page, so the site's bubbling listeners (one that closes a menu on an
+	// outside press, say) don't act on it.
+	for (const type of ['pointerdown', 'mousedown', 'click']) {
+		host.addEventListener(type, (event) => {
+			event.stopPropagation();
+		});
+	}
+
+	const root = host.attachShadow({mode: 'closed'});
+	const list = document.createElement('div');
+	// Newest last, so it sits nearest the corner.
+	set(list, {
+		display: 'flex',
+		'flex-direction': 'column',
+		'align-items': 'flex-end',
+		gap: '8px',
+	});
+	root.append(list);
+	document.documentElement.append(host);
+	return {host, root, list, closers: []};
+}
 
 /**
-Shows the notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
-`asking` marks a question (the saved page catch-up), which stays longer.
+Shows a notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
+`asking` marks a question (the saved page catch-up), which stays longer. Each call adds a notice of its own, with
+its own buttons and timer, so a later one never takes an earlier one's Undo away.
 */
 export function showSourceToast(
 	text: string,
@@ -210,23 +262,17 @@ export function showSourceToast(
 		asking = false,
 	}: {actions?: ToastAction[]; error?: boolean; asking?: boolean} = {},
 ) {
-	// The one on screen goes now, so its Undo can't act while the new one reads the theme. That read is async, so a
-	// later notice could also be replaced by an earlier one; only the newest renders.
-	closeShown?.();
-	const request = ++latestToast;
-	void readAppearance().then(({theme, accent}) => {
-		if (request !== latestToast) {
-			return;
-		}
-
-		render(text, {
-			actions,
-			error,
-			asking,
-			theme,
-			accent,
+	queue = queue
+		.then(async () => readAppearance())
+		.then(({theme, accent}) => {
+			render(text, {
+				actions,
+				error,
+				asking,
+				theme,
+				accent,
+			});
 		});
-	});
 }
 
 function render(
@@ -245,30 +291,18 @@ function render(
 		accent: string;
 	},
 ) {
-	// One left by an earlier copy of this script, after an extension update, is not in closeShown.
-	document.querySelector(`#${HOST_ID}`)?.remove();
-	const host = document.createElement('div');
-	host.id = HOST_ID;
-	set(host, {
-		all: 'initial',
-		position: 'fixed',
-		right: '16px',
-		bottom: '16px',
-		'z-index': '2147483647',
-		display: 'block',
-		'max-width': 'min(448px, calc(100vw - 32px))',
-		'color-scheme': theme,
-	});
-	// A press on the notice is not a press on the page, so the site's bubbling listeners (one that closes a menu on an
-	// outside press, say) don't act on it.
-	for (const type of ['pointerdown', 'mousedown', 'click']) {
-		host.addEventListener(type, (event) => {
-			event.stopPropagation();
-		});
+	// The host is gone when the page removed it (or a later copy of this script did); start a new one.
+	if (!stack || !document.documentElement.contains(stack.host)) {
+		stack = createStack(theme);
 	}
 
-	const root = host.attachShadow({mode: 'closed'});
-	document.documentElement.append(host);
+	const current = stack;
+	while (current.closers.length >= MAX_TOASTS) {
+		current.closers[0]();
+	}
+
+	const {host, root, list} = current;
+	set(host, {'color-scheme': theme});
 	const colors = toastColors(
 		theme,
 		accent === SYSTEM_ACCENT ? systemAccentColor(root) : presetColor(accent),
@@ -290,6 +324,9 @@ function render(
 		'-webkit-font-smoothing': 'antialiased',
 		'text-align': 'left',
 		'letter-spacing': 'normal',
+		'box-sizing': 'border-box',
+		'max-width': '100%',
+		'pointer-events': 'auto',
 	});
 	box.append(
 		icon(error ? 'error' : 'done', error ? colors.destructive : colors.primary),
@@ -361,7 +398,7 @@ function render(
 		box.append(row);
 	}
 
-	root.append(box);
+	list.append(box);
 	requestAnimationFrame(() => {
 		message.textContent = text;
 	});
@@ -370,26 +407,31 @@ function render(
 	let held = false;
 	let previous: HTMLElement | undefined;
 	let closed = false;
-	// Runs once. A closed notice whose Undo finishes later must not arm a timer or unregister the notice now shown.
+	// Runs once. A closed notice whose Undo finishes later must not arm a timer again.
 	const close = () => {
 		if (closed) {
 			return;
 		}
 
 		closed = true;
-		if (closeShown === close) {
-			closeShown = undefined;
+		current.closers = current.closers.filter((closer) => closer !== close);
+		clearTimeout(timer);
+		const hadFocus =
+			root.activeElement !== null && box.contains(root.activeElement);
+		box.remove();
+		if (current.closers.length === 0) {
+			host.remove();
+			if (stack === current) {
+				stack = undefined;
+			}
 		}
 
-		clearTimeout(timer);
-		const hadFocus = root.activeElement !== null;
-		host.remove();
 		if (hadFocus && previous?.isConnected) {
 			previous.focus();
 		}
 	};
 
-	closeShown = close;
+	current.closers.push(close);
 	const schedule = () => {
 		clearTimeout(timer);
 		if (!held && !closed) {
