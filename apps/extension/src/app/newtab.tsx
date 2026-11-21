@@ -577,7 +577,6 @@ function NewTab() {
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
-	// Memoized: a new array on every render would re-render every bookmark card.
 	const quickActions = useMemo(
 		() =>
 			(settings.bookmarkQuickActions ?? ['open-new']).filter(
@@ -3920,8 +3919,6 @@ const BookmarkColumn = memo(
 		ariaLabel,
 		emptyMessage,
 	}: BookmarkColumnProps) => {
-		// A scrolling column used to mount every bookmark at once, which made a long library slow to open. It
-		// now mounts a window and extends it before the end scrolls into view; the rest stay data until then.
 		const windowSize = renderAll
 			? Math.max(pageSize * 3, SCROLL_WINDOW)
 			: pageSize;

@@ -425,8 +425,6 @@ export async function columnCapCheck(env: Env, theme: Theme) {
 				'section[data-column-id="bookmark-unfiled"]',
 			);
 			const unfiledCards = unfiled.locator('[data-bookmark-id]');
-			// A capped column mounts a window of 48 cards (3 pages of 10 is less than the 48 floor) and adds more as its
-			// end nears, so a long list does not make the page slow to open (issue #415).
 			await until(
 				async () => (await cards.count()) === 48,
 				'the first window of the capped column',

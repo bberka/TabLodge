@@ -76,9 +76,7 @@ const PULL_LIMIT = 500;
 const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source', 'setting'] as const;
 type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
-// A round starts this long after the last local write, so a burst of edits is sent once...
 const LOCAL_CHANGE_DELAY_MS = 2500;
-// ...but never later than this after the first write of the burst, so constant editing cannot hold sync off.
 const LOCAL_CHANGE_MAX_WAIT_MS = 10_000;
 // Chrome keeps an extension service worker alive while its WebSocket exchanges messages within 30 seconds.
 const PING_MS = 20_000;
@@ -454,7 +452,6 @@ export function createSyncClient(host: SyncHost) {
 	let localTimer: ReturnType<typeof setTimeout> | undefined;
 	// A local change is waiting for its delayed round.
 	let localPending = false;
-	// When the first write of the waiting burst happened.
 	let localSince = 0;
 	let socket: SyncSocket | undefined;
 	let pingTimer: ReturnType<typeof setInterval> | undefined;

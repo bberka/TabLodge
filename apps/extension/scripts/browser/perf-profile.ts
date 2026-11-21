@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, unicorn/isolated-functions, unicorn/no-global-object-property-assignment, no-promise-executor-return, unicorn/no-array-sort, @typescript-eslint/ban-ts-comment, local/no-comments, @typescript-eslint/restrict-plus-operands -- Measurement script: its page and worker snippets are untyped here. Never bundled. */
-// @ts-nocheck -- Most of this file is code that runs inside the page or the worker, where the DOM and chrome types are not available to this project.
 import process from 'node:process';
 import {chromium, type Page, type Worker} from 'playwright';
 import type {DevStore} from '../../src/shared/dev-fixture.ts';
