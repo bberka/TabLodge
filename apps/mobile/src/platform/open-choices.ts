@@ -33,8 +33,9 @@ export type OpenChoice = {
 };
 
 /**
-What **Open in…** offers: the in-app tab, the default browser, each installed browser, and Android's chooser. The
-chooser picks an app for one link, so it is left out when several links open at once.
+What **Open in…** offers. Android's chooser already lists every installed browser and takes one link at a time, so one
+link gets the in-app tab, the default browser, and the chooser, without the browsers listed again. Several links get
+the installed browsers instead of the chooser.
 */
 export function openChoices(
 	browsers: ReadonlyArray<{id: string; name: string; icon?: string}>,
@@ -47,14 +48,13 @@ export function openChoices(
 			label: 'Default browser',
 			opener: {how: 'system', app: ''},
 		},
-		...browsers.map(({id, name, icon}) => ({
-			key: `app:${id}`,
-			label: name,
-			image: icon,
-			opener: {how: 'app' as const, app: id},
-		})),
 		...(several
-			? []
+			? browsers.map(({id, name, icon}) => ({
+					key: `app:${id}`,
+					label: name,
+					image: icon,
+					opener: {how: 'app' as const, app: id},
+				}))
 			: [
 					{
 						key: 'chooser',
