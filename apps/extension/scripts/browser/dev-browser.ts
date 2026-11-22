@@ -9,6 +9,7 @@ import {
 import {OUT_DIR, fromRoot} from '../vite-shared.ts';
 import {loadDevFavicons} from './dev-favicon-cache.ts';
 import {stopWatchersWhenBrowserCloses} from './dev-browser-lifecycle.ts';
+import {clearServiceWorkerCache} from './dev-profile-cache.ts';
 
 function profileDirectory(headless: boolean): string {
 	return fromRoot(
@@ -18,6 +19,10 @@ function profileDirectory(headless: boolean): string {
 
 async function launchBrowser(headless: boolean): Promise<BrowserContext> {
 	const userDataDir = profileDirectory(headless);
+	await clearServiceWorkerCache(userDataDir);
+	console.log(
+		`Cleared the cached service worker in ${userDataDir}, so the worker this build writes is the one that runs.`,
+	);
 	const launchOptions = {
 		headless,
 		viewport: headless ? {width: 1440, height: 900} : null,
