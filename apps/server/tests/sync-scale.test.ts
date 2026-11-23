@@ -115,7 +115,10 @@ function makeServer() {
 
 let deviceCount = 0;
 
-function makeDevice(server: ReturnType<typeof makeServer>) {
+function makeDevice(
+	server: ReturnType<typeof makeServer>,
+	now: () => number = () => Date.now(),
+) {
 	const backend = makeBackend();
 	const state = createLibraryState(backend);
 	const meter = {
@@ -184,7 +187,7 @@ function makeDevice(server: ReturnType<typeof makeServer>) {
 			deviceCount += 1;
 			return `scale-device-${deviceCount}`;
 		},
-		now: () => Date.now(),
+		now,
 	});
 	return {
 		backend,
@@ -207,11 +210,13 @@ const sessionCount = (store: Store) => store.groups.length;
 const linkCount = (store: Store) =>
 	store.groups.reduce((sum, group) => sum + group.tabs.length, 0);
 
+const frozen = Date.now();
+
 vi.setConfig({testTimeout: 600_000});
 
 test(`a library of ${SESSIONS} sessions syncs whole to a second device, and one edit after costs one record`, async () => {
 	const server = makeServer();
-	const a = makeDevice(server);
+	const a = makeDevice(server, () => frozen);
 	await a.seed(bigLibrary());
 
 	const firstStart = performance.now();
@@ -369,4 +374,23 @@ test('a push cut off by the network resumes with the records not yet sent, and l
 	assert.equal(sessionCount(pulled), SMALL);
 	assert.equal(linkCount(pulled), SMALL * LINKS_PER_SESSION);
 	assert.equal(pulled.bookmarks.length, 1000);
+});
+
+test('a push saves its state every few seconds while it runs', async () => {
+	const server = makeServer();
+	let clock = Date.now();
+	const a = makeDevice(server, () => clock);
+	await a.seed(smallLibrary());
+	server.hooks.beforePush = () => {
+		clock += 4000;
+	};
+
+	await a.client.connect(URL_BASE, TOKEN);
+	const pushes = server.pushes.length;
+	assert.ok(pushes >= 8, String(pushes));
+	assert.ok(
+		a.meter.syncStateWrites >= pushes - 1,
+		String(a.meter.syncStateWrites),
+	);
+	assert.equal((await a.client.status()).pending, 0);
 });

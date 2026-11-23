@@ -546,7 +546,9 @@ export function createSyncClient(host: SyncHost) {
 
 	async function putState(state: SyncState) {
 		stateEpoch += 1;
+		const epoch = stateEpoch;
 		await host.set(SYNC_STATE_KEY, state);
+		return epoch;
 	}
 
 	async function dropState(extra: string[] = []) {
@@ -774,13 +776,11 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			const done = await work(state, records, store);
-			if (done.state !== stored) {
-				await putState(done.state);
-			}
-
+			const epoch =
+				done.state === stored ? stateEpoch : await putState(done.state);
 			return {
 				result: done.result,
-				snapshot: {state: done.state, records, epoch: stateEpoch},
+				snapshot: {state: done.state, records, epoch},
 			};
 		});
 	}
@@ -946,7 +946,7 @@ export function createSyncClient(host: SyncHost) {
 		let savedAt = host.now();
 		const save = async () => {
 			const snapshot = held;
-			if (!snapshot || !unsaved) {
+			if (!snapshot || !unsaved || config !== target) {
 				return;
 			}
 
@@ -958,8 +958,7 @@ export function createSyncClient(host: SyncHost) {
 					return;
 				}
 
-				await putState(snapshot.state);
-				held = {...snapshot, epoch: stateEpoch};
+				held = {...snapshot, epoch: await putState(snapshot.state)};
 			});
 		};
 
