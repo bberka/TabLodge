@@ -335,6 +335,54 @@ test('Add them automatically keeps adding the items that arrive later, each with
 	);
 });
 
+test('an automatic batch that finishes while the list changed still reports its Undo', async () => {
+	vi.useFakeTimers();
+	const page = savedPage([first]);
+	const add = Promise.withResolvers<unknown>();
+	let firstAdd = true;
+	watchSavedPage({
+		source: siteSourceById('youtube')!,
+		read: page.read,
+		async send<T>(message: Record<string, unknown>) {
+			switch (message.type) {
+				case 'SITE_SOURCE_CATCH_UP': {
+					return {
+						ok: true,
+						missing: 1,
+						ask: true,
+						mode: 'add',
+					} as unknown as T;
+				}
+
+				case 'SITE_SOURCE_CATCH_UP_ADD': {
+					if (firstAdd) {
+						firstAdd = false;
+						return add.promise as unknown as T;
+					}
+
+					return {ok: true, added: 1, column: 'YouTube'} as unknown as T;
+				}
+
+				default: {
+					return undefined;
+				}
+			}
+		},
+		appName: 'TabLodge',
+		undo: async () => 'Removed from TabLodge.',
+	});
+
+	await vi.advanceTimersByTimeAsync(1000);
+	page.set([first, second]);
+	await vi.advanceTimersByTimeAsync(2000);
+	add.resolve({ok: true, added: 1, column: 'YouTube', undoId: 'undo-1'});
+	await vi.advanceTimersByTimeAsync(0);
+	assert.ok(
+		toasts.some((toast: Shown) => toast.actions[0]?.label === 'Undo'),
+		'the batch shows its Undo although the list grew meanwhile',
+	);
+});
+
 test('an automatic add that finishes after the user left the saved page shows nothing', async () => {
 	vi.useFakeTimers();
 	const page = savedPage([first]);

@@ -36,6 +36,7 @@ export function watchSavedPage({
 	let lastAsked = '';
 	// Answers can come back out of order; only the newest request's answer is shown.
 	let latestRequest = 0;
+	let visit = 0;
 	let asked = false;
 	let failures = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -92,6 +93,7 @@ export function watchSavedPage({
 			// Off the saved page (YouTube and X change pages in place): an answer still on its way is for a list
 			// that is gone, and coming back asks again.
 			latestRequest++;
+			visit++;
 			lastAsked = '';
 			asked = false;
 			return;
@@ -113,6 +115,7 @@ export function watchSavedPage({
 
 		lastAsked = key;
 		const request = ++latestRequest;
+		const here = visit;
 		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP'>>({
 			type: 'SITE_SOURCE_CATCH_UP',
 			source: source.id,
@@ -138,7 +141,7 @@ export function watchSavedPage({
 
 		if (result.mode === 'add') {
 			const next = await add(links, true);
-			if (request !== latestRequest || !next) {
+			if (visit !== here || !next) {
 				return;
 			}
 
@@ -187,6 +190,7 @@ export function watchSavedPage({
 		refresh() {
 			lastAsked = '';
 			latestRequest++;
+			visit++;
 			asked = false;
 			settle();
 		},
