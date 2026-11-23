@@ -195,9 +195,6 @@ import {NotesField} from './notes-field';
 import {NoteText} from './note-text';
 import {cn} from '@/lib/utils';
 
-/**
-Modifier keys that choose how a restore behaves or extend a tab selection (a mouse or keyboard event satisfies this).
-*/
 type ClickModifiers = {
 	ctrlKey?: boolean;
 	metaKey?: boolean;
@@ -206,25 +203,10 @@ type ClickModifiers = {
 type FolderDialog = {
 	mode: 'create' | 'rename';
 	folder?: Folder;
-	/**
-	Create mode only: the session to move into the new folder.
-	*/
 	moveGroupId?: string;
-	/**
-	Create mode only: a name typed in the folder picker, used as the form's first value.
-	*/
 	name?: string;
-	/**
-	The icon chosen so far in the open dialog.
-	*/
 	icon?: string;
-	/**
-	The color chosen so far; an empty string or missing means none.
-	*/
 	color?: string;
-	/**
-	Whether a session moved into the folder takes its color.
-	*/
 	colorSessions?: boolean;
 };
 type DialogState =
@@ -232,18 +214,9 @@ type DialogState =
 type BookmarkDraft = Partial<SavedTabRecord> & {columnId?: string};
 
 const ALL = 'all';
-/**
-Highlight id for the New folder button while a session is dragged over it.
-*/
 const NEW_FOLDER_DROP = 'new-folder';
-/**
-Folder-picker value for "New folder" in the session details dialog.
-*/
 const NEW_FOLDER = 'new-folder-choice';
 const WIDE_PAGE = '(min-width: 768px)';
-/**
-Tailwind's md breakpoint, tracked so collapsed cards know whether there is room for their preview icons.
-*/
 function useWidePage() {
 	const [wide, setWide] = useState(
 		() => globalThis.matchMedia(WIDE_PAGE).matches,
@@ -263,9 +236,6 @@ function useWidePage() {
 	return wide;
 }
 
-/**
-Stable fallbacks so memoized values and effects do not see a new array on every render.
-*/
 const NO_SESSIONS: Session[] = [];
 const NO_FOLDERS: Folder[] = [];
 const NO_COLUMNS: BookmarkColumn[] = [];
@@ -273,9 +243,6 @@ const NO_SETTINGS: Partial<Settings> = {};
 const NO_ORIGINS: readonly string[] = [];
 const NO_SELECTION = new Set<string>();
 const SendPrivateIcon = ACTION_ICONS.sendPrivate;
-/**
-Sessions rendered at first; more are added as the list is scrolled (thousands of cards at once are slow).
-*/
 const SESSION_PAGE = 40;
 
 const SESSION_LINKS_MAX_HEIGHT = '44rem';
@@ -307,9 +274,6 @@ const dateText = (value: unknown) => {
 		: 'Date unavailable';
 };
 
-/**
-Saved tabs in display order, with the two halves of each split view joined into one entry.
-*/
 function tabRuns(tabs: SavedTabRecord[]): SavedTabRecord[][] {
 	const runs: SavedTabRecord[][] = [];
 	for (let index = 0; index < tabs.length; index += 1) {
@@ -326,9 +290,6 @@ function tabRuns(tabs: SavedTabRecord[]): SavedTabRecord[][] {
 	return runs;
 }
 
-/**
-`initialQuery` prefills the session search (newtab.html?q=…).
-*/
 export function SessionManager({
 	embedded = false,
 	initialQuery = '',
@@ -338,9 +299,6 @@ export function SessionManager({
 	onSaveWindow,
 }: {
 	embedded?: boolean;
-	/**
-	Saves the current window. Shown in the empty state when the page has no Save button of its own.
-	*/
 	onSaveWindow?: () => void;
 	initialQuery?: string;
 	state: TabLodgeState | null;
@@ -353,7 +311,6 @@ export function SessionManager({
 	const [query, setQuery] = useState(initialQuery);
 	const [sort, setSort] = useState<string>('newest');
 	const [expanded, setExpanded] = useState(() => new Set<string>());
-	// With "Keep sessions expanded by default", sessions are open unless collapsed during this visit.
 	const [collapsed, setCollapsed] = useState(() => new Set<string>());
 	const [selected, setSelected] = useState(() => new Set<string>());
 	const [anchor, setAnchor] = useState<string | null>(null);
@@ -362,11 +319,8 @@ export function SessionManager({
 		null,
 	);
 	const [editingGroup, setEditingGroup] = useState<Session | null>(null);
-	// Set when a session title click opens the details dialog: the name field gets focus with its text selected.
 	const [focusGroupName, setFocusGroupName] = useState(false);
-	// Session details: the chosen folder, or NEW_FOLDER with the new folder's icon (its name is a form field).
 	const [detailsFolder, setDetailsFolder] = useState('unfiled');
-	// Session details: the chosen color, a preset id or `#rrggbb`, or '' for none.
 	const [detailsColor, setDetailsColor] = useState('');
 	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
@@ -383,15 +337,12 @@ export function SessionManager({
 		group: Session;
 		tab: SavedTabRecord;
 	} | null>(null);
-	// Written while a restore runs; the value itself is never read, the update just re-renders the page.
 	// eslint-disable-next-line @eslint-react/use-state -- write-only on purpose
 	const [, setBusy] = useState('');
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
-	// Drag state lives outside React state: only the cards a drag touches re-render, not the whole list.
 	const [dragStore] = useState(() => new DragStore());
-	// Bumped to ask the list to scroll to `revealRef` once it is rendered.
 	const [revealTick, setRevealTick] = useState(0);
 	const revealRef = useRef<{id: string; focus: boolean} | null>(null);
 	const groups = state?.groups || NO_SESSIONS;
@@ -406,7 +357,6 @@ export function SessionManager({
 		visibleFolders.length,
 		settings.sessionFolderView,
 	);
-	// Collapsed cards show a row of preview icons only on wide pages.
 	const wide = useWidePage();
 	const canSwitch = useHasSavableTabs(
 		settings.includePinnedTabs === true,
@@ -481,7 +431,6 @@ export function SessionManager({
 
 		return filtered;
 	}, [groups, folders, archivedId, folderId, query, sort]);
-	// A new filter, search or sort starts again from the first batch.
 	const [visibleLimit, showMore, showUpTo] = usePagedLimit(
 		`${folderId}|${query}|${sort}`,
 		SESSION_PAGE,
@@ -528,8 +477,6 @@ export function SessionManager({
 		[groups, selected],
 	);
 
-	// Links are only saved by drops on a session. Elsewhere a link drag shows the "no drop" cursor and
-	// a stray drop is swallowed so the page does not navigate to the link.
 	useEffect(() => {
 		const guard = (event: globalThis.DragEvent) => {
 			if (!shouldBlockDocumentDrop(event)) {
@@ -575,7 +522,6 @@ export function SessionManager({
 			),
 		);
 		setSelected((old) => new Set([...old].filter((key) => valid.has(key))));
-		// Reconciles with each new saved state only; changing the folder filter must not re-run it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `state` on purpose
 	}, [state]);
 
@@ -588,11 +534,9 @@ export function SessionManager({
 		setGroupOpen(focusId, true);
 		revealRef.current = {id: focusId, focus: false};
 		setRevealTick((tick) => tick + 1);
-		// Focuses the session named in the URL whenever the saved state changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `state` on purpose
 	}, [state]);
 
-	// Requests from the global finder: reveal a session or folder, or open one of the session dialogs.
 	const finderRequestRef = useRef<(detail: FinderEventDetail) => void>(
 		() => {},
 	);
@@ -662,7 +606,6 @@ export function SessionManager({
 		return () => globalThis.removeEventListener(FINDER_EVENT, onRequest);
 	}, []);
 
-	// Scrolls to a session asked for by the URL or the palette, rendering more of the list first if it is further down.
 	useEffect(() => {
 		const reveal = revealRef.current;
 		if (!reveal) {
@@ -850,7 +793,6 @@ export function SessionManager({
 			return;
 		}
 
-		// Only partial failures are reported; a clean restore speaks for itself.
 		if (result.failed) {
 			showStatus(
 				`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'} · ${result.failed} failed${result.failures?.[0] ? ` · ${restoreFailureText(result.failures[0])}` : ''}.`,
@@ -984,9 +926,6 @@ export function SessionManager({
 		}
 	}
 
-	/**
-	Deletes right away; `closeEditor` also closes the details dialog it was asked from. Undo puts the session back from the trash.
-	*/
 	async function deleteGroup(group: Session, closeEditor = false) {
 		const result = await send('DELETE_GROUP', {groupId: group.id});
 		if (!result?.ok) {
@@ -1044,7 +983,6 @@ export function SessionManager({
 			return;
 		}
 
-		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
 		if (tabs.length > 10) {
 			offerCloseTabsUndo(`Opened ${tabs.length} tabs.`, opened, showStatus);
 		}
@@ -1085,7 +1023,6 @@ export function SessionManager({
 		position?: InsertPosition,
 		copy = false,
 	) {
-		// Where the link sat, so Undo can put it back next to the same neighbor.
 		const sourceTabs = groups.find((group) => group.id === fromGroupId)?.tabs;
 		const sourceIndex = sourceTabs?.findIndex((tab) => tab.id === tabId) ?? -1;
 		const nextSibling = sourceTabs?.[sourceIndex + 1];
@@ -1118,7 +1055,6 @@ export function SessionManager({
 								toGroupId: fromGroupId,
 								targetTabId: nextSibling?.id ?? previousSibling?.id ?? null,
 								position: nextSibling ? 'before' : 'after',
-								// The move emptied the source session: it comes back from the trash with the link.
 								restoreTrashId: result.trashId,
 							});
 							if (!undone?.ok) {
@@ -1196,7 +1132,6 @@ export function SessionManager({
 		return Boolean(result?.ok);
 	}
 
-	// Keyboard alternative to dragging a session: one step up or down in the list as shown.
 	async function moveGroup(group: Session, direction: MoveDirection) {
 		const ids = visibleGroups.map((entry) => entry.id);
 		const target = neighborId(ids, group.id, direction);
@@ -1230,7 +1165,6 @@ export function SessionManager({
 		);
 	}
 
-	// A dragged session may land on any folder chip except All and the folder it already sits in.
 	function folderDropTarget(targetId: string) {
 		const item = dragItemRef.current;
 		if (item?.kind !== 'session' || targetId === ALL) {
@@ -1244,7 +1178,6 @@ export function SessionManager({
 	const drag = {
 		begin(item: DragItem) {
 			dragItemRef.current = item;
-			// Styling the source row right away can cancel the browser's drag, so it waits a frame.
 			requestAnimationFrame(() => {
 				if (dragItemRef.current === item) {
 					dragStore.set({dragging: item});
@@ -1264,7 +1197,6 @@ export function SessionManager({
 			}
 
 			event.preventDefault();
-			// Links from outside this list (a page, a bookmark, another window) are always copied in.
 			event.dataTransfer.dropEffect =
 				!item || (mark.kind !== 'session' && (event.ctrlKey || event.metaKey))
 					? 'copy'
@@ -1288,7 +1220,6 @@ export function SessionManager({
 
 			event.preventDefault();
 			if (!item) {
-				// Drag data is only readable now, before the first await.
 				const links = parseDroppedLinks(event.dataTransfer);
 				drag.end();
 				void addDroppedLinks(
@@ -1318,8 +1249,6 @@ export function SessionManager({
 	};
 
 	const sendState = useSendToPrivate();
-	// One stable object of callbacks for every card: it always calls the latest closures below, so
-	// memoized cards and rows are not re-rendered just because a handler was re-created.
 	const cardActions = useStableCallbacks<CardActions>({
 		expand: setGroupOpen,
 		restore: (group, event) => restoreGroup(group, false, event),
@@ -1579,7 +1508,6 @@ export function SessionManager({
 		targetId: string,
 		targetName?: string,
 	) {
-		// The menu may have opened on an older copy of the session; Undo must return it to where it is now.
 		const group = groups.find((entry) => entry.id === opened.id) ?? opened;
 		if (group.folderId === targetId) {
 			return;
@@ -1642,7 +1570,6 @@ export function SessionManager({
 		const result =
 			folderDialog?.mode === 'rename'
 				? await send('UPDATE_FOLDER', {
-						// The folder the dialog was opened for, not the one selected: Edit folder is also in each folder's right-click menu.
 						folderId: folderDialog.folder?.id ?? folderId,
 						name,
 						icon: folderDialog.icon ?? '',
@@ -1669,7 +1596,6 @@ export function SessionManager({
 
 		setDialog(null);
 		if (moving) {
-			// The folder exists now; the move reports its own result with Undo.
 			await moveGroupToFolder(moving, result.folder.id, result.folder.name);
 			return;
 		}
@@ -1749,7 +1675,6 @@ export function SessionManager({
 	}
 
 	const selectedSources = selectedGroups();
-	// Splitting needs links of one session, and leaves at least one link behind.
 	const splitSource =
 		selectedSources.length === 1
 			? groups.find(
@@ -1870,7 +1795,6 @@ export function SessionManager({
 								folder.id === ALL
 									? LayoutGrid
 									: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
-							// A folder with a color is active in that color, as a colored bookmark column is in the Focus view.
 							const folderColor = columnColorVars(folder.color);
 							const isActive = folderId === folder.id;
 							const chip = (
@@ -2083,7 +2007,6 @@ export function SessionManager({
 									)}
 									aria-label="New folder"
 									onClick={() => setDialog({mode: 'create'})}
-									// Dropping a session here creates a folder and moves the session into it.
 									onDragOver={(event) => {
 										if (dragItemRef.current?.kind !== 'session') {
 											return;
@@ -2586,7 +2509,6 @@ export function SessionManager({
 									onValueChange={(next) => {
 										setDetailsFolder(next);
 										const target = folders.find((folder) => folder.id === next);
-										// Moving into a folder that colors its sessions picks its color here; it can still be changed before saving.
 										if (
 											next !== editingGroup?.folderId &&
 											target?.colorSessions &&
@@ -2778,7 +2700,6 @@ function urlDisplay(
 	mode: Settings['urlDisplayMode'] = 'full',
 	simplify = true,
 ) {
-	// 'url-only' shows the address as the row's main line, so it has no second line.
 	return mode === 'none' || mode === 'url-only'
 		? null
 		: mode === 'domain'
@@ -2786,9 +2707,6 @@ function urlDisplay(
 			: simplifiedUrl(url, simplify);
 }
 
-/**
-Where a drag would land, drawn as a highlight (into a session) or a line (between sessions or links).
-*/
 type DropMark =
 	| {kind: 'session'; groupId: string; position: InsertPosition}
 	| {kind: 'into'; groupId: string}
@@ -2800,10 +2718,6 @@ type DropMark =
 	  };
 type DragItem =
 	{kind: 'session'; id: string} | {kind: 'tab'; groupId: string; tabId: string};
-/**
-The drag in progress and where it would land. Cards subscribe to just the slice they draw, so a
-drag moving over the list re-renders only the cards whose marker or dimming changed.
-*/
 class DragStore {
 	private readonly listeners = new Set<() => void>();
 	mark: DropMark | null = null;
@@ -2835,10 +2749,6 @@ function useDragSlice<T>(store: DragStore, select: (store: DragStore) => T): T {
 	return useSyncExternalStore(store.subscribe, () => select(store));
 }
 
-/**
-Handlers the session manager shares with every card. The object never changes, so memoized cards
-and rows are not re-rendered by it.
-*/
 type CardActions = {
 	expand: (groupId: string, next: boolean) => void;
 	restore: (group: Session, event?: ClickModifiers) => void;
@@ -2848,9 +2758,6 @@ type CardActions = {
 	switchTo: (group: Session) => void;
 	replaceFromWindow: (group: Session) => void;
 	appendWindow: (group: Session) => void;
-	/**
-	Moves the group's selected links into a new session.
-	*/
 	splitSelected: (group: Session) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
@@ -2866,30 +2773,15 @@ type CardActions = {
 	editName: (group: Session) => void;
 	moveToFolder: (group: Session, folderId: string) => void;
 	archive: (group: Session) => void;
-	/**
-	Keyboard alternative to dragging: moves a session one place up or down.
-	*/
 	moveGroup: (group: Session, direction: MoveDirection) => void;
 	canMoveGroup: (groupId: string, direction: MoveDirection) => boolean;
 	merge: (group: Session, targetId: string) => void;
-	/**
-	Opens the new-folder dialog; saving it creates the folder and moves the session in.
-	*/
 	newFolderFor: (group: Session, name?: string) => void;
-	/**
-	Folders a session can move to (read when a menu opens, never while rendering).
-	*/
 	folderTargets: () => Folder[];
 	bookmark: (tab: SavedTabRecord) => void;
 	select: (key: string, checked: boolean, event: ClickModifiers) => void;
 	selectGroup: (groupId: string, checked: boolean) => void;
-	/**
-	Sessions a link can be moved to (read when a menu opens, never while rendering).
-	*/
 	moveTargets: (excludeId: string) => Array<{id: string; name: string}>;
-	/**
-	Opens the shared searchable picker for a move whose targets can outgrow a menu.
-	*/
 	pickTarget: (request: TargetPickerRequest) => void;
 	dragBegin: (item: DragItem) => void;
 	dragEnd: () => void;
@@ -2898,15 +2790,11 @@ type CardActions = {
 	dragDrop: (group: Session, event: DragEvent<HTMLElement>) => void;
 };
 
-/**
-Where the current drag would land over `group`, or null when dropping there does nothing.
-*/
 function resolveDropMark(
 	group: Session,
 	event: DragEvent<HTMLElement>,
 	item: DragItem | null,
 ): DropMark | null {
-	// No drag of ours in progress: only a link from a page, a bookmark, or another window can land.
 	if (
 		!item &&
 		!['link', 'bookmark', 'session'].includes(
@@ -2930,7 +2818,6 @@ function resolveDropMark(
 		};
 	}
 
-	// Links keep the order they were saved in: dragging one inside its own session offers no drop (Ctrl copies it).
 	if (
 		item?.kind === 'tab' &&
 		item.groupId === group.id &&
@@ -2950,7 +2837,6 @@ function resolveDropMark(
 	const run = tabRuns(group.tabs).find((entry) =>
 		entry.some((tab) => tab.id === row.dataset.tabId),
 	);
-	// A split pair moves as a unit: dropping beside one half lands outside the pair.
 	if (
 		item?.kind === 'tab' &&
 		item.groupId === group.id &&
@@ -2970,20 +2856,11 @@ type GroupCardProps = {
 	group: Session;
 	folderName?: string;
 	settings: Partial<Settings>;
-	/**
-	The page is wide enough for the row of preview icons on a collapsed card.
-	*/
 	wide: boolean;
 	isExpanded: boolean;
-	/**
-	Ids of this session's selected links.
-	*/
 	selectedTabs: Set<string>;
 	selectedTabsForDrag: SavedTabRecord[];
 	selectionActive: boolean;
-	/**
-	This window has tabs a save could store; without any, switching and the replace and add actions are off.
-	*/
 	canSwitch: boolean;
 	actions: CardActions;
 	dragStore: DragStore;
@@ -3010,7 +2887,6 @@ const GroupCard = memo(
 		dragStore,
 	}: GroupCardProps) => {
 		const displayMode = settings.urlDisplayMode;
-		// Screen readers read these names; a session saved without a name still needs one.
 		const name = group.name.trim() || 'Untitled session';
 		const previewTabs = group.tabs.slice(0, 6);
 		const runs = useMemo(() => tabRuns(group.tabs), [group.tabs]);
@@ -3163,7 +3039,6 @@ const GroupCard = memo(
 				}
 			},
 		);
-		// One list for the Restore dropdown and the Restore options submenu, so they cannot drift apart.
 		const restoreOptions: MenuAction[] = [
 			{
 				id: 'restore-here',
@@ -3191,7 +3066,6 @@ const GroupCard = memo(
 				onSelect: () => handlers.forceRestore(group),
 			},
 		];
-		// Built only when the menu opens.
 		const actions = (): MenuAction[] => [
 			{
 				id: 'restore',
@@ -3328,7 +3202,6 @@ const GroupCard = memo(
 					const {target} = event;
 					if (
 						target instanceof Element &&
-						// A menu is drawn in a portal but its clicks still reach this card through React, so they are ignored.
 						target.closest(
 							'button, a, input, textarea, select, [role="button"], [role="menu"], [role="menuitem"]',
 						)
@@ -3504,7 +3377,6 @@ const GroupCard = memo(
 								settings.showSessionFaviconPreviews !== false && (
 									<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
 										{previewTabs.map((tab) => (
-											// Decorative: the title button is the keyboard and screen reader control, and a click here reaches the card's own handler.
 											<span key={tab.id} aria-hidden="true">
 												<Favicon
 													url={tab.url}
@@ -3646,9 +3518,6 @@ type SavedTabProps = {
 	actions: CardActions;
 	dragStore: DragStore;
 	displayMode?: Settings['urlDisplayMode'];
-	/**
-	Shown on the first tab of a split view pair.
-	*/
 	splitBadge?: boolean;
 };
 
@@ -3695,7 +3564,6 @@ const SavedTab = memo(
 		const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
 		const copyUrls = usePageCopyUrls();
 		const sendState = useSendToPrivate();
-		// Built only when the menu opens.
 		const actions = (): MenuAction[] => [
 			{
 				id: 'open-here',

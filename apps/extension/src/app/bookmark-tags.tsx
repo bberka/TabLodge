@@ -1,5 +1,3 @@
-// What the pages show of bookmark tags (#344): the chips on a card, the board's tag filter, and the Tags field of
-// the bookmark editor. The rules live in src/shared/bookmark-tags.ts, which the Android app shares.
 import {Plus, Tags, X} from 'lucide-react';
 import {useRef, useState} from 'react';
 import {
@@ -31,9 +29,6 @@ type Tagged = Pick<Bookmark, 'url' | 'tags' | 'hiddenKinds'>;
 const chip =
 	'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground';
 
-/**
-A card's tags, read out after its name. They only label the card; the tag filter and `tag:` search find them.
-*/
 export function TagChips({
 	bookmark,
 	className,
@@ -58,10 +53,6 @@ export function TagChips({
 	);
 }
 
-/**
-The board's tag filter: every tag in the library with how many bookmarks show it. Picking one adds `tag:` to the
-bookmark search, picking it again takes it out, so the search box always says what is filtered.
-*/
 export function TagFilterMenu({
 	bookmarks,
 	search,
@@ -101,7 +92,6 @@ export function TagFilterMenu({
 								key={tag}
 								checked={active.includes(tag)}
 								onSelect={(event) => {
-									// The menu stays open so several tags can be picked in a row.
 									event.preventDefault();
 								}}
 								onCheckedChange={() => {
@@ -123,11 +113,6 @@ export function TagFilterMenu({
 
 export type TagEdit = Pick<Bookmark, 'tags' | 'hiddenKinds'>;
 
-/**
-The Tags field of the bookmark editor. The automatic kind shows as a chip the person can remove, which keeps it
-removed for this bookmark; a removed kind can be put back. Typed tags are added with Enter or a comma, and when the
-field loses focus. Nothing is saved until the editor is.
-*/
 export function TagsField({
 	id,
 	url,
@@ -149,7 +134,6 @@ export function TagsField({
 	const kindHidden = automatic !== undefined && hidden.includes(automatic);
 	const full = own.length >= MAX_TAGS;
 
-	// Removing the kind also takes away a typed tag of the same name, so the chip does not come straight back.
 	const setKindHidden = (next: boolean) => {
 		const others = hidden.filter((entry) => entry !== automatic);
 		onChange({
@@ -225,7 +209,6 @@ export function TagsField({
 							return;
 						}
 
-						// Enter adds the tag; it does not submit the editor.
 						event.preventDefault();
 						commit(draft);
 					}}
@@ -239,7 +222,6 @@ export function TagsField({
 					className="h-7 px-2 text-xs"
 					onClick={() => {
 						setKindHidden(false);
-						// This button goes away: focus the input, or the kind's own remove button when the input is full.
 						requestAnimationFrame(() => {
 							const target = inputRef.current?.disabled
 								? boxRef.current?.querySelector<HTMLButtonElement>('button')
