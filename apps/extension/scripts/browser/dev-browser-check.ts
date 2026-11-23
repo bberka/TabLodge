@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import type {Buffer} from 'node:buffer';
 import {spawn} from 'node:child_process';
-import {mkdir} from 'node:fs/promises';
+import {existsSync} from 'node:fs';
+import {mkdir, writeFile} from 'node:fs/promises';
 import process from 'node:process';
 import {chromium, type Browser} from 'playwright';
 import {fromRoot} from '../vite-shared.ts';
+import {serviceWorkerCachePath} from './dev-profile-cache.ts';
+
+const headlessProfile = fromRoot('.dev/chromium-headless-profile');
+const plantedWorker = `${serviceWorkerCachePath(headlessProfile)}/ScriptCache/check`;
+await mkdir(`${serviceWorkerCachePath(headlessProfile)}/ScriptCache`, {
+	recursive: true,
+});
+await writeFile(plantedWorker, 'a worker from an earlier build');
 
 const child = spawn(
 	process.execPath,
@@ -53,6 +62,11 @@ try {
 	);
 	const worker = context.serviceWorkers()[0];
 	assert.ok(worker.url().endsWith('/service-worker.js'));
+	assert.equal(
+		existsSync(plantedWorker),
+		false,
+		'Launching should clear the cached service worker of an earlier build.',
+	);
 	await mkdir(fromRoot('.dev/evidence'), {recursive: true});
 	await page.screenshot({path: fromRoot('.dev/evidence/headless-dev.png')});
 	const session = await browser.newBrowserCDPSession();
