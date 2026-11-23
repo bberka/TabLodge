@@ -10706,6 +10706,7 @@ test('the palette shortcut opens one palette window over the focused window on a
 	const url = new URL(call.url);
 	assert.equal(url.pathname, '/palette.html');
 	assert.equal(url.searchParams.get('window'), '10');
+	assert.equal(url.searchParams.get('tab'), '1');
 
 	// The palette window is now open; pressing the shortcut again closes it instead of opening a second one.
 	await press();
@@ -10764,6 +10765,7 @@ test('by default the shortcut injects the overlay on demand and opens no window'
 	assert.equal(url.pathname, '/palette.html');
 	assert.equal(url.searchParams.get('overlay'), '1');
 	assert.equal(url.searchParams.get('window'), '10');
+	assert.equal(url.searchParams.get('tab'), '1');
 });
 
 test('by default, pages that cannot be scripted open the window instead', async () => {
@@ -10846,6 +10848,118 @@ test('messages from the palette window act on the window it was opened over', as
 	assert.equal(response.ok, true, response.error);
 	assert.ok(harness.openedTabs.length > 0);
 	assert.ok(harness.openedTabs.every((tab) => tab.windowId === 10));
+});
+
+test('a palette restore that moves the session to the trash offers Undo on the tab the palette was over, and Undo brings it back', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreTarget: 'current-window', restoreMode: 'remove'}),
+		[
+			webTab(1, 10, 0, {url: 'https://front.example/', title: 'Front'}),
+			webTab(3, 10, 1, {
+				active: true,
+				url: 'https://opened.example/',
+				title: 'Opened',
+			}),
+			{
+				id: 2,
+				windowId: 20,
+				index: 0,
+				active: true,
+				url: 'chrome-extension://tablodge/palette.html?window=10',
+			},
+		],
+		{extraWindows: [20]},
+	);
+	const palette = {
+		url: 'chrome-extension://tablodge/palette.html?window=10&tab=1',
+		tab: {id: 2, windowId: 20},
+	};
+	const restored = await harness.sendMessage(
+		{type: 'RESTORE_GROUP', groupId: 'session-1'},
+		palette,
+	);
+	assert.equal(restored.ok, true, restored.error);
+	assert.ok(restored.trashId);
+
+	const message = 'Restored “Research”. Removed it from your sessions.';
+	const shown = await harness.sendMessage(
+		{type: 'SHOW_TRASH_UNDO', tabId: 1, message, trashId: restored.trashId},
+		palette,
+	);
+	assert.equal(shown.ok, true, shown.error);
+	assert.equal(harness.executeScriptCalls.length, 1);
+	const [call] = harness.executeScriptCalls;
+	assert.equal(
+		call.target.tabId,
+		1,
+		'it draws on the tab the palette was over, the one the activeTab grant covers',
+	);
+	assert.equal((call.args?.[0] as {message: string}).message, message);
+
+	const otherTab = await harness.sendMessage(
+		{type: 'TRASH_UNDO', id: restored.trashId},
+		{url: 'https://opened.example/', tab: {id: 3, windowId: 10}},
+	);
+	assert.equal(otherTab.ok, false);
+
+	const undo = await harness.sendMessage(
+		{type: 'TRASH_UNDO', id: restored.trashId},
+		{url: 'https://front.example/', tab: {id: 1, windowId: 10}},
+	);
+	assert.equal(undo.ok, true, undo.error);
+	assert.equal(undo.message, 'Restored to Research.');
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_TRASH'})).items.length,
+		0,
+	);
+	assert.ok(
+		(await harness.sendMessage({type: 'GET_STATE'})).groups.some(
+			(group) => group.id === 'session-1',
+		),
+	);
+});
+
+test('a palette restore still works, and shows no error, where the page cannot show the Undo toast', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreTarget: 'current-window', restoreMode: 'remove'}),
+		[
+			webTab(1, 10, 0, {active: true, url: 'https://front.example/'}),
+			{
+				id: 2,
+				windowId: 20,
+				index: 0,
+				active: true,
+				url: 'chrome-extension://tablodge/palette.html?window=10&tab=1',
+			},
+		],
+		{extraWindows: [20], scriptingFails: true},
+	);
+	const palette = {
+		url: 'chrome-extension://tablodge/palette.html?window=10&tab=1',
+		tab: {id: 2, windowId: 20},
+	};
+	const restored = await harness.sendMessage(
+		{type: 'RESTORE_GROUP', groupId: 'session-1'},
+		palette,
+	);
+	assert.equal(restored.ok, true, restored.error);
+	assert.ok(restored.trashId);
+	const shown = await harness.sendMessage(
+		{
+			type: 'SHOW_TRASH_UNDO',
+			tabId: 1,
+			message: 'Restored “Research”. Removed it from your sessions.',
+			trashId: restored.trashId,
+		},
+		palette,
+	);
+	assert.equal(shown.ok, false);
+	assert.equal(shown.error, 'That page cannot show a message.');
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_TRASH'})).items.length,
+		1,
+		'the session waits in the trash',
+	);
 });
 
 test('an all-windows toolbar save asks once for every session it created', async () => {

@@ -1071,6 +1071,8 @@ export type TabLodgeMessages = {
 	Sent by the Save quote toast in a web page: undoes the quote that toast reported, and nothing else.
 	*/
 	QUOTE_UNDO: {id: string};
+	SHOW_TRASH_UNDO: {tabId: number; message: string; trashId: string};
+	TRASH_UNDO: {id: string};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -1475,6 +1477,8 @@ export type TabLodgeResponses = {
 	SITE_SOURCE_CATCH_UP_DISMISS: {};
 	SITE_SOURCE_UNDO: {label: string};
 	QUOTE_UNDO: {label: string};
+	SHOW_TRASH_UNDO: {};
+	TRASH_UNDO: {message: string};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

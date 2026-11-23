@@ -23,7 +23,15 @@ export const newColumnRequested = (value: string | null | undefined) =>
 `?window=` on palette.html: the id of the browser window the shortcut was pressed in; undefined when missing or not a whole number.
 */
 export function paletteWindowId(search: string): number | undefined {
-	const value = new URLSearchParams(search).get('window');
+	return requestId(search, 'window');
+}
+
+export function paletteTabId(search: string): number | undefined {
+	return requestId(search, 'tab');
+}
+
+function requestId(search: string, name: string): number | undefined {
+	const value = new URLSearchParams(search).get(name);
 	const id = value && /^\d{1,10}$/.test(value) ? Number(value) : undefined;
 	return id !== undefined && Number.isSafeInteger(id) ? id : undefined;
 }

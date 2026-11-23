@@ -751,7 +751,8 @@ function Help() {
 							commands, Settings, or the web. Your recent sessions are listed
 							before you type. Choose one to restore it, or press{' '}
 							<Key>Shift</Key> + <Key>Enter</Key> to reveal it on the dashboard
-							instead. Type the name of a Settings section, such as Sync or
+							instead. A restore that moves the session to the trash offers Undo
+							in a toast. Type the name of a Settings section, such as Sync or
 							Recovery &amp; backups, to open Settings there. Commands include
 							Sync now, Back up now, Share bookmarks, Trash bin, and Keep a copy
 							of this page (from the palette over a page). The palette lists the
@@ -777,11 +778,13 @@ function Help() {
 							a new window. Links and web searches open in that window&apos;s
 							active tab. Press the shortcut again or <Key>Esc</Key> to close
 							the palette. A palette window also closes when you click another
-							window.
+							window. With Remove restored tabs on, a restore that moves the
+							session to the trash shows Undo on the page the palette was over,
+							where TabLodge can show a message on it.
 						</>
 					),
 					searchText:
-						'any page global shortcut ctrl shift k command palette window in the current page overlay browser pages restore session new window open search palette close click away focus',
+						'any page global shortcut ctrl shift k command palette window in the current page overlay browser pages restore session new window open search palette close click away focus undo remove restored tabs trash message toast',
 				},
 				{
 					title: 'Navigate results',

@@ -41,7 +41,7 @@
 	"apps/extension/src/app/bookmark-tags.tsx": 9,
 	"apps/extension/src/app/column-color.ts": 4,
 	"apps/extension/src/app/column-select.tsx": 1,
-	"apps/extension/src/app/common.tsx": 52,
+	"apps/extension/src/app/common.tsx": 49,
 	"apps/extension/src/app/dashboard.tsx": 72,
 	"apps/extension/src/app/data-transfer.tsx": 45,
 	"apps/extension/src/app/default-column.ts": 3,

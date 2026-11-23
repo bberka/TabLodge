@@ -118,14 +118,13 @@ import {
 	StatusLine,
 	TabLodgeMark,
 	send,
-	splitNote,
 	useHasSavableTabs,
 	switchSummary,
 	useStatus,
-	restoreFailureText,
 	plural,
 	showSaveFailure,
 } from './common';
+import {restoreFailureText, splitNote} from './session-restore-message';
 import {claimUndo} from './message-client';
 import {defaultBookmarkColumnId} from './default-column';
 import {ImportDialog, useShareDialog} from './lazy-dialogs';
