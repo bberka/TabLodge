@@ -36,7 +36,7 @@ export function watchSavedPage({
 	let lastAsked = '';
 	// Answers can come back out of order; only the newest request's answer is shown.
 	let latestRequest = 0;
-	let shown = false;
+	let asked = false;
 	let failures = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -88,13 +88,18 @@ export function watchSavedPage({
 
 	const check = async () => {
 		const loaded = read(document);
-		const links = loaded?.slice(0, CATCH_UP_MAX_LINKS);
-		if (!links?.length) {
+		if (!loaded) {
 			// Off the saved page (YouTube and X change pages in place): an answer still on its way is for a list
 			// that is gone, and coming back asks again.
 			latestRequest++;
 			lastAsked = '';
-			shown = false;
+			asked = false;
+			return;
+		}
+
+		const links = loaded.slice(0, CATCH_UP_MAX_LINKS);
+		if (links.length === 0) {
+			lastAsked = '';
 			return;
 		}
 
@@ -127,14 +132,13 @@ export function watchSavedPage({
 		}
 
 		failures = 0;
-		if (!result.ask || shown) {
+		if (!result.ask) {
 			return;
 		}
 
-		shown = true;
 		if (result.mode === 'add') {
 			const next = await add(links, true);
-			if (!next) {
+			if (request !== latestRequest || !next) {
 				return;
 			}
 
@@ -145,8 +149,13 @@ export function watchSavedPage({
 			return;
 		}
 
+		if (asked) {
+			return;
+		}
+
+		asked = true;
 		const cut =
-			loaded && loaded.length > links.length
+			loaded.length > links.length
 				? ` Only the first ${links.length} were checked.`
 				: '';
 		showSourceToast(catchUpCountText(result.missing, appName) + cut, {
@@ -178,7 +187,7 @@ export function watchSavedPage({
 		refresh() {
 			lastAsked = '';
 			latestRequest++;
-			shown = false;
+			asked = false;
 			settle();
 		},
 	};

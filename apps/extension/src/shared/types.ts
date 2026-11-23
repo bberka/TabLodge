@@ -1058,7 +1058,6 @@ export type TabLodgeMessages = {
 	SITE_SOURCE_CATCH_UP: {source: string; links: unknown[]};
 	/**
 	Sent by the site content script when the user answers Add them: adds the listed items TabLodge lacks.
-	`automatic`: the setting adds them without asking, so the addresses answered Not now stay out.
 	*/
 	SITE_SOURCE_CATCH_UP_ADD: {
 		source: string;
@@ -1475,8 +1474,7 @@ export type TabLodgeResponses = {
 	};
 	TOAST_PREFS: {position: ToastPosition; duration: ToastDuration};
 	/**
-	`missing`: how many listed items TabLodge lacks. `ask`: some of them were never answered Not now. `mode`:
-	whether Settings › Sources adds them at once or asks first.
+	`missing`: how many listed items TabLodge lacks. `ask`: some of them were never answered Not now.
 	*/
 	SITE_SOURCE_CATCH_UP: {
 		missing: number;

@@ -221,7 +221,7 @@ test('Ask first offers Add them and Not now, and Add them adds on the click', as
 	assert.equal(add?.automatic, undefined);
 });
 
-test('one page load shows one catch-up message while the list grows under it', async () => {
+test('Ask first asks once while the list grows under it', async () => {
 	vi.useFakeTimers();
 	const page = savedPage([first]);
 	let counted = 0;
@@ -244,7 +244,125 @@ test('one page load shows one catch-up message while the list grows under it', a
 	page.set([first, second]);
 	await vi.advanceTimersByTimeAsync(2000);
 	assert.equal(counted, 2, 'the longer list was counted');
-	assert.equal(toasts.length, 1, 'the second count did not prompt again');
+	assert.deepEqual(
+		toasts.map((toast: Shown) => toast.text),
+		["1 saved item on this page isn't in TabLodge."],
+		'the second count did not ask again',
+	);
+});
+
+test('a list the site empties while redrawing does not ask a second time', async () => {
+	vi.useFakeTimers();
+	const page = savedPage([first]);
+	watchSavedPage({
+		source: siteSourceById('youtube')!,
+		read: page.read,
+		async send<T>(message: Record<string, unknown>) {
+			return (message.type === 'SITE_SOURCE_CATCH_UP'
+				? count(1, true, 'ask')
+				: undefined) as unknown as T;
+		},
+		appName: 'TabLodge',
+		undo: async () => '',
+	});
+
+	await vi.advanceTimersByTimeAsync(1000);
+	page.set([]);
+	await vi.advanceTimersByTimeAsync(2000);
+	page.set([first]);
+	await vi.advanceTimersByTimeAsync(2000);
+	assert.equal(toasts.length, 1, 'the redraw asked nothing new');
+});
+
+test('Add them automatically keeps adding the items that arrive later, each with its own Undo', async () => {
+	vi.useFakeTimers();
+	const page = savedPage([first]);
+	const added: Array<{links: SourceLink[]; automatic?: boolean}> = [];
+	watchSavedPage({
+		source: siteSourceById('youtube')!,
+		read: page.read,
+		async send<T>(message: Record<string, unknown>) {
+			switch (message.type) {
+				case 'SITE_SOURCE_CATCH_UP': {
+					return {ok: true, missing: 1, ask: true, mode: 'add'} as unknown as T;
+				}
+
+				case 'SITE_SOURCE_CATCH_UP_ADD': {
+					added.push({
+						links: message.links as SourceLink[],
+						automatic: message.automatic as boolean | undefined,
+					});
+					return {
+						ok: true,
+						added: 1,
+						column: 'YouTube',
+						undoId: `undo-${added.length}`,
+					} as unknown as T;
+				}
+
+				default: {
+					return undefined;
+				}
+			}
+		},
+		appName: 'TabLodge',
+		undo: async () => 'Removed from TabLodge.',
+	});
+
+	await vi.advanceTimersByTimeAsync(1000);
+	page.set([first, second]);
+	await vi.advanceTimersByTimeAsync(2000);
+	assert.deepEqual(
+		added.map((batch) => [
+			batch.automatic,
+			batch.links.map((link) => link.url),
+		]),
+		[
+			[true, [first.url]],
+			[true, [first.url, second.url]],
+		],
+	);
+	assert.deepEqual(
+		toasts.map((toast: Shown) => [
+			toast.text,
+			toast.actions.map((action) => action.label),
+		]),
+		[
+			['Added 1 to TabLodge in YouTube.', ['Undo']],
+			['Added 1 to TabLodge in YouTube.', ['Undo']],
+		],
+		'each batch reports its own adds, with its own Undo',
+	);
+});
+
+test('an automatic add that finishes after the user left the saved page shows nothing', async () => {
+	vi.useFakeTimers();
+	const page = savedPage([first]);
+	const add = Promise.withResolvers<unknown>();
+	let onSavedPage = true;
+	watchSavedPage({
+		source: siteSourceById('youtube')!,
+		read: () => (onSavedPage ? page.read() : undefined),
+		async send<T>(message: Record<string, unknown>) {
+			return message.type === 'SITE_SOURCE_CATCH_UP_ADD'
+				? (add.promise as unknown as T)
+				: ({ok: true, missing: 1, ask: true, mode: 'add'} as unknown as T);
+		},
+		appName: 'TabLodge',
+		undo: async () => '',
+	});
+
+	await vi.advanceTimersByTimeAsync(1000);
+	onSavedPage = false;
+	page.set([]);
+	await vi.advanceTimersByTimeAsync(2000);
+	add.resolve({ok: true, added: 1, column: 'YouTube', undoId: 'undo-1'});
+	await vi.advanceTimersByTimeAsync(0);
+	assert.deepEqual(
+		toasts,
+		[],
+		'the result of a list the user left is not shown',
+	);
 });
 
 test('the same items redrawn in another order are not counted again', async () => {
