@@ -1,6 +1,6 @@
 # Spec driven development
 
-The spec is the contract. A change is done when every acceptance criterion in it has proof, and the code does nothing the spec does not ask for. The spec lives in one place, the GitHub issue ([Issues](issue-tracker.md)), and the pull request points back to it.
+Spec = contract. Change done when every acceptance criterion has proof, and code does nothing spec does not ask for. Spec lives in one place, GitHub issue ([Issues](issue-tracker.md)), and pull request points back to it.
 
 ## What counts as the spec
 
@@ -10,9 +10,9 @@ The spec is the contract. A change is done when every acceptance criterion in it
 | Fix | The bug report: its steps reproduce the bug and its expected result is the criterion |
 | Refactor, docs, tooling | One sentence in **What and why** of the pull request, naming what must stay true |
 
-A feature without an issue gets one before the first edit. Write it from the request and the code with the `to-spec` skill (no interview) or by hand in the format below, publish it with `gh issue create`, and go on. Ask the user only for a decision that is theirs to make: a product trade-off the code cannot settle. "Implement it" means the spec is written and the build starts; it never skips the spec.
+Feature without issue gets one before first edit. Write from request and code with `to-spec` skill (no interview) or by hand in format below, publish with `gh issue create`, go on. Ask user only for decision that is theirs: product trade-off code cannot settle. "Implement it" means spec written and build starts; never skips spec.
 
-An issue labeled `ready-for-agent` is a finished spec: build it as written. When the code shows the spec is wrong or incomplete, amend the spec on the issue first (edit the body, add a comment saying what changed and why), then change the code.
+Issue labeled `ready-for-agent` is finished spec: build as written. When code shows spec wrong or incomplete, amend spec on issue first (edit body, add comment saying what changed and why), then change code.
 
 ## The format
 
@@ -33,22 +33,22 @@ The answers from cross-app.md, including the `Entry points:` and `Settings:` lin
 What a reader might expect and will not get.
 ```
 
-Acceptance criteria describe behavior seen from outside ("a note longer than the cap is cut on save"), never the implementation ("`normalizeBookmark` calls `clip`"). Each one must be checkable: a reader who has never seen the code can say whether it holds. Cover the empty state, the error path, and older data where the change touches stored data.
+Acceptance criteria describe behavior seen from outside ("a note longer than the cap is cut on save"), never implementation ("`normalizeBookmark` calls `clip`"). Each must be checkable: reader who never saw code can say whether it holds. Cover empty state, error path, older data where change touches stored data.
 
-Link a decision that outlives the feature, such as a protocol choice, as an [ADR](../adr/) from the spec. The spec says what must be true; the ADR says why this design.
+Link decision that outlives feature, such as protocol choice, as [ADR](../adr/) from spec. Spec says what must be true; ADR says why this design.
 
 ## The loop
 
-1. **Find the spec and claim it.** Read the issue and its comments, then the code it touches. Search pull requests for the issue number and its keywords (`gh pr list --search "#<n>" --state all`) and check recent commits on `master`: someone may already have built it. When nobody has, comment on the issue that you are taking it. Release the claim with a comment if you stop. Write the spec when it is missing.
-2. **Challenge.** A feature gets `challenge-feature` against the spec, as in [Task workflow](workflow.md).
-3. **Test first.** Turn the acceptance criteria into tests at the most direct existing boundary with the `tdd` skill. A criterion that only a browser or an emulator can show becomes a step list for the proof instead.
-4. **Build** the smallest change that makes every criterion hold.
-5. **Prove each criterion.** Run the [validation gate](validation.md) and collect one piece of proof per criterion.
-6. **Check against the spec.** Read the diff once against the Acceptance list and Out of scope: a criterion with no proof, or behavior in the diff that no criterion asks for, is a finding. Fix it before the pull request.
-7. **Report by criterion.** The pull request copies the Acceptance list and puts the proof beside each line, as in [Pull request evidence](validation.md#pull-request-evidence).
+1. **Find the spec and claim it.** Read issue and comments, then code it touches. Search pull requests for issue number and keywords (`gh pr list --search "#<n>" --state all`) and check recent commits on `master`: someone may already have built it. When nobody has, comment on issue that you take it. Release claim with comment if you stop. Write spec when missing.
+2. **Challenge.** Feature gets `challenge-feature` against spec, as in [Task workflow](workflow.md).
+3. **Test first.** Turn acceptance criteria into tests at most direct existing boundary with `tdd` skill. Criterion only browser or emulator can show becomes step list for proof instead.
+4. **Build** smallest change that makes every criterion hold.
+5. **Prove each criterion.** Run [validation gate](validation.md) and collect one proof per criterion.
+6. **Check against the spec.** Read diff once against Acceptance list and Out of scope: criterion with no proof, or behavior in diff no criterion asks for, is a finding. Fix before pull request.
+7. **Report by criterion.** Pull request copies Acceptance list and puts proof beside each line, as in [Pull request evidence](validation.md#pull-request-evidence).
 
-A follow up request on an open pull request amends the spec first: add or change the criterion on the issue (or in the pull request's **Spec** section when there is no issue), then code it and prove it like the others.
+Follow up request on open pull request amends spec first: add or change criterion on issue (or in pull request's **Spec** section when no issue), then code and prove like others.
 
 ## Splitting work
 
-One feature is one branch and one pull request, even when it has several steps; push each step to the same branch. Split it into separate issues only when the maintainer wants separate pull requests, using `to-tickets` and the blocking links in [Issues](issue-tracker.md). Each ticket then carries its own Acceptance list, and the parent issue's list is the sum of theirs.
+One feature is one branch and one pull request, even with several steps; push each step to same branch. Split into separate issues only when maintainer wants separate pull requests, using `to-tickets` and blocking links in [Issues](issue-tracker.md). Each ticket then carries own Acceptance list, and parent issue's list is sum of theirs.

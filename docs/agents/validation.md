@@ -1,50 +1,50 @@
 # Validation gate
 
-Install the Vite+ CLI once as described in [Contributing Development](../CONTRIBUTING.md#development), then use `vp run <task>` from the repository root. The gate applies to every code fix or feature and defines when you may report a change complete or commit, push, or open a pull request. The branch, commit, and CI steps are in [Task workflow](workflow.md).
+Install Vite+ CLI once per [Contributing Development](../CONTRIBUTING.md#development), then use `vp run <task>` from repo root. Gate applies to every code fix or feature. Defines when you may report change complete, or commit, push, open pull request. Branch, commit, CI steps in [Task workflow](workflow.md).
 
 ## Required workflow
 
-1. **Add regression coverage.** For a bug, add or update a test that fails before the fix when practical. For a feature, test the new behavior at the most direct existing test boundary. Do not replace a browser test with a mock when the behavior depends on Chrome APIs or extension page behavior.
-2. **Run automated checks.** Run `vp run check` and `vp run build`. Fix failures and rerun both commands. Record the result of each command. While you iterate, `vp run check:changed` lints, type checks, and tests only what differs from `origin/master`; it is a faster loop and never replaces the full run, because a change can break a file it did not touch. If the change touches the manifest, the build scripts, `apps/extension/src/shared/browser.ts`, or anything that differs between Chromium and Firefox, also run `vp run check:firefox` (needs Firefox installed) and record its result.
-3. **Verify runtime behavior in the dev browser.** For a user visible or browser behavior change, run `vp run browser:install` once if the Playwright browser is missing, then run `vp run dev:chrome --headless`. When the change can behave differently in Firefox (see [Browser support](../architecture.md#browser-support)), also run `vp run dev:firefox --headless` and repeat the check there. Wait for the initial build to finish and connect to the automation endpoint described in [Browser access](extension.md#browser-access). Perform the exact action that was broken or changed and check the result. After rebuilding, reload TabLodge at `chrome://extensions` and reopen its pages. Check the page console and service worker console for relevant errors. For UI changes, also test keyboard use and both themes, and run `vp run check:a11y` after `vp run build`. CI runs `check:a11y`, `check:startup`, `check:private-storage`, `check:dev-browser`, and the Cloudflare Worker freshness check on every pull request (see [CI](ci.md)), so run them locally when your change can break one, but a green pull request already covers them. Follow [Accessibility](ui.md#accessibility): every interaction that needs a pointer also needs a keyboard alternative. Use available screen reader or accessibility inspection tools.
-4. **Capture proof.** For every fix or feature, keep evidence that the change works, taken from the runs in steps 2 and 3 (test output counts where no browser run applies), one piece for each acceptance criterion of the [spec](spec-driven.md). See [Proof](#proof).
-5. **Unslop the diff.** Clean the changed files before review. See [Unslop the diff](#unslop-the-diff).
-6. **Review scope and evidence.** Run `git diff --check` and `git status --short`, then inspect `git diff HEAD` to review staged and unstaged changes together. Check the diff against the spec: every criterion has proof and nothing goes beyond it ([Change scope review](#change-scope-review)). Record concrete validation evidence for the pull request.
+1. **Add regression coverage.** Bug: add or update test that fails before fix when practical. Feature: test new behavior at most direct existing test boundary. Do not replace browser test with mock when behavior depends on Chrome APIs or extension page behavior.
+2. **Run automated checks.** Run `vp run check` and `vp run build`. Fix failures, rerun both. Record result of each. While iterating, `vp run check:changed` lints, type checks, tests only what differs from `origin/master`; faster loop, never replaces full run, because change can break file it did not touch. If change touches manifest, build scripts, `apps/extension/src/shared/browser.ts`, or anything differing between Chromium and Firefox, also run `vp run check:firefox` (needs Firefox installed) and record result.
+3. **Verify runtime behavior in dev browser.** For user visible or browser behavior change, run `vp run browser:install` once if Playwright browser missing, then run `vp run dev:chrome --headless`. When change can behave differently in Firefox (see [Browser support](../architecture.md#browser-support)), also run `vp run dev:firefox --headless`, repeat check there. Wait for initial build to finish, connect to automation endpoint described in [Browser access](extension.md#browser-access). Perform exact action that was broken or changed, check result. After rebuilding, reload TabLodge at `chrome://extensions`, reopen its pages. Check page console and service worker console for relevant errors. For UI changes, also test keyboard use and both themes, run `vp run check:a11y` after `vp run build`. CI runs `check:a11y`, `check:startup`, `check:private-storage`, `check:dev-browser`, Cloudflare Worker freshness check on every pull request (see [CI](ci.md)), so run locally when change can break one, but green pull request already covers them. Follow [Accessibility](ui.md#accessibility): every interaction needing pointer also needs keyboard alternative. Use available screen reader or accessibility inspection tools.
+4. **Capture proof.** For every fix or feature, keep evidence change works, taken from runs in steps 2 and 3 (test output counts where no browser run applies), one piece per acceptance criterion of [spec](spec-driven.md). See [Proof](#proof).
+5. **Unslop the diff.** Clean changed files before review. See [Unslop the diff](#unslop-the-diff).
+6. **Review scope and evidence.** Run `git diff --check` and `git status --short`, then inspect `git diff HEAD` to review staged and unstaged changes together. Check diff against spec: every criterion has proof, nothing goes beyond it ([Change scope review](#change-scope-review)). Record concrete validation evidence for pull request.
 
 ## Proof
 
-A fix or feature is not done until the pull request shows it working. Pick the strongest form the environment allows:
+Fix or feature not done until pull request shows it working. Pick strongest form environment allows:
 
-- **Screenshots** for UI changes. Exercise the affected workflow and capture its resulting state in both themes at all four browser viewport profiles: mobile portrait at 440 × 956 CSS pixels with a device scale factor of 3, representing a 6.9 inch iPhone Pro Max class device; tablet portrait at 768 × 1024 CSS pixels; wide desktop at 1440 × 900 CSS pixels; and very wide desktop at 1920 × 1080 CSS pixels. Use mobile device emulation for the phone profile. Use the headless dev browser (`vp run dev:chrome --headless`, plus `--seed-data` for realistic sample data). For a fix, also capture the broken state before the change at each profile where the issue reproduces.
-- **Android app proof.** Changes under `apps/mobile/` are shown on an Android emulator or a device instead of the browser profiles: screenshots of the affected screens in the app, with the Android version and whether the Material or iOS look was used, and a note if TalkBack, a dark theme, or a small screen was not checked. Start your own emulator without a window (`emulator -avd <name> -no-window -no-audio -gpu swiftshader_indirect`, or `pnpm run mobile:emulator --headless`) and target it by serial in every command (`adb -s <serial>`, or `ANDROID_SERIAL=<serial>` for `pnpm run mobile:android` and installs), so nothing lands on another emulator. Screenshots and the T3 device tools work the same on a headless emulator; open a visible window only when the maintainer asks for one. Keep the sample data off any real server. The **Mobile** workflow builds the debug APK for these changes, but it does not run the app.
-- **Recording or step list** for behavior that a still image cannot show, such as drag and drop, shortcuts, or restore flows. Give the exact steps and the observed result.
-- **Console or test output** for worker, storage, or import and export changes: the failing test before the fix and the passing test after, or the service worker console showing the expected result.
+- **Screenshots** for UI changes. Exercise affected workflow, capture resulting state in both themes at all four browser viewport profiles: mobile portrait 440 × 956 CSS pixels, device scale factor 3, representing 6.9 inch iPhone Pro Max class device; tablet portrait 768 × 1024 CSS pixels; wide desktop 1440 × 900 CSS pixels; very wide desktop 1920 × 1080 CSS pixels. Use mobile device emulation for phone profile. Use headless dev browser (`vp run dev:chrome --headless`, plus `--seed-data` for realistic sample data). For fix, also capture broken state before change at each profile where issue reproduces.
+- **Android app proof.** Changes under `apps/mobile/` shown on Android emulator or device instead of browser profiles: screenshots of affected screens in app, with Android version and whether Material or iOS look used, plus note if TalkBack, dark theme, or small screen not checked. Start own emulator without window (`emulator -avd <name> -no-window -no-audio -gpu swiftshader_indirect`, or `pnpm run mobile:emulator --headless`), target it by serial in every command (`adb -s <serial>`, or `ANDROID_SERIAL=<serial>` for `pnpm run mobile:android` and installs), so nothing lands on another emulator. Screenshots and T3 device tools work same on headless emulator; open visible window only when maintainer asks. Keep sample data off any real server. **Mobile** workflow builds debug APK for these changes, but does not run app.
+- **Recording or step list** for behavior still image cannot show, such as drag and drop, shortcuts, restore flows. Give exact steps and observed result.
+- **Console or test output** for worker, storage, import and export changes: failing test before fix and passing test after, or service worker console showing expected result.
 
-Save screenshots and recordings under `apps/extension/.dev/evidence/`, which git ignores, with the viewport and theme in each file name.
+Save screenshots and recordings under `apps/extension/.dev/evidence/`, git ignores it, with viewport and theme in each file name.
 
-Upload them with `vp run evidence <pr-number> <file>...` and paste the Markdown image links it prints into the pull request description (`gh pr edit <pr> --body-file`). In the pull request, a path on your disk is not proof. Only when `gh` cannot reach the repository, say so and list the file paths.
+Upload with `vp run evidence <pr-number> <file>...`, paste Markdown image links it prints into pull request description (`gh pr edit <pr> --body-file`). In pull request, path on your disk is not proof. Only when `gh` cannot reach repository, say so and list file paths.
 
-**Check by assertion, look once.** The script that captures a shot also asserts its state: the expected text, visibility, no horizontal scroll, no console errors. To judge the look, run `vp run proof:sheet <files or folder>` after the last edit and open the one image it prints, once, or have a subagent open it and report in text. Each opened image is resent on every later turn, so open only the sheet. The final reply embeds every screenshot by absolute path: `![mobile 440 light](/abs/path.png)`.
+**Check by assertion, look once.** Script capturing shot also asserts its state: expected text, visibility, no horizontal scroll, no console errors. To judge look, run `vp run proof:sheet <files or folder>` after last edit, open the one image it prints, once, or have subagent open it and report in text. Each opened image resent on every later turn, so open only sheet. Final reply embeds every screenshot by absolute path: `![mobile 440 light](/abs/path.png)`.
 
-**Every change gets its own screenshots.** A request to change something, including one that arrives after the pull request is open, is a new change. When it alters anything the user sees (layout, copy, spacing, a control, a setting, a default), take new screenshots of the result in the running app, upload them, and add them to the pull request before you say it is done; the earlier set does not count. A change with no visible effect says so in one sentence instead. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
+**Every change gets own screenshots.** Request to change something, including one arriving after pull request open, is new change. When it alters anything user sees (layout, copy, spacing, control, setting, default), take new screenshots of result in running app, upload, add to pull request before saying done; earlier set does not count. Change with no visible effect says so in one sentence instead. Documentation only and tooling only changes need sentence explaining why browser proof does not apply.
 
 ## Report only what you ran
 
-The pull request and your final reply list each check with its result. A check you could not run (no Firefox, no emulator, a blocked network) is named as not run, with the reason. Do not write that something works because the code looks right, a related test passed, or a build succeeded. The Android proof and the browser proof each say what was not checked.
+Pull request and final reply list each check with result. Check you could not run (no Firefox, no emulator, blocked network) named as not run, with reason. Do not write that something works because code looks right, related test passed, or build succeeded. Android proof and browser proof each say what was not checked.
 
 ## Guards say why
 
-A guard is a hook, lint rule, CI check, skipped test, or lint suppression. When you add one, write what it prevents where it is configured or in the doc that names it, and put a suppression's reason in the directive ([Code comments](comments.md)). When one looks removable, read that reason first, and change it only when the reason no longer holds. A guard with no reason gets its reason found before it is removed.
+Guard is hook, lint rule, CI check, skipped test, or lint suppression. When you add one, write what it prevents where configured or in doc naming it, put suppression's reason in directive ([Code comments](comments.md)). When one looks removable, read that reason first, change it only when reason no longer holds. Guard with no reason gets its reason found before removal.
 
 ## Unslop the diff
 
-Before the first push and after any later rework, review only the files this branch changes:
+Before first push and after any later rework, review only files this branch changes:
 
 ```sh
 git diff --name-only origin/master...HEAD
 ```
 
-Run the `unslop-*` skills that match those files, scoped to that list and nothing else:
+Run `unslop-*` skills matching those files, scoped to that list only:
 
 | Changed files | Skill |
 | --- | --- |
@@ -53,23 +53,23 @@ Run the `unslop-*` skills that match those files, scoped to that list and nothin
 | Markdown, Help copy, website copy | `unslop-text` |
 | Commit messages on the branch | `unslop-git` |
 
-Fix every finding that is in your diff. Leave code you did not change alone, even when it has slop, and mention it in the pull request only if it blocks the change. Then rerun `vp run check` and `vp run build`, commit the fixes, and continue. The skills write a ledger to `.unslop/`, which git ignores. The pull request does not need a report. Say in the pull request that the pass ran.
+Fix every finding in your diff. Leave code you did not change alone, even with slop; mention in pull request only if it blocks change. Then rerun `vp run check` and `vp run build`, commit fixes, continue. Skills write ledger to `.unslop/`, git ignores it. Pull request needs no report. Say in pull request that pass ran.
 
 ## Change scope review
 
-Keep the patch to the smallest set of changes that implements the request and its tests. Before opening a pull request, check each changed path against the request and remove unrelated cleanup, formatting, generated output, or speculative refactoring. Explain any necessary supporting change, such as a migration, test, or documentation update. Preserve existing user changes.
+Keep patch to smallest set of changes implementing request and its tests. Before opening pull request, check each changed path against request, remove unrelated cleanup, formatting, generated output, speculative refactoring. Explain any necessary supporting change, such as migration, test, documentation update. Preserve existing user changes.
 
 ## Pull request evidence
 
-Do not commit, push, or open a pull request for a runtime change until the checks pass, the affected workflow ran in Chrome or Chromium, proof exists, the diff is unslopped, and the scope review is done. When an environment limit blocks a required step, try another route to the same proof first. Stop before committing and ask only when no form of proof is possible, and report what is blocked and what access is needed.
+Do not commit, push, or open pull request for runtime change until checks pass, affected workflow ran in Chrome or Chromium, proof exists, diff unslopped, scope review done. When environment limit blocks required step, try another route to same proof first. Stop before committing and ask only when no form of proof possible; report what is blocked and what access needed.
 
-The pull request body lists:
+Pull request body lists:
 
-- The spec: the issue link and its Acceptance list, each criterion with its proof (or the one sentence spec of a refactor, docs, or tooling change). A criterion that changed during the work says so.
-- The commands run and whether each passed.
-- The browser used and the exact steps exercised, with the observed result.
-- For UI changes, the result of `vp run check:a11y`, keyboard testing, and the screen reader or accessibility inspection tools used, with workflows tested, tools unavailable, and remaining limits. Manual screen reader testing is not required.
-- The [proof](#proof), with a before and after for a fix.
-- That the unslop pass ran on the changed files.
+- Spec: issue link and its Acceptance list, each criterion with its proof (or one sentence spec of refactor, docs, tooling change). Say so if criterion changed during work.
+- Commands run and whether each passed.
+- Browser used and exact steps exercised, with observed result.
+- For UI changes, result of `vp run check:a11y`, keyboard testing, screen reader or accessibility inspection tools used, with workflows tested, tools unavailable, remaining limits. Manual screen reader testing not required.
+- [Proof](#proof), with before and after for fix.
+- That unslop pass ran on changed files.
 - Why browser validation does not apply, for documentation only or tooling only changes.
 - That each changed file is needed and unrelated changes are gone.
