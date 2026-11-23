@@ -431,13 +431,5 @@
 	"apps/site/postcss.config.cjs": 1,
 	"apps/site/src/lib/downloads.ts": 4,
 	"apps/site/src/lib/platform.ts": 11,
-	"apps/site/tests/site-platform.test.ts": 1,
-	"scripts/agent-context.ts": 9,
-	"scripts/check-changed.ts": 3,
-	"scripts/publish-evidence.ts": 5,
-	"scripts/release-version.ts": 18,
-	"scripts/third-party-notices.test.ts": 1,
-	"scripts/third-party-notices.ts": 23,
-	"vite.config.ts": 3,
-	"xo.config.ts": 60
+	"apps/site/tests/site-platform.test.ts": 1
 }

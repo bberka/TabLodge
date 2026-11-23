@@ -3,15 +3,6 @@ import {existsSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import process from 'node:process';
 import {pathToFileURL} from 'node:url';
 
-// Keeps the agent instructions from growing unnoticed. Agents read AGENTS.md, the per-folder AGENTS.md files, and
-// whichever docs/agents page matches the task; each byte costs every session. The budget file records the current
-// size, so a pull request that adds instructions shows the growth in its diff, and CI rejects growth over master's
-// budget unless the pull request carries the `agent-context-increase` label (it sets ALLOW_INCREASE=true).
-//
-//   node scripts/agent-context.ts                 fail unless the budget matches the files
-//   node scripts/agent-context.ts --write         rewrite the budget from the files
-//   node scripts/agent-context.ts --base <ref>    also fail when a size is above the one at <ref>
-
 const BUDGET = 'scripts/agent-context-budget.json';
 
 export type Sizes = Record<string, number>;
@@ -41,7 +32,6 @@ export function grown(current: Sizes, base: Sizes): string[] {
 		);
 }
 
-// The base has no budget file until the pull request that adds it merges.
 function baseBudget(ref: string): Sizes | undefined {
 	try {
 		return JSON.parse(

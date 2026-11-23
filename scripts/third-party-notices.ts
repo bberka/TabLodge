@@ -1,9 +1,3 @@
-// Third party notices for what a build really ships, shared by the extension build (THIRD_PARTY_NOTICES.txt in each
-// package) and the Android app (apps/mobile/scripts/licences.mts, the Open source licences screen).
-//
-// The input is the build's own module list: the files Vite or Metro put in a bundle, and for Android the libraries
-// on Gradle's release classpath. Every package found there needs a licence id and a licence text, or this throws,
-// so a build cannot ship a package that has no entry.
 import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -12,15 +6,9 @@ import type {LicenceData} from '../apps/mobile/src/about/licence-data.ts';
 export type Notice = {
 	name: string;
 	version: string;
-	/**
-	SPDX id or expression, as the package or POM states it.
-	*/
 	licence: string;
 	url?: string;
 	text: string;
-	/**
-	`native` for a library on the Android classpath that is not an npm package.
-	*/
 	kind: 'npm' | 'native';
 };
 
@@ -29,9 +17,6 @@ const TEXTS_DIR = join(
 	'licence-texts',
 );
 
-/**
-Licences whose standard text is kept in scripts/licence-texts, for packages that ship no licence file.
-*/
 const STANDARD_TEXTS = ['Apache-2.0', 'MIT', 'BSD-3-Clause'] as const;
 type StandardLicence = (typeof STANDARD_TEXTS)[number];
 
@@ -57,11 +42,6 @@ const readPackageJson = (dir: string): PackageJson | undefined => {
 		: undefined;
 };
 
-/**
-The folder of the npm package a bundled file belongs to, or undefined for the app's own code (anything outside
-node_modules). Nested package.json files that only set `type` or `main` are skipped: the package is the nearest one
-with a name and a version.
-*/
 export function packageDirOf(file: string): string | undefined {
 	if (!file.includes('/node_modules/')) {
 		return undefined;
@@ -114,10 +94,6 @@ function repositoryUrl(json: PackageJson): string | undefined {
 const standardFor = (licence: string): StandardLicence | undefined =>
 	STANDARD_TEXTS.find((id) => licence === id || licence === `(${id})`);
 
-/**
-Apache-2.0 asks for a copy of the licence itself. Many packages ship only the short header that points to it, so the
-full text is added after the header when it is missing.
-*/
 function withFullApache(licence: string, text: string): string {
 	return licence.includes('Apache-2.0') &&
 		!text.includes('TERMS AND CONDITIONS')
@@ -125,9 +101,6 @@ function withFullApache(licence: string, text: string): string {
 		: text;
 }
 
-/**
-The notice for one npm package folder: its licence file, plus NOTICE when it has one.
-*/
 export function npmNotice(dir: string): Notice {
 	const json = readPackageJson(dir);
 	if (!json?.name || !json.version) {
@@ -173,10 +146,6 @@ export function npmNotice(dir: string): Notice {
 
 const BARE_CSS_IMPORT = /@import\s+(?:url\()?["']([^"'./][^"']*)["']/g;
 
-/**
-The folders of the packages a CSS file pulls in with a bare `@import`, such as `@import 'tailwindcss'`. PostCSS
-inlines those, so they never show up as modules of the bundle.
-*/
 export function cssImportDirs(cssFile: string): string[] {
 	const css = readFileSync(cssFile, 'utf8');
 	return [...css.matchAll(BARE_CSS_IMPORT)].map(([, specifier = '']) => {
@@ -197,10 +166,6 @@ export function cssImportDirs(cssFile: string): string[] {
 	});
 }
 
-/**
-One notice per npm package among the bundled files, sorted by name. Paths that do not exist (Metro's virtual
-modules, Vite's `\0` helpers) are skipped. The app's own files count only for the packages their CSS imports.
-*/
 export function npmNotices(files: Iterable<string>): Notice[] {
 	const dirs = new Set<string>();
 	for (const file of files) {
@@ -221,9 +186,6 @@ export function npmNotices(files: Iterable<string>): Notice[] {
 	return sortNotices([...dirs].map((dir) => npmNotice(dir)));
 }
 
-/**
-What apps/mobile/scripts/native-licences.gradle writes.
-*/
 export type GradleLibraries = {
 	artifacts: Array<{
 		group: string;
@@ -232,15 +194,9 @@ export type GradleLibraries = {
 		url: string;
 		licences: Array<{name: string; url: string}>;
 	}>;
-	/**
-	Folders of the Gradle projects autolinking added, each the `android` folder of an npm package.
-	*/
 	projects: string[];
 };
 
-/**
-Maps the licence names POM files use to SPDX ids. A name not listed here fails the build until someone adds it.
-*/
 export function spdxFromPom(name: string): StandardLicence | undefined {
 	if (/apache\b.*\b2\b/i.test(name)) {
 		return 'Apache-2.0';
@@ -253,11 +209,6 @@ export function spdxFromPom(name: string): StandardLicence | undefined {
 	return /^bsd(?: license)?$/i.test(name.trim()) ? 'BSD-3-Clause' : undefined;
 }
 
-/**
-Notices for the libraries on the Android release classpath. Maven artifacts carry the licence their POM names, with
-its standard text, since a POM holds no licence text and most AARs ship none. Gradle projects are npm packages with
-native code; those outside node_modules are the app's own modules and are skipped.
-*/
 export function nativeNotices(libraries: GradleLibraries): Notice[] {
 	const notices: Notice[] = [];
 	for (const artifact of libraries.artifacts) {
@@ -282,7 +233,6 @@ export function nativeNotices(libraries: GradleLibraries): Notice[] {
 			version: artifact.version,
 			licence: unique.join(' OR '),
 			url: artifact.url || artifact.licences[0]?.url || undefined,
-			// The same text for every artifact under a licence, so the app stores it once.
 			text: `${unique
 				.map(
 					(spdx) =>
@@ -311,9 +261,6 @@ const sortNotices = (notices: Notice[]) =>
 			left.version.localeCompare(right.version, 'en'),
 	);
 
-/**
-Merges notice lists, keeping one entry per name and version.
-*/
 export function mergeNotices(...lists: Notice[][]): Notice[] {
 	const byId = new Map<string, Notice>();
 	for (const notice of lists.flat()) {
@@ -326,9 +273,6 @@ export function mergeNotices(...lists: Notice[][]): Notice[] {
 	return sortNotices([...byId.values()]);
 }
 
-/**
-The plain text file the extension ships.
-*/
 export function noticesText(product: string, notices: Notice[]): string {
 	const rule = '='.repeat(78);
 	const parts = notices.map((notice) =>
@@ -345,9 +289,6 @@ export function noticesText(product: string, notices: Notice[]): string {
 	return `${product} includes the following third party software, each under its own licence.\n\n${parts.join('\n')}`;
 }
 
-/**
-The Android app's data: one row per package, with each distinct licence text stored once.
-*/
 export function licenceData(notices: Notice[]): LicenceData {
 	const texts: string[] = [];
 	const indexOf = new Map<string, number>();
@@ -371,8 +312,5 @@ export function licenceData(notices: Notice[]): LicenceData {
 	return {packages, texts};
 }
 
-/**
-Resolves a source path from a Metro source map, which is relative to the repository root with a leading slash.
-*/
 export const fromMetroSource = (repoRoot: string, source: string) =>
 	existsSync(source) ? source : resolve(repoRoot, `.${source}`);

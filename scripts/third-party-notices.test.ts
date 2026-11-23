@@ -49,7 +49,6 @@ afterEach(() => {
 
 test('a bundled file belongs to the nearest package.json with a name and version', () => {
 	const dir = pkg('dom', {license: 'MIT'}, {LICENSE: 'MIT text'});
-	// Packages often carry a stub package.json that only sets the module type.
 	put('node_modules/dom/esm/package.json', {type: 'module'});
 	const file = put('node_modules/dom/esm/index.js', '');
 	assert.equal(packageDirOf(file), dir);
