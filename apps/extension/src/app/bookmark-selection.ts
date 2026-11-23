@@ -1,14 +1,5 @@
-/*
-Which bookmarks are selected on the board: click to toggle one, shift click to take the range from the last one
-clicked (in the order the cards appear on screen), Escape to clear. The rules are plain functions; the hook adds
-the state and the keyboard listeners.
-*/
 import {useCallback, useEffect, useRef, useState} from 'react';
 
-/**
-The selection after clicking `id`. A plain click toggles it; a range click adds everything between the anchor (the
-last bookmark clicked) and `id` in `order`, or just `id` when the anchor is not on screen.
-*/
 export function toggleSelection(
 	selected: ReadonlySet<string>,
 	order: readonly string[],
@@ -40,9 +31,6 @@ export function toggleSelection(
 	return next;
 }
 
-/**
-The selection without bookmarks that no longer exist. Returns the same set when nothing was dropped.
-*/
 export function pruneSelection<T extends ReadonlySet<string>>(
 	selected: T,
 	existing: ReadonlyArray<{id: string}>,
@@ -61,7 +49,6 @@ const onScreenOrder = () =>
 
 export function useBookmarkSelection(bookmarks: ReadonlyArray<{id: string}>) {
 	const [selected, setSelected] = useState<Set<string>>(() => new Set());
-	// Alt held down shows the selection checkboxes without switching selection mode on.
 	const [modifier, setModifier] = useState(false);
 	const [enabled, setEnabled] = useState(false);
 	const anchorRef = useRef<string | null>(null);

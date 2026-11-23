@@ -1,7 +1,3 @@
-// The column an Add bookmark dialog starts on: the one that took the newest bookmark, else the first column. Source
-// columns never count, so a save on a site does not move the user's own default. It is read from the bookmarks
-// themselves, so there is nothing to store, sync, or clean up when a column is deleted.
-
 import {sourceColumnSite} from '../shared/source-columns';
 import type {Bookmark, BookmarkColumn} from '../shared/types';
 
