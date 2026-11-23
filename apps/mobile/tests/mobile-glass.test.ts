@@ -8,7 +8,6 @@ import {
 	over,
 } from '../src/ui/glass-colors';
 
-// The iOS look's palettes from src/ui/theme.ts, which cannot be imported here (it pulls in react-native).
 const THEMES = {
 	light: {
 		background: '#f2f2f7',
@@ -28,7 +27,6 @@ const THEMES = {
 	},
 };
 
-// What can sit behind glass: the page, a card, and rows of text blurred into a gray (a share of the page's ink).
 const backdrops = (theme: (typeof THEMES)['light']) => {
 	const page = hexRgb(theme.background);
 	const ink = hexRgb(theme.text);

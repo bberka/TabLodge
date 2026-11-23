@@ -646,7 +646,6 @@ describe('editing columns', () => {
 		assert.equal(column(cleared, 'c1')?.icon, undefined);
 		assert.equal(column(cleared, 'c1')?.color, undefined);
 		assert.deepEqual(column(cleared, 'c1')?.domains, ['github.com']);
-		// An unknown color is dropped, not stored.
 		const bad = updateColumn(
 			store,
 			'c1',
@@ -727,7 +726,6 @@ describe('editing columns', () => {
 		};
 		const own = store.bookmarks;
 		const deleted = deleteColumn(store, 'source-reddit', null, NOW + 1);
-		// The browser saved on Reddit again and synced the column back before Undo.
 		const back = {
 			...deleted,
 			bookmarkColumns: [reddit],

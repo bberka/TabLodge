@@ -9,7 +9,6 @@ import {
 import {ROWS} from '../src/screens/settings/settings-index';
 import type {Preferences} from '../src/settings/preferences';
 
-// Only the keys the rows under test read are filled in; the rest is never looked at.
 const prefs = {
 	barLabels: 'active',
 	privateLockMinutes: 5,

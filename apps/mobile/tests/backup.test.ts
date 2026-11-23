@@ -1,8 +1,3 @@
-/*
-The phone's full backup against the extension's own full-backup code, both ways, with and without a password. The
-password wrap runs the native module's stand-in (tests/support/fake-crypto.ts), so what these tests cannot show is that
-the Kotlin module wraps a whole backup file; phone-crypto-vectors.test.ts shows its envelope for a small payload.
-*/
 import assert from 'node:assert/strict';
 import {strToU8, zipSync} from 'fflate';
 import {beforeEach, describe, test, vi} from 'vite-plus/test';
@@ -114,7 +109,6 @@ describe('a backup the phone makes, read by the extension', () => {
 		assert.equal(contents.snapshots, null);
 		assert.equal(contents.trash, null);
 		assert.equal(contents.preferences, null);
-		// What the extension's restore keeps: its own normalizer returns every session, tab, and bookmark.
 		const restored = normalizeStore(contents.state as Record<string, unknown>);
 		assert.deepEqual(idsOf(restored), idsOf(store));
 	});
@@ -345,7 +339,6 @@ describe('a backup the extension makes, read by the phone', () => {
 			['https://ok.example/'],
 		);
 		assert.equal(result.counts.bookmarks, 1);
-		// The file listed 2 bad sessions and 4 bookmarks of which 3 are unusable.
 		assert.equal(result.skipped, 5);
 	});
 
@@ -404,7 +397,6 @@ describe('large libraries', () => {
 		assert.equal(reopened.counts.bookmarks, 20_000);
 		assert.ok(built < 10_000);
 		assert.ok(read < 10_000);
-		// Making 20,000 bookmarks one by one (each save checks for a duplicate) takes a few seconds before the timed part, so the default 5 s test limit would fail it; `built` and `read` hold the real bounds.
 	}, 30_000);
 
 	test('a backup with more sessions than the extension once held keeps every one of them', async () => {

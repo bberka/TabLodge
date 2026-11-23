@@ -177,7 +177,6 @@ test('the app settings travel between two phones and the extension keeps them', 
 	assert.deepEqual(second.store.settings.mobileApp, expected);
 	assert.deepEqual(desktop.store.settings.mobileApp, expected);
 
-	// The second phone changes one value and the first follows.
 	second.store = {
 		...second.store,
 		settings: {
@@ -216,7 +215,6 @@ test('pausing sends a waiting change and closes the live socket, and waking open
 	assert.equal(sockets.length, 1);
 	assert.equal(sockets[0]?.closed, false);
 
-	// A change made just before the app goes to the background is not left waiting for the delay.
 	phone.store = addBookmark(
 		emptyStore(NOW),
 		{url: 'https://example.com/late', title: 'Late', columnId: 'c1'},
@@ -245,8 +243,6 @@ describe('a read only device', () => {
 		return ((await response.json()) as {records: number}).records;
 	};
 
-	// The server is replaced after the device has pulled: it is empty and behind, so a device that sends would send
-	// every record it holds all over again.
 	const afterServerReplaced = async (readOnly: boolean) => {
 		const firstLog = new ChangeLog();
 		const secondLog = new ChangeLog();

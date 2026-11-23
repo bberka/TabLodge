@@ -1,9 +1,3 @@
-/*
-A sync server and an "extension side" for tests. The server is the real API (apps/server/src/api.ts) over the real change
-log, in two libraries as node.ts serves them: the regular one and `/private`. The extension side is the extension's own
-sync client, private codec, and key code (apps/extension/src/shared), wired to memory the way its service worker wires
-them to extension storage.
-*/
 import {vi} from 'vite-plus/test';
 import {createApi} from '../../../server/src/api';
 import {ChangeLog} from '../../../extension/src/shared/sync/change-log';
@@ -62,10 +56,6 @@ export function makeServer() {
 
 export type Server = ReturnType<typeof makeServer>;
 
-/**
-Routes the phone's global `fetch` to the server, and gives its live socket nothing to say, so it relies on the
-explicit rounds a test asks for.
-*/
 export function connectGlobals(server: Server) {
 	vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) =>
 		server.fetch(String(input), init),
@@ -91,9 +81,6 @@ export type Extension = {
 	rewrap(credential: Credential): Promise<void>;
 };
 
-/**
-The extension's private library: its store, its sync key as it keeps it, and the sync client it runs.
-*/
 export function makeExtension(
 	server: Server,
 	store: Store = emptyStore(Date.now()),
@@ -155,9 +142,6 @@ export function makeExtension(
 		async sync() {
 			await device.client.syncNow();
 		},
-		/**
-		What enablePrivateSync does in the service worker for a library with a PIN or password and no key on the server yet.
-		*/
 		async protect(credential: Credential) {
 			key = await createSyncKey(credential);
 			const response = await server.fetch(`${URL_BASE}/private/v1/key`, {
@@ -172,9 +156,6 @@ export function makeExtension(
 				throw new Error(`key refused: ${response.status}`);
 			}
 		},
-		/**
-		What enablePrivateSync does when the server already has a key: the PIN or password is entered once.
-		*/
 		async enterCredential(credential: string) {
 			const response = await server.fetch(`${URL_BASE}/private/v1/key`, {
 				headers: {Authorization: `Bearer ${TOKEN}`},
@@ -187,9 +168,6 @@ export function makeExtension(
 
 			key = await joinSyncKey(parsed, credential);
 		},
-		/**
-		RewrapPrivateSyncKey: a new PIN or password for the same key.
-		*/
 		async rewrap(credential: Credential) {
 			const old = key!;
 			const next = await rewrapSyncKey(old, credential);

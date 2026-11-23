@@ -120,7 +120,6 @@ describe('search elsewhere', () => {
 			});
 		}
 
-		// A setting's own name finds the section that holds it.
 		const byRow = searchElsewhere(
 			library(),
 			'accent color',

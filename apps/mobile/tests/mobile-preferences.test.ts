@@ -46,12 +46,8 @@ const changed: Preferences = {
 };
 
 describe('preference schema', () => {
-	// The guard that keeps every preference syncing (#397, #418): one stays on the phone only when the shared
-	// setting-scopes.ts scopes it to the device with a reason, which docs/PRIVACY.md repeats
-	// (extension/tests/setting-scopes.test.ts).
 	test('a preference reaches another phone unless it is scoped to this device', () => {
 		const chosen = {...defaults, ...changed};
-		// Through the library as the extension keeps it, which drops a value it cannot hold.
 		const arrived = readSyncedPreferences(
 			normalizeMobileApp(syncedPreferences(chosen)),
 		);
@@ -68,7 +64,6 @@ describe('preference schema', () => {
 	});
 
 	test("a synced key is never lost to the extension's limit", () => {
-		// Each synced key is sent with the time it changed.
 		assert.ok(SYNCED_KEYS.length * 2 <= MOBILE_APP_KEYS_MAX);
 		const both = Object.fromEntries(
 			SYNCED_KEYS.flatMap((key) => [
@@ -112,7 +107,6 @@ describe('preference schema', () => {
 			glassEffect: false,
 			openApp: 'org.example',
 		};
-		// The theme and the bar are the same on every phone (#418); the browser a phone opens links in is its own.
 		assert.deepEqual(readSyncedPreferences(raw), {
 			swipeRight: 'open',
 			theme: 'light',
@@ -150,7 +144,6 @@ describe('settling with the other phones', () => {
 		prefs: {...defaults, ...values},
 		at,
 	});
-	// What the library does with two writes of the record: one of them wins whole.
 	const settleAll = (
 		phones: Array<ReturnType<typeof phone>>,
 		library: MobileApp,
@@ -186,7 +179,6 @@ describe('settling with the other phones', () => {
 		settleAll([a, b], {});
 		assert.equal(a.prefs.swipeRight, 'open');
 		assert.equal(b.prefs.swipeRight, 'open');
-		// Whichever phone reaches the library first gives the same answer.
 		const c = phone({swipeRight: 'move'}, {swipeRight: 100});
 		const d = phone({swipeRight: 'open'}, {swipeRight: 200});
 		settleAll([d, c], {});
@@ -218,7 +210,6 @@ describe('settling with the other phones', () => {
 	});
 
 	test('a library that has no mobileApp setting yet takes a change', () => {
-		// A fresh install's empty library has `settings: {}` until the first sync brings the record.
 		const result = settlePreferences(
 			undefined,
 			{...defaults, swipeRight: 'move'},

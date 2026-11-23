@@ -43,7 +43,6 @@ describe('the accent color', () => {
 			assert.match(found.onAccent, /^#[\da-f]{6}$/);
 		}
 
-		// A pale yellow on a light page is moved toward black until it can be read.
 		const yellow = resolve('#f5e642', 'light', LIGHT);
 		assert.notEqual(yellow?.accent, '#f5e642');
 		assert.equal(resolve('nonsense', 'light', LIGHT), undefined);

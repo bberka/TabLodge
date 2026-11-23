@@ -31,7 +31,6 @@ describe('readShare', () => {
 	});
 
 	test('a selection Chrome shared without a link is a quote with no page', () => {
-		// What Chrome on Android 17 sent from a selection: the text in quotation marks, and its preview label as the title.
 		assert.deepEqual(
 			readShare({
 				text: '"Lisbon is a city of hills"',

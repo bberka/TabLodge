@@ -119,7 +119,6 @@ describe('the sessions screen changes', () => {
 		const undone = moveSessionsBack(moved, ['s1', 's2'], was, 'work', clock);
 		assert.equal(folderOf(undone, 's1'), 'work');
 		assert.equal(folderOf(undone, 's2'), find(store, 's2')!.folderId);
-		// A session with no recorded folder goes to the fallback.
 		const fallback = moveSessionsBack(store, ['s2'], new Map(), 'work', clock);
 		assert.equal(folderOf(fallback, 's2'), 'work');
 	});
@@ -143,7 +142,6 @@ describe('the sessions screen changes', () => {
 		assert.equal(found?.description, 'About it');
 		assert.equal(found?.folderId, 'work');
 		assert.equal(found?.color, '#ff0000');
-		// The folder is left alone when it is the one it is in, and a missing description clears it.
 		const same = saveSessionDetails(
 			saved,
 			saved.groups.find((entry) => entry.id === 's2')!,

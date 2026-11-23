@@ -1,8 +1,3 @@
-/*
-Background sync, run against the app's real library and sync client and an in-process sync server, with WorkManager,
-the widget module, and the socket replaced by recorders. What these tests cannot show: that Android runs the task with
-the app closed; the pull request shows that on an emulator.
-*/
 import assert from 'node:assert/strict';
 import {beforeEach, describe, test, vi} from 'vite-plus/test';
 import {createApi} from '../../server/src/api';
@@ -36,7 +31,6 @@ vi.mock('expo-task-manager', () => ({
 	},
 	async isTaskRegisteredAsync(name: string) {
 		recorded.checks += 1;
-		// A test can hold the answer, so a change arrives while the check is still out.
 		await recorded.hold;
 		return recorded.registered.has(name);
 	},
@@ -83,9 +77,6 @@ const {setPreferences} = await import('./support/fake-preferences');
 
 let server: ReturnType<typeof createApi>;
 
-/**
-The extension's side: its own sync client, adding one bookmark and sending it.
-*/
 async function extensionSaves(url: string) {
 	const storage = new Map<string, unknown>();
 	let store: Store = emptyStore(1);
@@ -120,9 +111,6 @@ async function extensionSaves(url: string) {
 	client.stop();
 }
 
-/**
-Loads the app's modules again, as Android does when it starts the process only to run the task.
-*/
 async function freshProcess() {
 	vi.resetModules();
 	recorded.tasks.clear();
@@ -134,9 +122,6 @@ async function freshProcess() {
 	return {library, background, task};
 }
 
-/**
-A phone that connected once and was then closed.
-*/
 async function connectedThenClosed() {
 	const {library} = await freshProcess();
 	await library.startLibrary();
@@ -216,7 +201,6 @@ describe('background sync', () => {
 		const {library, background} = await freshProcess();
 		await library.startLibrary();
 		const stop = background.startBackgroundSync();
-		// Scheduling finishes after the change that asked for it.
 		const settlesAt = async (expected: boolean) =>
 			vi.waitFor(() => {
 				assert.equal(
@@ -258,7 +242,6 @@ describe('background sync', () => {
 		});
 		setPreferences({backgroundSync: true});
 		resolve();
-		// Off cancels the task and on registers it again.
 		await vi.waitFor(() => {
 			assert.equal(recorded.registrations, 2);
 		});

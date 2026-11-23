@@ -150,9 +150,6 @@ describe('trash list', () => {
 const trashed = (details: NewTrash): TrashEntry =>
 	addToTrash([], [details], ['e'], NOW)[0];
 
-/**
-An entry as the extension writes it, whose data the phone has to read.
-*/
 const fromExtension = (
 	kind: TrashEntry['kind'],
 	data: TrashEntry['data'],
