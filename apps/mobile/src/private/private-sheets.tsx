@@ -25,10 +25,6 @@ import {
 	unlockPrivate,
 } from './private-library';
 
-/**
-Which private library drawer is open: make the library, open it with its password, bring in the server's, set the password of one
-that has none, or change the password it has.
-*/
 export type PrivateSheet = 'setup' | 'unlock' | 'server' | 'protect' | 'change';
 
 let current: PrivateSheet | undefined;
@@ -45,9 +41,6 @@ export const openPrivateSheet = (sheet: PrivateSheet): void => {
 	set(sheet);
 };
 
-/**
-Draws the private library drawers. Mount it once, near the root.
-*/
 export function PrivateSheetHost() {
 	const open = useSyncExternalStore(
 		(listener) => {
@@ -94,10 +87,6 @@ function Note({children}: {children: string}) {
 	return <Text style={{color: colors.muted}}>{children}</Text>;
 }
 
-/**
-Choosing a password, then making the library with it (or, for a library that has none, giving it one, or changing
-the one it has). It is asked for twice.
-*/
 function SetupForm({
 	creating = false,
 	changing = false,
@@ -107,13 +96,7 @@ function SetupForm({
 }: {
 	creating?: boolean;
 	changing?: boolean;
-	/**
-	The library is kept on this phone only, so it does not sync with the server it would otherwise try.
-	*/
 	deviceOnly?: boolean;
-	/**
-	Told when the form starts and stops saving.
-	*/
 	onBusy?: (busy: boolean) => void;
 	onDone: () => void;
 }) {
@@ -127,7 +110,6 @@ function SetupForm({
 		onBusy?.(busy);
 	}, [busy, onBusy]);
 	const problem = validateCredential(value) ?? undefined;
-	// A note while the password is short or only digits: it never blocks.
 	const weak = value === '' || problem ? undefined : weakPasswordHint(value);
 	const mismatch = again !== '' && !sameCredential(again, value);
 	const ready =
@@ -154,7 +136,6 @@ function SetupForm({
 				showSnack('The password was changed');
 			} else if (creating) {
 				if (deviceOnly) {
-					// Set first, so the new library does not try the server's key.
 					setPreferences({syncPrivate: false});
 				}
 
@@ -235,7 +216,7 @@ function SetupForm({
 						setValue(text);
 					}}
 				/>
-				{/* Always mounted, so TalkBack announces the hint when its text arrives. */}
+				{}
 				<Text
 					accessibilityLiveRegion="polite"
 					style={{color: colors.muted, marginTop: weak ? 0 : -14}}
@@ -273,15 +254,11 @@ function SetupForm({
 	);
 }
 
-/**
-Opens a locked library with its password.
-*/
 function UnlockForm({onDone}: {onDone: () => void}) {
 	const colors = useColors();
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
-	// The drawer was dismissed while the password was checked: the result must not change the screen.
 	const dismissedRef = useRef(false);
 	useEffect(() => {
 		dismissedRef.current = false;
@@ -289,7 +266,6 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 			dismissedRef.current = true;
 		};
 	}, []);
-	// An erase is running: unlocking waits, so it cannot open a library that is being deleted.
 	const [erasing, setErasing] = useState(false);
 	const run = async () => {
 		setBusy(true);
@@ -305,7 +281,6 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 		}
 
 		if (result === 'ok') {
-			// Not if it was erased or locked again while the password was being checked.
 			if (isPrivateOpen()) {
 				setView('private');
 			}
@@ -361,10 +336,6 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	);
 }
 
-/**
-Asks before the private library is erased from this phone, erases it, and opens the set-a-password drawer once it is gone. A
-failure is reported and leaves the library as it was, so the erase can be tried again. Both entry points use it.
-*/
 export function confirmErase(
 	afterErase?: () => void,
 	onWorking?: (working: boolean) => void,
@@ -391,13 +362,6 @@ export function confirmErase(
 	);
 }
 
-/**
-The first password of the private library, for a new one or for one that has none. When the connected server
-already holds a private library, its password comes first: it becomes this library's lock, and the server's data
-joins what is here. Keeping the library on this phone only, with a password of its own, stays available. When the
-server cannot be asked, the drawer says so, offers a retry, and sets the library up on the phone only: it is not synced
-until the server's password is entered from Settings.
-*/
 function FirstPin({
 	creating = false,
 	onDone,
@@ -412,7 +376,6 @@ function FirstPin({
 		failed: boolean;
 	}>();
 	const [deviceOnly, setDeviceOnly] = useState(false);
-	// A form is checking or saving: the choice between them waits, so a pending join cannot land after a local save.
 	const [working, setWorking] = useState(false);
 	const [attempt, setAttempt] = useState(0);
 	useEffect(() => {
@@ -481,22 +444,12 @@ function FirstPin({
 	);
 }
 
-/**
-Brings in the private library the extension keeps on the server. A protected one asks for the password set in
-the extension, once; the phone's library takes that lock and syncs with the server's.
-*/
 function ServerForm({
 	known = false,
 	onBusy,
 	onDone,
 }: {
-	/**
-	The server is known to hold a protected library, so its password is asked for at once.
-	*/
 	known?: boolean;
-	/**
-	Told when the form starts and stops checking.
-	*/
 	onBusy?: (busy: boolean) => void;
 	onDone: () => void;
 }) {
@@ -504,7 +457,6 @@ function ServerForm({
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
-	// The drawer was dismissed: a join that is still waiting must not install anything or touch the screen.
 	const dismissedRef = useRef(false);
 	useEffect(() => {
 		dismissedRef.current = false;
@@ -529,7 +481,6 @@ function ServerForm({
 		}
 
 		if (result.ok) {
-			// Only while it is open: a library that has no password, or that locked while the join waited, does not show.
 			if (isPrivateOpen()) {
 				setView('private');
 			}
