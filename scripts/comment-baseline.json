@@ -408,10 +408,5 @@
 	"apps/mobile/tests/support/fake-crypto.ts": 2,
 	"apps/mobile/tests/support/fake-preferences.ts": 3,
 	"apps/mobile/tests/support/memory-storage.ts": 4,
-	"apps/mobile/tests/support/world.ts": 6,
-	"apps/site/astro.config.mjs": 1,
-	"apps/site/postcss.config.cjs": 1,
-	"apps/site/src/lib/downloads.ts": 4,
-	"apps/site/src/lib/platform.ts": 11,
-	"apps/site/tests/site-platform.test.ts": 1
+	"apps/mobile/tests/support/world.ts": 6
 }
