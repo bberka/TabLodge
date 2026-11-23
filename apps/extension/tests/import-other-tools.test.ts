@@ -1,5 +1,3 @@
-// Exports from other bookmark tools. Each fixture in fixtures/imports is written by hand from the
-// tool's exporter code or API docs (cited in import-formats.ts), not taken from a real account.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'vite-plus/test';
@@ -35,7 +33,6 @@ test('a Linkwarden backup: collections become columns, links keep their saved or
 		Tools: ['https://tools.example/'],
 		Rust: ['https://rust.example/book'],
 	});
-	// The uploaded PDF has no URL.
 	assert.equal(parsed.invalid, 1);
 	const [article, older] = parsed.bookmarks[0].links;
 	assert.equal(article.title, 'An article');
@@ -144,7 +141,6 @@ test('a Pinboard JSON export: the description field is the title, extended is th
 });
 
 test('the new readers leave look-alike files to the readers they belong to', () => {
-	// A TabLodge bookmarks backup also has a `bookmarks` array.
 	const backup = parseImportFile(
 		JSON.stringify({
 			format: 'tablodge-bookmarks',
@@ -154,7 +150,6 @@ test('the new readers leave look-alike files to the readers they belong to', () 
 		'backup.json',
 	);
 	assert.equal(backup.format, 'backup');
-	// Session Buddy also has `collections`.
 	const sessionBuddy = parseImportFile(
 		JSON.stringify({
 			format: 'nxs.json.v2',
@@ -165,7 +160,6 @@ test('the new readers leave look-alike files to the readers they belong to', () 
 		'sb.json',
 	);
 	assert.equal(sessionBuddy.format, 'session-buddy');
-	// A plain array of links stays a plain array of links.
 	const plain = parseImportFile(
 		JSON.stringify([{url: 'https://c.example/', title: 'C'}]),
 		'links.json',
@@ -189,7 +183,6 @@ test('a Karakeep import keeps its lists as bookmark columns', () => {
 				payload.bookmarks.find((bookmark) => bookmark.url === url)?.columnId,
 		)?.name;
 	assert.equal(column('https://read.example/post'), 'Reading');
-	// Links in no list go to the first column, as with other formats.
 	assert.equal(column('https://loose.example/'), 'Dev');
 });
 
@@ -206,7 +199,6 @@ test('a Mastodon bookmarks.csv: one post address per row, no header', () => {
 			'https://misskey.example/notes/9xk2abcd',
 		],
 	);
-	// A headerless CSV of other links still needs a header row.
 	assert.throws(
 		() => parseImportFile('https://a.example/\nhttps://b.example/\n', 'x.csv'),
 		/header row/,

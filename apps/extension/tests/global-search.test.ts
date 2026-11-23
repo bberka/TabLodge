@@ -232,7 +232,6 @@ test('a blank query lists sessions by last use, newest first, up to a cap', () =
 	const many = Array.from({length: 12}, (_, number) =>
 		make(`s${number}`, number),
 	);
-	// An old session restored just now counts as the most recent.
 	many[0] = make('opened-today', 0, 1000);
 	const listed = flattenSections(
 		searchFinder('', buildFinderIndex({...sources, groups: many})),

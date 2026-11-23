@@ -40,7 +40,6 @@ test('an entry covers its host and subdomains, never siblings or look-alikes', (
 	assert.equal(hostIsExcluded('notgoogle.com', entries), false);
 	assert.equal(hostIsExcluded('google.com.evil.example', entries), false);
 	assert.equal(hostIsExcluded('google.co.uk', entries), false);
-	// A subdomain entry covers only its own subtree.
 	assert.equal(hostIsExcluded('google.com', ['gemini.google.com']), false);
 	assert.equal(
 		hostIsExcluded('x.gemini.google.com', ['gemini.google.com']),

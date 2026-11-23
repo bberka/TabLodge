@@ -92,7 +92,6 @@ test('a dismissed missing-features banner comes back only when the server versio
 	const dismissed = dismissKey(shown);
 	assert.ok(problemBanner(shown, undefined));
 	assert.equal(problemBanner(shown, dismissed), undefined);
-	// The same server read again, with its features in another order.
 	assert.equal(
 		problemBanner(server('0.3.0', old.toReversed()), dismissed),
 		undefined,

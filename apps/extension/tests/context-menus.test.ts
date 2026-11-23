@@ -16,10 +16,6 @@ import {BOOKMARK_UNFILED_ID} from '../src/shared/bookmark-rules';
 import {logicalState, sortKeysDeep, storeLibrary} from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 
-// Right-click menus. Like tests/service-worker.test.ts, this runs the type-stripped service worker in a
-// fresh VM context per harness. Its chrome mock is smaller but stricter about context menus: it uses the
-// callback-style API of Chrome 116-122 (no promises), reports duplicate or orphaned ids through
-// runtime.lastError like Chrome does, and fires storage.onChanged.
 const workerPath = join(
 	import.meta.dirname,
 	'..',
@@ -35,12 +31,8 @@ const manifest = JSON.parse(
 ) as chrome.runtime.Manifest;
 const appName = manifest.short_name ?? manifest.name;
 const dashboardUrl = 'chrome-extension://tablodge/newtab.html';
-/**
-Longer than the worker's rebuild debounce (150 ms).
-*/
 const REBUILD_WAIT = 200;
 
-// The mocks and the worker's debounces run on fake timers, so waiting means advancing the clock.
 beforeEach(() => {
 	vi.useFakeTimers();
 });
@@ -139,9 +131,6 @@ function createHarness(
 		firefox?: boolean;
 		userAgent?: string;
 		listsTabContext?: boolean;
-		/**
-		Chrome.scripting.executeScript rejects, as on pages an extension cannot script.
-		*/
 		scriptingFails?: boolean;
 	} = {},
 ) {
@@ -171,7 +160,6 @@ function createHarness(
 				sendResponse: (response: Response) => void,
 		  ) => unknown)
 		| undefined;
-	// Storage holds every key the worker writes; `state` mirrors the library the way the app sees it.
 	const stored: Record<string, unknown> = {};
 	storeLibrary(stored, structuredClone(initialState));
 	const state = (logicalState(stored) ?? {}) as typeof initialState;
@@ -197,9 +185,6 @@ function createHarness(
 		theme: string;
 	}> = [];
 	const menus = new Map<string, MenuItem>();
-	/**
-	Errors Chrome would report through runtime.lastError (duplicate ids, missing parents).
-	*/
 	const menuErrors: string[] = [];
 	let lastError: {message: string} | undefined;
 	let nextTabId = 200;
@@ -272,7 +257,6 @@ function createHarness(
 					}
 
 					pullState();
-					// Chrome delivers onChanged after the write, asynchronously.
 					setTimeout(() => {
 						fire('storageChanged', changes, 'local');
 					}, 0);
@@ -418,11 +402,9 @@ function createHarness(
 		commands: {onCommand: on('onCommand')},
 		contextMenus: {
 			ACTION_MENU_TOP_LEVEL_LIMIT: 6,
-			// Firefox and Chromium 149 or newer list the tab strip's context.
 			ContextType: listsTabContext
 				? {PAGE: 'page', TAB: 'tab'}
 				: {PAGE: 'page'},
-			// Callback-style, as on Chrome 116-122: nothing is returned.
 			removeAll(callback?: () => void) {
 				menus.clear();
 				setTimeout(() => callback?.(), 0);
@@ -543,9 +525,6 @@ function createHarness(
 				}),
 			);
 		},
-		/**
-		A message from code injected into the web page in tab `tabId`, as the Save quote toast sends it.
-		*/
 		sendFromPage(message: TabLodgeMessage, tabId = 1) {
 			return untilSettled(
 				new Promise<Response>((resolve) => {
@@ -564,9 +543,6 @@ function createHarness(
 }
 
 const wait = async (ms: number) => vi.advanceTimersByTimeAsync(ms);
-/**
-Advances the fake clock until the promise settles, for responses that wait on mock callbacks scheduled with setTimeout.
-*/
 async function untilSettled<T>(promise: Promise<T>) {
 	const state = {settled: false};
 	const result = promise.finally(() => {
@@ -715,7 +691,6 @@ test('settings default to on, normalize, and rebuild the menus immediately', asy
 	);
 	const initial = await harness.send({type: 'GET_STATE'});
 	const settings = initial.settings!;
-	// Only an explicit false switches a group off; other stored values fall back to the default (on).
 	assert.equal(settings.contextMenusEnabled, true);
 	assert.equal(settings.contextMenuLinksEnabled, true);
 	assert.equal(settings.contextMenuPageEnabled, true);
@@ -817,7 +792,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'New column',
 	]);
 
-	// A burst of changes, settings updates and lifecycle events at once still never creates an id twice.
 	await Promise.all([
 		harness.send({type: 'CREATE_BOOKMARK_COLUMN', name: 'One'}),
 		harness.send({type: 'CREATE_BOOKMARK_COLUMN', name: 'Two'}),
@@ -934,7 +908,6 @@ test('image and video menus list the columns under one root each', async () => {
 		]);
 	}
 
-	// Only web images have an address to save; a stream needs a web page to fall back to.
 	assert.deepEqual(harness.item('tablodge-image-root')?.targetUrlPatterns, [
 		'http://*/*',
 		'https://*/*',
@@ -984,7 +957,6 @@ test('Bookmark image to saves the image address, and skips one saved in any colu
 		});
 	await save('https://cdn.example/full/cat.JPG?w=800');
 	await save('https://cdn.example/full/cat.JPG?w=800');
-	// Bookmarked in another column, it still counts as saved.
 	await save('https://cdn.example/old.png');
 	assert.deepEqual(
 		harness.state.bookmarks.map(({title, url, columnId}) => ({
@@ -1200,7 +1172,6 @@ test('New column opens the dashboard with a prefilled add-bookmark dialog', asyn
 		'nothing is saved until the dialog is submitted',
 	);
 
-	// A second request reuses the open dashboard tab.
 	await harness.click({
 		menuItemId: 'tablodge-page-bookmark-new',
 		pageUrl: 'https://current.example/page',
@@ -1319,7 +1290,6 @@ test('sending this tab to a session appends it, leaves the page open when closin
 	assert.equal(harness.badges.at(0)?.text, '✓');
 	assert.equal(harness.tabs.length, 1, 'the tab stays open');
 
-	// Allowed duplicates may repeat an address in another session, matching the toolbar behavior.
 	await harness.click({menuItemId: 'tablodge-page-send:b'});
 	assert.equal(
 		harness.state.groups.find((group) => group.id === 'b')!.tabs.length,
@@ -1470,7 +1440,6 @@ test('Save quote bookmarks the page with the quote and a link to it, then append
 	assert.ok(harness.toasts[0].undo);
 	assert.deepEqual(harness.badges, [], 'the toast replaces the badge');
 
-	// The page opened from the saved link reports the address with the fragment; it is still the same bookmark.
 	await harness.click(
 		quoted(
 			`${page}#:~:text=First%20quote`,
@@ -1590,7 +1559,6 @@ test('Undo from the quote toast removes the quote and the bookmark it made', asy
 	assert.equal(harness.state.bookmarks.length, 1);
 	const {id} = harness.toasts[0].undo!;
 
-	// A page may not run Undo itself, and another tab may not take back this toast's quote.
 	assert.equal((await harness.sendFromPage({type: 'UNDO', id})).ok, false);
 	assert.equal(
 		(await harness.sendFromPage({type: 'QUOTE_UNDO', id}, 2)).ok,
@@ -1672,7 +1640,6 @@ test('the toolbar exclude toggle adds and removes the active site and tracks the
 		['✓', '✓'],
 	);
 
-	// Switching tabs updates the checkbox: an excluded site is checked, a non-web page disables it.
 	for (const entry of harness.tabs) {
 		entry.active = entry.id === 2;
 	}
@@ -1703,7 +1670,6 @@ test('the toolbar exclude toggle adds and removes the active site and tracks the
 	]);
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['other.example']);
 
-	// Exclusions changed in Settings also update the checkbox.
 	for (const entry of harness.tabs) {
 		entry.active = entry.id === 1;
 	}
@@ -1909,7 +1875,6 @@ test('Chromium 150 puts the page items on the tab strip, with & as written and t
 });
 
 test('in Chromium the tab strip items refuse a tab that is not a web page', async () => {
-	// Chromium ignores documentUrlPatterns in the tab strip, so the items also show on the dashboard's own tab.
 	const dashboard: MockTab = {
 		id: 4,
 		windowId: 10,
@@ -2163,7 +2128,6 @@ test('adding bookmarks follows the duplicate setting on every path', async () =>
 		});
 		assert.equal(many.ok, false);
 		assert.equal(many.duplicate, true);
-		// A link menu save of the same address into a third place reports the duplicate on the badge, never a tick.
 		await harness.click({
 			menuItemId: 'tablodge-link-bookmark:bookmark-default',
 			linkUrl: 'https://seen.example/',

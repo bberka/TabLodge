@@ -74,7 +74,6 @@ test('a count still on its way when the page leaves the saved list shows nothing
 
 	await vi.advanceTimersByTimeAsync(1000);
 	assert.equal(answers.length, 1, 'the saved page was counted');
-	// The user moves on in place before the answer comes back.
 	isOnSavedPage = false;
 	document.body.append(document.createElement('div'));
 	await vi.advanceTimersByTimeAsync(1000);
@@ -82,7 +81,6 @@ test('a count still on its way when the page leaves the saved list shows nothing
 	await vi.advanceTimersByTimeAsync(0);
 	assert.deepEqual(toasts, [], 'no offer on the page the user moved to');
 
-	// Back on the same list, it is counted again and the offer shows.
 	isOnSavedPage = true;
 	document.body.append(document.createElement('div'));
 	await vi.advanceTimersByTimeAsync(1000);
