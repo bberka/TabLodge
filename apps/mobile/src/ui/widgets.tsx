@@ -68,7 +68,6 @@ export function Button({
 						: pressed && !shape.ios
 							? colors.pressed
 							: 'transparent',
-					// IOS plain buttons are bare text; Material ones are outlined.
 					borderColor: filled || shape.ios ? 'transparent' : colors.border,
 					opacity: disabled ? 0.4 : pressed && (filled || shape.ios) ? 0.6 : 1,
 				},
@@ -162,7 +161,6 @@ export function Field({
 			<View
 				style={[
 					styles.inputBox,
-					// The border width never changes, so focusing or flagging a field cannot move what is around it.
 					shape.ios
 						? {
 								borderRadius: shape.fieldRadius,
@@ -179,7 +177,6 @@ export function Field({
 				]}
 			>
 				{!shape.ios && (focused || error) && (
-					// A thicker ring drawn over the border, outside the layout.
 					<View
 						pointerEvents="none"
 						style={[
@@ -221,9 +218,6 @@ export function Field({
 	);
 }
 
-/**
-A row of single choice chips, such as the bookmark columns.
-*/
 export function Chips({
 	items,
 	selected,
@@ -234,20 +228,11 @@ export function Chips({
 		id: string;
 		name: string;
 		count?: number;
-		/**
-		A glyph drawn before the name.
-		*/
 		glyph?: IconName;
-		/**
-		A color for this chip's icon, and for its fill and outline while selected.
-		*/
 		tint?: string;
 	}>;
 	selected: string;
 	onSelect: (id: string) => void;
-	/**
-	Called with a chip's id when it is held down, to open that chip's menu. Screen readers get a More actions action.
-	*/
 	onLongPress?: (id: string) => void;
 }) {
 	const colors = useColors();
@@ -262,7 +247,6 @@ export function Chips({
 						key={item.id}
 						accessibilityRole="tab"
 						accessibilityState={{selected: on}}
-						// The chip is 40dp tall; this brings the touch target to the 48dp Android asks for.
 						hitSlop={{top: 4, bottom: 4}}
 						style={({pressed}) => [
 							styles.chip,
@@ -316,9 +300,6 @@ export function Chips({
 	);
 }
 
-/**
-A round letter badge for a site, in a color taken from its host name.
-*/
 export function Avatar({host, size = 40}: {host: string; size?: number}) {
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	return (
@@ -352,9 +333,6 @@ export function Header({
 }: {
 	title: string;
 	subtitle?: string;
-	/**
-	Reads the subtitle out when it changes, for a count that follows a search.
-	*/
 	live?: boolean;
 	right?: ReactNode;
 }) {
@@ -386,10 +364,6 @@ export function Header({
 	);
 }
 
-/**
-A rounded surface. With `flush`, its children run edge to edge and are clipped to the corners, so a pressable row
-inside highlights the whole width.
-*/
 export function Card({
 	children,
 	flush = false,
@@ -416,10 +390,6 @@ export function Card({
 	);
 }
 
-/**
-A native-looking switch: the system one on Android, and a drawn iOS one (green track, white knob) when the app
-imitates iOS, since React Native's Android switch cannot look like it.
-*/
 export function Switch({
 	value,
 	onValueChange,
@@ -487,9 +457,6 @@ export function Switch({
 	);
 }
 
-/**
-Pick one of a few options: a Material segmented button row, or an iOS segmented control.
-*/
 export function Segmented<T extends string>({
 	items,
 	selected,
@@ -521,7 +488,6 @@ export function Segmented<T extends string>({
 						key={item.id}
 						accessibilityRole="radio"
 						accessibilityState={{checked: on}}
-						// The segment is 36dp tall; this brings the touch target to 48dp.
 						hitSlop={{top: 6, bottom: 6}}
 						style={[
 							styles.segment,

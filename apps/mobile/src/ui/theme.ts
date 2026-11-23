@@ -40,7 +40,6 @@ const darkMaterial: typeof light = {
 
 export type Colors = typeof light;
 
-// The iOS look uses the system colors: grouped gray background, white cards, and the system blue.
 const iosLight: Colors = {
 	background: '#f2f2f7',
 	surface: '#ffffff',
@@ -75,7 +74,6 @@ const iosDark: Colors = {
 	teal: '#40d0c4',
 };
 
-// The phone's accent is read once, when the app starts.
 const system = systemAccent();
 
 function palette(look: ReturnType<typeof resolveLook>, dark: boolean): Colors {
@@ -108,9 +106,6 @@ export const useColors = (): Colors => {
 	}, [look, accent, dark]);
 };
 
-/**
-Shape and size choices that differ between the two looks.
-*/
 type Shape = {
 	ios: boolean;
 	buttonRadius: number;
@@ -120,9 +115,6 @@ type Shape = {
 	sheetRadius: number;
 	chipRadius: number;
 	titleSize: number;
-	/**
-	The gap around a floating tab bar, at its sides and below it.
-	*/
 	barGap: number;
 };
 
@@ -154,14 +146,10 @@ const SHAPES = {material: materialShape, ios: iosShape};
 
 export const useShape = (): Shape => SHAPES[resolveLook(usePreferences().look)];
 
-// Android asks for touch targets of at least 48dp.
 export const TARGET = 48;
 
 const AVATAR_HUES = [262, 200, 150, 30, 340, 90, 220, 10];
 
-/**
-A steady color for a site, from its host name, so the same site always gets the same avatar.
-*/
 export function avatarColor(host: string, scheme: 'light' | 'dark'): string {
 	let hash = 0;
 	for (const char of host) {
@@ -172,18 +160,12 @@ export function avatarColor(host: string, scheme: 'light' | 'dark'): string {
 	return scheme === 'dark' ? `hsl(${hue} 45% 38%)` : `hsl(${hue} 55% 42%)`;
 }
 
-/**
-A see-through version of a color, for the fill behind a tinted icon or chip. Takes `#rrggbb` or `hsl(h s% l%)`.
-*/
 export function soften(color: string): string {
 	return color.startsWith('#')
 		? `${color}26`
 		: color.replace(/^hsl\((\d+) (\d+)% (\d+)%\)$/, 'hsla($1, $2%, $3%, 0.18)');
 }
 
-/**
-White or near black text, whichever reads better on a solid `color` (`#rrggbb` or `hsl(h s% l%)`).
-*/
 export function readableOn(color: string): string {
 	const hsl = /^hsl\(\d+ \d+% (\d+)%\)$/.exec(color);
 	const bright = hsl

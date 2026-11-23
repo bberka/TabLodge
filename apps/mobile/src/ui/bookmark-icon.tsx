@@ -16,19 +16,11 @@ const KIND_ICONS: Record<MediaKind, IconName> = {
 	video: 'film',
 };
 
-/**
-The media kind in words at the start of a row's accessibility label ("Image, "), or nothing for other links, whose
-kind a bookmark row says with its tags.
-*/
 export function spokenKind(url: string) {
 	const kind = linkKind(url);
 	return isMediaKind(kind) ? `${LINK_KIND_LABELS[kind]}, ` : '';
 }
 
-/**
-A bookmark's site icon, with a small mark on its corner when the link is an image, a PDF, or a video. The kind is
-read from the address each time (see link-kind.ts); the row's accessibility label says it with spokenKind.
-*/
 export function BookmarkIcon({url, size}: {url: string; size: number}) {
 	const colors = useColors();
 	const kind = linkKind(url);

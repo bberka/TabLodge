@@ -4,34 +4,16 @@ import {TARGET, useColors} from './theme';
 import {Icon, type IconName} from './widgets';
 
 export type SheetAction = {
-	/**
-	Tells rows apart when two can share a label, such as two browsers with one name. Defaults to the label.
-	*/
 	key?: string;
 	icon: IconName;
-	/**
-	A picture drawn in place of the icon, such as an app's own icon as a `data:` address.
-	*/
 	image?: string;
 	label: string;
-	/**
-	One line under the label, for an action that needs a word of explanation.
-	*/
 	hint?: string;
-	/**
-	The icon's color, for an action that has one of its own (the swipe actions' colors). Defaults to the accent.
-	*/
 	color?: string;
-	/**
-	Drawn in the danger color, for an action that removes something.
-	*/
 	destructive?: boolean;
 	onPress: () => void;
 };
 
-/**
-A drawer with a list of actions, each with an icon and a word, for the things a header has no room to name.
-*/
 export function ActionSheet({
 	visible,
 	title,

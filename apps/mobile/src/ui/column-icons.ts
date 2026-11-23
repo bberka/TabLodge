@@ -8,9 +8,6 @@ import type {IconId} from '../../../extension/src/shared/icon-ids';
 import {avatarColor} from './theme';
 import type {IconName} from './widgets';
 
-/**
-The extension names column icons from a Lucide set; this picks the closest Ionicons glyph for each one.
-*/
 const GLYPHS: Record<IconId, IconName> = {
 	bookmark: 'bookmark-outline',
 	folder: 'folder-outline',
@@ -273,9 +270,6 @@ const GLYPHS: Record<IconId, IconName> = {
 	rainbow: 'color-palette-outline',
 };
 
-/**
-The glyph for a column's icon id. A missing or unknown id gets the plain folder.
-*/
 export function columnGlyph(icon: string | undefined): IconName {
 	const glyph = icon
 		? (GLYPHS as Partial<Record<string, IconName>>)[icon]
@@ -283,9 +277,6 @@ export function columnGlyph(icon: string | undefined): IconName {
 	return glyph ?? 'folder-outline';
 }
 
-/**
-The color a column was given, as the shade that reads on the current theme, or undefined for a column without one.
-*/
 export function columnTint(
 	color: string | undefined,
 	scheme: 'light' | 'dark',
@@ -294,10 +285,6 @@ export function columnTint(
 	return shades ? rgbToHex(shades[scheme]) : undefined;
 }
 
-/**
-Gives a column or folder chip its icon and its color: the one chosen for the column, or else a steady one taken from
-its name, so each one is easy to spot.
-*/
 export function useChipLook() {
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	return useCallback(

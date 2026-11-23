@@ -21,11 +21,6 @@ export type SwipeAction = {
 const TRIGGER = 88;
 const MAX = 140;
 
-/**
-A row that slides sideways to reveal an action: swipe right for `left`, swipe left for `right`. Passing the
-threshold and letting go runs the action and the row springs back. Screen reader users get the same actions through
-`accessibilityActions` on the row itself, so nothing depends on the gesture.
-*/
 export function SwipeRow({
 	children,
 	left,
@@ -34,21 +29,11 @@ export function SwipeRow({
 	radius = 0,
 	background,
 }: {
-	/**
-	What slides. A function receives the pan handlers instead of the whole row taking them, so only the part that spreads
-	them (a card's header) starts the swipe.
-	*/
 	children: ReactNode | ((handlers: GestureResponderHandlers) => ReactNode);
 	left?: SwipeAction;
 	right?: SwipeAction;
 	disabled?: boolean;
-	/**
-	Rounds the corners of the reveal to match a rounded row.
-	*/
 	radius?: number;
-	/**
-	What shows behind a row with square corners while it slides. The screen's background by default.
-	*/
 	background?: string;
 }) {
 	const colors = useColors();
@@ -101,7 +86,6 @@ export function SwipeRow({
 						backgroundColor: action.color,
 						justifyContent: 'center',
 						alignItems: side === 'left' ? 'flex-start' : 'flex-end',
-						// Both layers sit under the row; only the one on the dragged side may show.
 						opacity: x.interpolate({
 							inputRange: side === 'left' ? [0, 1] : [-1, 0],
 							outputRange: side === 'left' ? [0, 1] : [1, 0],

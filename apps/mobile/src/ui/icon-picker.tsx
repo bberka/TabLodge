@@ -11,10 +11,6 @@ const HEIGHT = 340;
 
 const label = (id: string) => id.replaceAll('-', ' ');
 
-/**
-The icons that match a search, in rows, so the list draws the first few rows and the rest as they are scrolled to.
-Drawing about a hundred buttons at once held up the drawer that shows them.
-*/
 function rowsFor(query: string) {
 	const icons = searchIconInfos(query);
 	return Array.from({length: Math.ceil(icons.length / COLUMNS)}, (_, row) =>
@@ -144,9 +140,6 @@ function IconSheet({
 	);
 }
 
-/**
-A button showing the icon a column has, which opens a drawer to search the icons and choose one.
-*/
 function IconPickerView({
 	selected,
 	onSelect,
@@ -191,7 +184,6 @@ function IconPickerView({
 	);
 }
 
-// Typing in the name field must not draw the drawer again.
 export const IconPicker = memo(IconPickerView);
 
 const styles = StyleSheet.create({
@@ -207,7 +199,6 @@ const styles = StyleSheet.create({
 	value: {flex: 1, fontSize: 16, textTransform: 'capitalize'},
 	sheet: {gap: 12, paddingHorizontal: 20, paddingBottom: 8},
 	title: {fontSize: 20, fontWeight: '700'},
-	// A fixed height, so the drawer is the same size before the rows are drawn and after.
 	list: {height: HEIGHT, flexGrow: 0, flexShrink: 1},
 	none: {height: HEIGHT},
 	row: {flexDirection: 'row'},

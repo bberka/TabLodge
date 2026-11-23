@@ -28,7 +28,6 @@ type Snack = {
 let current: Snack | undefined;
 let counter = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
-// Settings › Messages stay, kept here because showSnack is called from outside React; SnackbarHost updates it.
 let duration: ToastDuration = 'default';
 const listeners = new Set<() => void>();
 
@@ -79,14 +78,9 @@ function dismiss() {
 	emit();
 }
 
-/**
-A short message with an optional action such as Undo, shown at the top of the screen (or above the tab bar) for a few
-seconds, twice as long under Messages stay: Longer, and until dismissed under Until dismissed.
-*/
 export function SnackbarHost() {
 	const colors = useColors();
 	const {messagePosition} = usePreferences();
-	// The regular library's setting, as Settings changes it, also while the private library is open.
 	const links = useLinkSettings(true);
 	useEffect(() => {
 		duration = links.toastDuration;
@@ -117,7 +111,6 @@ export function SnackbarHost() {
 		}).start();
 	}, [snack, shown]);
 
-	// The bar is dark, so its action needs a light color: the accent in dark theme (a pale tone there), its tint in light.
 	const actionColor =
 		useColorScheme() === 'dark' ? colors.accent : colors.accentSoft;
 	const view = snack ?? lastRef.current;

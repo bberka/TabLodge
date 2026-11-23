@@ -19,24 +19,13 @@ import {useBarHeight} from './tab-bar';
 import {useColors, useShape} from './theme';
 import {Icon, IconButton, type IconName} from './widgets';
 
-/**
-Every round button in the row, and the search drawer, share this size, so the add, search and menu buttons read as one set.
-*/
 const SIZE = 52;
 
-/**
-The room a list leaves at its end so the round buttons, or the search bar that takes their place, never hide its last
-row: the bar's height and the gap around it.
-*/
 export const ROOM_FOR_BUTTONS = SIZE + 24;
 
-/**
-Search that opens from a button. `open` and `query` belong to the screen, which filters its own page by `query`.
-*/
 export function useSearch() {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
-	// A docked tab bar holds the search button itself, so the screen on show hands it what to do.
 	const {floatingBar} = usePreferences();
 	useBackAction(open, () => {
 		setOpen(false);
@@ -84,15 +73,11 @@ function RoundButton({
 	icon: IconName;
 	label: string;
 	primary?: boolean;
-	/**
-	Its width and height; an animated value follows the tab bar as it shrinks.
-	*/
 	size: Animated.Value | number;
 	onPress: () => void;
 }) {
 	const colors = useColors();
 	const glass = useGlass();
-	// A shell that animates its size, with the pressable filling it, since a pressable's style cannot be animated.
 	return (
 		<Animated.View
 			style={[
@@ -139,9 +124,6 @@ function RoundButton({
 	);
 }
 
-/**
-The row of round buttons in a screen's bottom right corner: search and add, each only when its handler is given. `bottom` is the room the tab bar takes.
-*/
 export function FloatingActions({
 	bottom,
 	onSearch,
@@ -155,9 +137,6 @@ export function FloatingActions({
 	onUp?: () => void;
 	buttonLabel?: string;
 }) {
-	// With a floating tab bar the search button sits in its row, at the right edge, as tall as the bar, and the add
-	// button stacks above it at the same size. Both follow the bar's height as it shrinks. With a docked bar they are
-	// a row of smaller buttons above it.
 	const {floatingBar} = usePreferences();
 	const insets = useSafeAreaInsets();
 	const {barGap} = useShape();
@@ -172,7 +151,6 @@ export function FloatingActions({
 		}).start();
 	}, [barHeight, size]);
 	const each = floatingBar ? size : SIZE;
-	// With a docked bar, the search button is in the bar.
 	const search = onSearch && floatingBar && (
 		<RoundButton icon="search" label="Search" size={each} onPress={onSearch} />
 	);
@@ -196,7 +174,6 @@ export function FloatingActions({
 		</View>
 	);
 	return (
-		// Clear of the tab bar below, whose own shadow would otherwise reach the buttons.
 		<View
 			pointerEvents="box-none"
 			style={[
@@ -225,10 +202,6 @@ export function FloatingActions({
 	);
 }
 
-/**
-The search input, a rounded bar that floats above the tab bar with room on both sides, riding just above the keyboard
-while it is open. Closing it clears the search.
-*/
 export function SearchDock({
 	label,
 	placeholder,
@@ -245,9 +218,6 @@ export function SearchDock({
 	query: string;
 	onChange: (query: string) => void;
 	onClose: () => void;
-	/**
-	Shows a help button at the end of the field that opens the search tips.
-	*/
 	onTips?: () => void;
 	onUp?: () => void;
 }) {
@@ -257,11 +227,8 @@ export function SearchDock({
 	const inset = keyboardInset();
 	const insets = useSafeAreaInsets();
 	const {barGap} = useShape();
-	// A floating tab bar gets a floating, rounded search bar; a docked one gets a banner across the screen.
 	const {floatingBar} = usePreferences();
 	const {width: screenWidth} = useWindowDimensions();
-	// The floating tab bar is gone while searching, so the bar sits at the screen's bottom; a docked bar stays below it.
-	// The banner of a docked bar is an edge of the screen, so only the floating forms are glass.
 	const glass = glassOn;
 	const rest = floatingBar ? barGap + insets.bottom : bottom;
 	const dockBottom = keyboardOpen

@@ -9,12 +9,6 @@ import {dismissSyncBanner, useSyncDismissed} from '../library/sync-dismissed';
 import {TARGET, useColors, useShape} from './theme';
 import {Icon} from './widgets';
 
-/**
-Shown at the top of Bookmarks and Sessions while the connected sync server and the app do not match: sync stopped over
-another protocol, or the server lacks features. A stopped sync has no Dismiss and goes away once the server or the app
-is updated. Missing features can be dismissed on this phone until the server version or the list changes. Settings ›
-Sync has the details either way.
-*/
 export function SyncProblemBanner({
 	onOpenSettings,
 }: {
@@ -94,13 +88,11 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		paddingBottom: 4,
 		borderWidth: 1,
-		// The same inset as the search row and chips below it.
 		marginHorizontal: 16,
 	},
 	body: {flexDirection: 'row', alignItems: 'flex-start', gap: 12},
 	text: {flex: 1, gap: 4},
 	title: {fontWeight: '600'},
-	// Lined up under the text, past the icon.
 	actions: {flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginLeft: 24},
 	action: {
 		minHeight: TARGET,

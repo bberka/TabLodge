@@ -19,12 +19,6 @@ import {IconButton} from './widgets';
 const CLOSE_DRAG = 80;
 const CLOSE_VELOCITY = 0.8;
 
-/**
-A drawer that slides up from the bottom and is only as tall as its content. A tap on the dimmed area, the Android
-back button, a swipe down on the handle, or the content's own close button dismisses it; the parent owns `visible`.
-While the keyboard is open the drawer shrinks to the room above it and its content scrolls. Content that is a scrolling
-list itself passes `scroll={false}` to keep its own scrolling.
-*/
 export function BottomSheet({
 	visible,
 	onClose,
@@ -38,8 +32,6 @@ export function BottomSheet({
 	scroll?: boolean;
 	children: ReactNode;
 }) {
-	// The drawer is only mounted while it is open or sliding away, so every opening starts from a clean state: nothing
-	// measured, nothing animated, and so nothing left over from the last time to flash on the first frame.
 	const [mounted, setMounted] = useState(visible);
 	if (visible && !mounted) {
 		setMounted(true);
@@ -93,7 +85,6 @@ function Sheet({
 	const shape = useShape();
 	const insets = useSafeAreaInsets();
 	const [height, setHeight] = useState(0);
-	// 0 is open; `height` is fully below the screen. It starts far below, and the sheet is hidden until measured.
 	const slide = useRef(new Animated.Value(1000)).current;
 	const scrim = useRef(new Animated.Value(0)).current;
 	const keyboard = keyboardInset();
@@ -104,7 +95,6 @@ function Sheet({
 	const goneRef = useRef(onGone);
 	goneRef.current = onGone;
 	const openedRef = useRef(false);
-	// A keyboard left over from an earlier input would push this drawer up for nothing.
 	useEffect(() => {
 		settleKeyboard();
 		const timer = setTimeout(settleKeyboard, 400);
@@ -113,8 +103,6 @@ function Sheet({
 		};
 	}, []);
 
-	// The open animation runs once. The content can change size a moment after it is first measured (icons loading, a
-	// scroll area settling), and restarting the slide for each of those made the drawer flicker.
 	useEffect(() => {
 		if (height === 0) {
 			return;
@@ -162,7 +150,6 @@ function Sheet({
 		});
 	}, [open, height, slide, scrim]);
 
-	// A drawer closed before it was ever measured has nothing to animate away.
 	useEffect(() => {
 		if (!open && heightRef.current === 0) {
 			goneRef.current();
@@ -186,8 +173,6 @@ function Sheet({
 	).current;
 
 	return (
-		// The room the keyboard takes is padding here, so the drawer inside shrinks to what is left above it. It is a
-		// layout value, so it animates on the JS thread, apart from the drawer's own slide on the native one.
 		<Animated.View
 			style={[
 				styles.root,
@@ -214,7 +199,6 @@ function Sheet({
 						backgroundColor: colors.surface,
 						borderTopLeftRadius: shape.sheetRadius,
 						borderTopRightRadius: shape.sheetRadius,
-						// Hidden until measured, so it does not flash at the wrong place.
 						opacity: height > 0 ? 1 : 0,
 						transform: [{translateY: slide}],
 					},
@@ -225,7 +209,6 @@ function Sheet({
 						return;
 					}
 
-					// The first measurement places the sheet just below the screen before it is shown.
 					if (heightRef.current === 0) {
 						slide.setValue(next);
 					}
@@ -237,7 +220,6 @@ function Sheet({
 					style={[
 						styles.inner,
 						{
-							// The keyboard covers the bottom edge, so its room replaces the bottom inset.
 							paddingBottom: keyboard.interpolate({
 								inputRange: [0, 120],
 								outputRange: [Math.max(insets.bottom, 16), 8],
@@ -271,9 +253,6 @@ function Sheet({
 	);
 }
 
-/**
-The title row at the top of a sheet's content, with the close button.
-*/
 export function SheetHeader({
 	title,
 	onClose,
@@ -307,7 +286,6 @@ const styles = StyleSheet.create({
 		maxHeight: '100%',
 		elevation: 12,
 	},
-	// Shrinks with the drawer, so a tall body gives way to the keyboard and scrolls instead of running off the top.
 	inner: {flexShrink: 1},
 	scroll: {flexGrow: 0},
 	fill: {flexShrink: 1},

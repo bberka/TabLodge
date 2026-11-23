@@ -9,7 +9,6 @@ import {Avatar} from './widgets';
 
 type Source = {uri: string; headers?: Record<string, string>};
 
-// The server address and token are read once per address, not once per row.
 let tokenCache: {url: string; token: Promise<string | undefined>} | undefined;
 
 function serverToken(url: string): Promise<string | undefined> {
@@ -26,14 +25,8 @@ async function readToken(): Promise<string | undefined> {
 	return typeof token === 'string' ? token : undefined;
 }
 
-/**
-Where to get a site's icon: the sync server when one is connected, and for a place with its own reason to show the
-icon (the save preview), otherwise the site's own favicon. Undefined while the token is still being read, and when
-the Site icons setting is on Letter tiles only.
-*/
 function useIconSource(host: string, always: boolean): Source | undefined {
 	const {siteIcons} = useLinkSettings(true);
-	// A place with its own reason to show the icon (the save preview) may ask the site itself.
 	const mode = always ? 'direct' : siteIcons === 'browser' ? 'off' : 'server';
 	const {connected, url} = useSyncStatus();
 	const [token, setToken] = useState<string>();
@@ -74,9 +67,6 @@ function useIconSource(host: string, always: boolean): Source | undefined {
 	};
 }
 
-/**
-A site's icon over its letter tile. The tile stays until the icon has loaded, and for good when it never does.
-*/
 export function SiteIcon({
 	host,
 	size = 40,
@@ -84,9 +74,6 @@ export function SiteIcon({
 }: {
 	host: string;
 	size?: number;
-	/**
-	Show the icon even with Site icons on Letter tiles only, for a place that has its own reason to ask for it.
-	*/
 	always?: boolean;
 }) {
 	const source = useIconSource(host, always);

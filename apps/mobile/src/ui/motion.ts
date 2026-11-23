@@ -1,12 +1,10 @@
 import {useEffect, useRef} from 'react';
 import {AccessibilityInfo, Animated} from 'react-native';
 
-// Every animation in the app runs at this fraction of its drawn out length, so the app feels quick.
 const SPEED = 0.65;
 const SPRING_TENSION = 1.5;
 const SPRING_FRICTION = 1.2;
 
-// Android's "Remove animations" (and iOS's Reduce Motion) turn this on; the app then jumps straight to the end state.
 let reduced = false;
 let watching = false;
 
@@ -24,18 +22,11 @@ function watch(): void {
 	});
 }
 
-/**
-A duration in milliseconds, shortened for the app's pace, or 0 when the system asks for no animations.
-*/
 export function motion(base: number): number {
 	watch();
 	return reduced ? 0 : Math.round(base * SPEED);
 }
 
-/**
-A spring toward `toValue`, stiffer than React Native's default so it settles fast. With the system's reduced motion it
-becomes an instant jump.
-*/
 export function spring(
 	value: Animated.Value,
 	toValue: number,
@@ -62,10 +53,6 @@ export function spring(
 	});
 }
 
-/**
-Fades a screen's content back in each time `key` changes, but not when it first shows, so going between a list and one
-item of it is not a hard cut.
-*/
 export function useCrossfade(key: unknown): Animated.Value {
 	const opacity = useRef(new Animated.Value(1)).current;
 	const firstRef = useRef(true);

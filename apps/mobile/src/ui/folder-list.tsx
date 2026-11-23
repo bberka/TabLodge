@@ -11,9 +11,6 @@ import {motion} from './motion';
 import {soften, TARGET, useColors, useShape} from './theme';
 import {Icon, type IconName} from './widgets';
 
-/**
-One column or folder as the list view draws it.
-*/
 export type FolderEntry = {
 	id: string;
 	name: string;
@@ -22,9 +19,6 @@ export type FolderEntry = {
 	tint: string;
 };
 
-/**
-The look every row shares: a bordered pill that darkens while pressed, or takes the given fill.
-*/
 function useRowStyle() {
 	const colors = useColors();
 	const shape = useShape();
@@ -38,10 +32,6 @@ function useRowStyle() {
 	];
 }
 
-/**
-Slides its content in from the side it is given, so the list arrives from the left (as if coming back) and an opened
-folder's bar from the right.
-*/
 function SlideIn({
 	from,
 	children,
@@ -68,10 +58,6 @@ function SlideIn({
 const countLabel = (entry: FolderEntry, noun: string) =>
 	`${entry.count} ${entry.count === 1 ? noun : `${noun}s`}`;
 
-/**
-Every column or folder as one row each, with its icon, name, and count, ending in a row that makes a new one. Tapping a
-row opens it, and holding it asks for its menu.
-*/
 export function FolderList({
 	entries,
 	noun,
@@ -81,9 +67,6 @@ export function FolderList({
 	onMenu,
 }: {
 	entries: FolderEntry[];
-	/**
-	What the entries hold, singular: bookmark or session.
-	*/
 	noun: string;
 	newLabel: string;
 	onOpen: (id: string) => void;
@@ -139,10 +122,6 @@ export function FolderList({
 	);
 }
 
-/**
-The bar above one opened column or folder in the list view: its name and count, and a way back to the list. Holding it
-asks for the same menu as holding the row did.
-*/
 export function FolderBack({
 	entry,
 	noun,
@@ -152,9 +131,6 @@ export function FolderBack({
 }: {
 	entry: FolderEntry;
 	noun: string;
-	/**
-	What the way back is called, such as All columns.
-	*/
 	label: string;
 	onBack: () => void;
 	onMenu: () => void;

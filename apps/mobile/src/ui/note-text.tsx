@@ -5,10 +5,6 @@ import {
 } from '../../../extension/src/shared/note-links';
 import {useColors} from './theme';
 
-/**
-A bookmark or saved tab note. A saved quote's passage link shows as a short "Go to passage" link instead of its encoded
-address. Without `onOpen` (while the row is selecting) the label only shows.
-*/
 export function NoteText({
 	notes,
 	numberOfLines,
