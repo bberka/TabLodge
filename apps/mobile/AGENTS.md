@@ -1,9 +1,9 @@
 # Android app
 
-Load [mobile.md](../../docs/agents/mobile.md) before editing here. Proof comes from an emulator or a device, never the browser.
+Load [mobile.md](../../docs/agents/mobile.md) before editing here. Proof comes from emulator or device, never browser.
 
-- Start your own emulator and target it by serial in every `adb` command. Another session may be using the one that is running.
-- Pure logic goes in a plain `.ts` file with a test in `tests/`, not in a screen. Screens cannot run in the Node tests.
-- Do not edit the PNGs in `assets/`. Change `scripts/make-icons.mts` and rerun `pnpm run mobile:icons`.
-- Do not add tab reordering, splitting or merging sessions, or library size limits. The owner left them out on purpose.
-- Code imported from `apps/extension/src` must stay free of browser APIs.
+- Start own emulator, target by serial in every `adb` command. Another session may use running one.
+- Put pure logic in plain `.ts` file with test in `tests/`, not in screen. Screens cannot run in Node tests.
+- Do not edit PNGs in `assets/`. Change `scripts/make-icons.mts`, rerun `pnpm run mobile:icons`.
+- Do not add tab reordering, splitting or merging sessions, or library size limits. Owner left out on purpose.
+- Keep code imported from `apps/extension/src` free of browser APIs.

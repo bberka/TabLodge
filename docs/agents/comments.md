@@ -1,22 +1,22 @@
 # Code comments
 
-Code has no comments. A reason lives where something checks it: a name, a type, a test, or an ADR in [docs/adr/](../adr/). Comments in TS, TSX, and JS fail lint (`local/no-comments`, `xo.config.ts`). A lint or type directive stays, with its reason inside it: `eslint-disable-next-line rule -- reason`, `@ts-expect-error reason`. A directive without a reason is a comment. `/// <reference>`, shebangs, and `eslint-enable` are allowed.
+Code has no comments. Reason lives where something checks it: name, type, test, or ADR in [docs/adr/](../adr/). Comments in TS, TSX, JS fail lint (`local/no-comments`, `xo.config.ts`). Lint or type directive stays, with reason inside: `eslint-disable-next-line rule -- reason`, `@ts-expect-error reason`. Directive without reason is comment. `/// <reference>`, shebangs, `eslint-enable` allowed.
 
 ## Ratchet
 
-One pull request per area deletes the old comments. `scripts/comment-baseline.json` holds each file's remaining count; the lint rule is off for the files listed.
+One pull request per area deletes old comments. `scripts/comment-baseline.json` holds each file's remaining count; lint rule off for files listed.
 
-- `node scripts/comment-ratchet.ts` runs in `vp run check` and in the CI job `comments`. It checks only the files the branch touches.
-- A touched file passes when its count equals its baseline and is no higher than at the merge base. A new comment fails, and so does a deleted one until the baseline follows: run `node scripts/comment-ratchet.ts --write` and commit the JSON. A file at zero leaves the baseline and the rule covers it.
-- `--report` prints comments, lines, and files per area. `apps/site` is outside xo, so only the ratchet covers it.
-- Never raise a baseline by hand.
-- A branch started before the rule can add a file with comments that no baseline lists, and lint then fails on master after the merge. A small pull request deletes those comments. Requiring up to date branches, or a merge queue, checks the merged result and prevents it.
+- `node scripts/comment-ratchet.ts` runs in `vp run check` and CI job `comments`. Checks only files branch touches.
+- Touched file passes when count equals baseline and no higher than at merge base. New comment fails, and so does deleted one until baseline follows: run `node scripts/comment-ratchet.ts --write` and commit JSON. File at zero leaves baseline, rule covers it.
+- `--report` prints comments, lines, files per area. `apps/site` outside xo, so only ratchet covers it.
+- Never raise baseline by hand.
+- Branch started before rule can add file with comments no baseline lists, then lint fails on master after merge. Small pull request deletes those comments. Requiring up to date branches, or merge queue, checks merged result and prevents it.
 
 ## Deleting an area
 
-Run `/delete-comment <path>`. One pull request per area, from fresh `origin/master`: comment deletions and directive reasons only, no logic edits. Leave an area with heavy open pull request churn until those merge.
+Run `/delete-comment <path>`. One pull request per area, from fresh `origin/master`: comment deletions and directive reasons only, no logic edits. Leave area with heavy open pull request churn until those merge.
 
-Sort honestly: a comment about a browser quirk, a race, or a protocol constraint is a decision.
+Sort honestly: comment about browser quirk, race, or protocol constraint is decision.
 
 | Category | Meaning | Action |
 | --- | --- | --- |
@@ -25,4 +25,4 @@ Sort honestly: a comment about a browser quirk, a race, or a protocol constraint
 | Excuse | Justifies a hack | Delete, and list it in one issue per area with `file:line` and a fix sketch |
 | Decision Record | A non-obvious decision (quirk, race, constraint, format, ordering) | Move to the area's ADR |
 
-The area's ADR is `docs/adr/<next number>-<area>-decisions.md`: take the number after the highest on `origin/master` and in open pull requests. It lists each decision with a `file:symbol` reference and its reason. A decision an ADR already covers gets a link only. The pull request body has the category table with counts and the issue link.
+Area's ADR is `docs/adr/<next number>-<area>-decisions.md`: take number after highest on `origin/master` and in open pull requests. Lists each decision with `file:symbol` reference and reason. Decision ADR already covers gets link only. Pull request body has category table with counts and issue link.
