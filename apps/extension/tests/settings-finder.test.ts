@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
+import {sectionId} from '../src/app/settings-sections';
 import {fieldEntryId, finderSettings} from '../src/app/settings-finder';
 import {SETTING_WORDS, settingsFieldGroups} from '../src/app/settings-fields';
 import {DEFAULT_SETTINGS} from '../src/shared/library-normalize';
@@ -32,6 +33,7 @@ const settingIds = (query: string) =>
 
 const NOT_A_ROW: Partial<Record<keyof typeof DEFAULT_SETTINGS, string>> = {
 	excludedOrigins: 'Excluded websites',
+	sourceCatchUp: 'Sources',
 	mobileApp: '',
 	heldSettings: '',
 };
@@ -103,6 +105,16 @@ test('obvious synonyms find the field, whichever section it sits in', () => {
 	found('unloading', 'unloadRestoredTabs');
 	found('split', 'saveSplitTabs');
 	found('session name', 'sessionNameStyle');
+});
+
+test('the catch-up setting is found through its Settings section', () => {
+	assert.ok(
+		settingIds('catch up').includes(`setting:${sectionId('Sources')}`),
+		'"catch up" does not open Settings › Sources',
+	);
+	assert.ok(
+		settingIds('ask first').includes(`setting:${sectionId('Sources')}`),
+	);
 });
 
 test('rows that cannot exist in Firefox are left out of its finder', () => {

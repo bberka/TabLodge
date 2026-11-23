@@ -522,24 +522,26 @@ function Help() {
 							saved page: your saved page on Reddit (new or old Reddit), Watch
 							later on YouTube, your bookmarks on X, All posts or a collection
 							under Saved on Instagram, or your own stars on GitHub. When some
-							of the saved items it shows are not in {PROJECT.name}, a notice
-							says how many and offers Add them, which adds them to the
-							site&apos;s column in the order the site lists them, and Not now,
-							which keeps it quiet until something new appears there. It counts
-							only what the page has loaded, so scroll down, or go to the next
-							page, for more; X keeps only the posts near the screen, so it
-							counts those. Saved comments are included on old Reddit only.
-							Someone else&apos;s GitHub stars are never offered. The other
-							sites don&apos;t offer this yet. Hacker News, Letterboxd,
-							Goodreads, and IMDb lists can be public, and telling your own list
-							from someone else&apos;s has not been checked on a signed-in page.
-							The saved pages of Stack Overflow, Lobsters, dev.to, Bluesky,
-							SoundCloud, Spotify, Medium, and Substack have not been checked on
-							a signed-in account with saves.
+							of the saved items it shows are not in {PROJECT.name}, they are
+							added to the site&apos;s column in the order the site lists them,
+							and a notice says how many, with Undo. Under When a saved page has
+							items {PROJECT.name} lacks, choose Ask first to be offered Add
+							them and Not now instead; Not now keeps the notice quiet until
+							something new appears there, and an item answered Not now is never
+							added automatically. It counts only what the page has loaded, so
+							scroll down, or go to the next page, for more; X keeps only the
+							posts near the screen, so it counts those. Saved comments are
+							included on old Reddit only. Someone else&apos;s GitHub stars are
+							never offered. The other sites don&apos;t offer this yet. Hacker
+							News, Letterboxd, Goodreads, and IMDb lists can be public, and
+							telling your own list from someone else&apos;s has not been
+							checked on a signed-in page. The saved pages of Stack Overflow,
+							Lobsters, dev.to, Bluesky, SoundCloud, Spotify, Medium, and
+							Substack have not been checked on a signed-in account with saves.
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default sync other browser on in another browser turn on',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now say how many undo add them automatically ask first save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default sync other browser on in another browser turn on',
 				},
 				{
 					title: 'Keep saves off the site',

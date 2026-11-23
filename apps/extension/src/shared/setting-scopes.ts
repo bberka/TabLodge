@@ -145,6 +145,10 @@ export const LIBRARY_SETTINGS = {
 	sessionNameTemplate: ['all', BOTH],
 	sessionNameFallback: ['all', BOTH],
 	defaultShareMode: ['all', BOTH],
+	sourceCatchUp: [
+		'platform',
+		'Watches the saved pages of sites the extension reads; the phone cannot read site pages.',
+	],
 	mobileApp: [
 		'platform',
 		"The Android app's own preferences, which only phones read (`ANDROID_PREFERENCES`).",

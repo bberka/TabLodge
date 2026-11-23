@@ -218,6 +218,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
 	defaultShareMode: 'snapshot',
+	sourceCatchUp: 'add',
 	mobileApp: {},
 	heldSettings: {},
 });
@@ -1111,6 +1112,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		defaultShareMode: isSharedPageMode(raw.defaultShareMode)
 			? raw.defaultShareMode
 			: 'snapshot',
+		sourceCatchUp: raw.sourceCatchUp === 'ask' ? 'ask' : 'add',
 		mobileApp: normalizeMobileApp(raw.mobileApp),
 		heldSettings: normalizeHeldSettings(raw.heldSettings),
 	};

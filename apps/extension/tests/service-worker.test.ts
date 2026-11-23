@@ -15237,7 +15237,7 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 				redditSaved,
 			),
 		),
-		{ok: true, missing: 2, ask: true},
+		{ok: true, missing: 2, ask: true, mode: 'add'},
 	);
 
 	const added = await harness.sendMessage(
@@ -15279,7 +15279,7 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 				redditSaved,
 			),
 		),
-		{ok: true, missing: 0, ask: false},
+		{ok: true, missing: 0, ask: false, mode: 'add'},
 	);
 	const again = await harness.sendMessage(
 		{type: 'SITE_SOURCE_CATCH_UP_ADD', source: 'reddit', links},
@@ -15311,11 +15311,17 @@ test('Not now keeps the saved page quiet until a new missing item appears', asyn
 		{type: 'SITE_SOURCE_CATCH_UP_DISMISS', source: 'reddit', links: first},
 		redditSaved,
 	);
-	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: false});
+	assert.deepEqual(await ask(first), {
+		ok: true,
+		missing: 2,
+		ask: false,
+		mode: 'add',
+	});
 	assert.deepEqual(await ask([savedPost('new999'), ...first]), {
 		ok: true,
 		missing: 3,
 		ask: true,
+		mode: 'add',
 	});
 	assert.equal(harness.state.bookmarks.length, 0, 'nothing was added');
 
@@ -15326,7 +15332,12 @@ test('Not now keeps the saved page quiet until a new missing item appears', asyn
 		enabled: false,
 	});
 	await switchOnReddit(harness);
-	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: true});
+	assert.deepEqual(await ask(first), {
+		ok: true,
+		missing: 2,
+		ask: true,
+		mode: 'add',
+	});
 
 	// A Not now that arrives after the site went off stores nothing.
 	await harness.sendMessage({
@@ -15339,7 +15350,88 @@ test('Not now keeps the saved page quiet until a new missing item appears', asyn
 		redditSaved,
 	);
 	await switchOnReddit(harness);
-	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: true});
+	assert.deepEqual(await ask(first), {
+		ok: true,
+		missing: 2,
+		ask: true,
+		mode: 'add',
+	});
+});
+
+test('Add them automatically adds the new items, skips the ones answered Not now, and Undo removes exactly those', async () => {
+	const harness = sourcesHarness();
+	await switchOnReddit(harness);
+	const dismissed = [savedPost('aaa111')];
+	await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_DISMISS', source: 'reddit', links: dismissed},
+		redditSaved,
+	);
+	const links = [...dismissed, savedPost('bbb222')];
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{type: 'SITE_SOURCE_CATCH_UP', source: 'reddit', links},
+				redditSaved,
+			),
+		),
+		{ok: true, missing: 2, ask: true, mode: 'add'},
+	);
+
+	const inColumn = () =>
+		harness.state.bookmarks
+			.filter((bookmark) => bookmark.columnId === 'source-reddit')
+			.map((bookmark) => bookmark.url);
+	const added = await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_CATCH_UP_ADD',
+			source: 'reddit',
+			links,
+			automatic: true,
+		},
+		redditSaved,
+	);
+	assert.equal(added.ok && added.added, 1);
+	assert.deepEqual(inColumn(), [
+		'https://www.reddit.com/r/typescript/comments/bbb222/post_bbb222/',
+	]);
+
+	const undone = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: (added.ok && added.undoId) || ''},
+		redditSaved,
+	);
+	assert.equal(undone.ok, true, undone.ok ? '' : undone.error);
+	assert.deepEqual(inColumn(), []);
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('Ask first is kept from the setting and adds only when Add them is answered', async () => {
+	const harness = sourcesHarness();
+	await switchOnReddit(harness);
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {sourceCatchUp: 'ask'},
+	});
+	const links = [savedPost('aaa111')];
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{type: 'SITE_SOURCE_CATCH_UP', source: 'reddit', links},
+				redditSaved,
+			),
+		),
+		{ok: true, missing: 1, ask: true, mode: 'ask'},
+	);
+	assert.equal(
+		harness.state.bookmarks.length,
+		0,
+		'nothing was added without a click',
+	);
+
+	const added = await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_ADD', source: 'reddit', links},
+		redditSaved,
+	);
+	assert.equal(added.ok && added.added, 1);
 });
 
 test('a saved page of a site that is off, or another site, gets no count and adds nothing', async () => {
@@ -15416,7 +15508,7 @@ test('the saved pages of YouTube, X, Instagram, and GitHub add their missing ite
 					from,
 				),
 			),
-			{ok: true, missing: 1, ask: true},
+			{ok: true, missing: 1, ask: true, mode: 'add'},
 			page.id,
 		);
 		const added = await harness.sendMessage(
@@ -15580,7 +15672,7 @@ test('a reel saved from its own page is not missing from the Instagram saved pag
 				{tab: {...youtubeTab, url: saved}, url: saved},
 			),
 		),
-		{ok: true, missing: 0, ask: false},
+		{ok: true, missing: 0, ask: false, mode: 'add'},
 	);
 });
 

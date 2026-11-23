@@ -10534,18 +10534,21 @@ async function countSourceCatchUp(
 		return {ok: true, missing: 0, ask: false};
 	}
 
-	const missing = await missingFromSource(await getStore(), source, links);
+	const store = await getStore();
+	const missing = await missingFromSource(store, source, links);
 	const dismissed = (await readCatchUpState())[source.id];
 	return {
 		ok: true,
 		missing: missing.length,
 		ask: catchUpAsks(missing, dismissed),
+		mode: store.settings.sourceCatchUp,
 	};
 }
 
 async function addSourceCatchUp(
 	source: SiteSource,
 	links: unknown,
+	automatic: boolean,
 ): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> {
 	const state = await readSourcesState();
 	if (!state.sites[source.id].enabled || privateSourcesOff()) {
@@ -10559,7 +10562,13 @@ async function addSourceCatchUp(
 			async (): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> => {
 				const store = await getStore();
 				const missing = await missingFromSource(store, source, links);
-				if (missing.length === 0) {
+				const answered = automatic
+					? new Set((await readCatchUpState())[source.id])
+					: undefined;
+				const added = answered
+					? missing.filter((link) => !answered.has(link.url))
+					: missing;
+				if (added.length === 0) {
 					return {ok: true, added: 0};
 				}
 
@@ -10567,7 +10576,7 @@ async function addSourceCatchUp(
 				const column = sourceSaveColumn(store, source, state, now);
 				const device = await savedHere();
 				// In the page's order, one after another, as the site lists them.
-				for (const link of missing) {
+				for (const link of added) {
 					const notes = sourceNote(source, link.discussion, link.url);
 					store.bookmarks.push({
 						id: makeId(),
@@ -10586,7 +10595,7 @@ async function addSourceCatchUp(
 				}
 
 				await writeStore(store);
-				return {ok: true, added: missing.length, column: column.name};
+				return {ok: true, added: added.length, column: column.name};
 			},
 		),
 	);
@@ -10783,7 +10792,7 @@ async function handleSourceMessage(
 		case 'SITE_SOURCE_CATCH_UP_ADD': {
 			const source = senderSource(message.source, sender);
 			return source
-				? addSourceCatchUp(source, message.links)
+				? addSourceCatchUp(source, message.links, message.automatic === true)
 				: {ok: false, error: 'This page cannot save to that source.'};
 		}
 

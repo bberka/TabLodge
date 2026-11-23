@@ -366,6 +366,7 @@ export type Settings = {
 	*/
 	sessionNameFallback: SessionNameFallback;
 	defaultShareMode: SharedPageMode;
+	sourceCatchUp: SourceCatchUpMode;
 	/**
 	Preferences of the Android app. The extension never reads them; it keeps them so they sync between the phones that
 	share this library (plain strings, numbers, and booleans only).
@@ -1058,7 +1059,11 @@ export type TabLodgeMessages = {
 	/**
 	Sent by the site content script when the user answers Add them: adds the listed items TabLodge lacks.
 	*/
-	SITE_SOURCE_CATCH_UP_ADD: {source: string; links: unknown[]};
+	SITE_SOURCE_CATCH_UP_ADD: {
+		source: string;
+		links: unknown[];
+		automatic?: boolean;
+	};
 	/**
 	Sent by the site content script when the user answers Not now: don't ask again about the items missing now.
 	*/
@@ -1215,6 +1220,7 @@ What a source save did: `saved` into the site's column, `exists` (the address is
 a private window that does not use the regular library).
 */
 export type SiteSourceOutcome = 'saved' | 'exists' | 'trashed' | 'off';
+export type SourceCatchUpMode = 'add' | 'ask';
 
 /**
 Success payload of each message (merged with `{ ok: true }`). Fields marked optional are only sometimes reported.
@@ -1472,7 +1478,11 @@ export type TabLodgeResponses = {
 	/**
 	`missing`: how many listed items TabLodge lacks. `ask`: some of them were never answered Not now.
 	*/
-	SITE_SOURCE_CATCH_UP: {missing: number; ask: boolean};
+	SITE_SOURCE_CATCH_UP: {
+		missing: number;
+		ask: boolean;
+		mode?: SourceCatchUpMode;
+	};
 	SITE_SOURCE_CATCH_UP_ADD: {added: number; column?: string} & Undoable;
 	SITE_SOURCE_CATCH_UP_DISMISS: {};
 	SITE_SOURCE_UNDO: {label: string};

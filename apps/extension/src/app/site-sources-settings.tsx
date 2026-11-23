@@ -28,7 +28,11 @@ import {
 	RadioCardGroup,
 	SelectItem,
 } from '../shared/ui';
-import type {SiteSourceStatus} from '../shared/types';
+import type {
+	Settings,
+	SiteSourceStatus,
+	SourceCatchUpMode,
+} from '../shared/types';
 import {ColumnSelect} from './column-select';
 import {send, type ShowStatus} from './common';
 import {Favicon} from './favicon';
@@ -55,6 +59,11 @@ export const SOURCES_WORDS = [
 	'permission',
 	'Save to',
 	'column',
+	'When a saved page has items TabLodge lacks',
+	'Add them automatically',
+	'Ask first',
+	'catch up',
+	'saved page',
 	`Save to ${PROJECT.name} only`,
 	'keep saves off the site',
 	'On in another browser',
@@ -650,9 +659,13 @@ function SiteOptions({
 export function SiteSourcesSettings({
 	controller,
 	columns,
+	settings,
+	onCatchUpChange,
 }: {
 	controller: SiteSourcesController;
 	columns: readonly ColumnOption[];
+	settings: Partial<Settings>;
+	onCatchUpChange: (mode: SourceCatchUpMode) => void;
 }) {
 	const {sources, privateWindow, status, remove} = controller;
 	// The site stays set while the dialog fades out, so its text does not change on Cancel.
@@ -660,6 +673,7 @@ export function SiteSourcesSettings({
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	// One row is open at a time, so the list stays short however many sites are added.
 	const [openId, setOpenId] = useState<SiteSourceId>();
+	const catchUpLabelId = useId();
 	const panelBaseId = useId();
 
 	if (privateWindow) {
@@ -672,64 +686,89 @@ export function SiteSourcesSettings({
 	}
 
 	const listed = SITE_SOURCES.filter((source) => isListed(status(source)));
-	if (sources && listed.length === 0) {
-		return (
-			<p className="rounded-md bg-muted px-3 py-3 text-sm text-muted-foreground">
-				No sites added.
-			</p>
-		);
-	}
-
+	const catchUpMode: SourceCatchUpMode =
+		settings.sourceCatchUp === 'ask' ? 'ask' : 'add';
 	return (
-		<div>
-			<ul className="divide-y divide-border rounded-md border border-border">
-				{listed.map((source) => {
-					const entry = status(source);
-					const isOpen = openId === source.id;
-					const panelId = `${panelBaseId}-${source.id}`;
-					return (
-						<li key={source.id} data-site-source={source.id}>
-							<button
-								type="button"
-								className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-								aria-expanded={isOpen}
-								aria-controls={isOpen ? panelId : undefined}
-								onClick={() => {
-									setOpenId(isOpen ? undefined : source.id);
-								}}
-							>
-								<SiteSummary source={source} entry={entry} />
-								<ChevronDown
-									className={cn(
-										'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-										isOpen && 'rotate-180',
-									)}
-									aria-hidden="true"
-								/>
-							</button>
-							{isOpen && (
-								<div
-									id={panelId}
-									role="region"
-									aria-label={`${source.label} options`}
-									className="border-t border-border px-3 py-3"
+		<div className="space-y-4">
+			<div>
+				<p id={catchUpLabelId} className="text-sm font-medium">
+					When a saved page has items {PROJECT.name} lacks
+				</p>
+				<RadioCardGroup
+					aria-labelledby={catchUpLabelId}
+					className="mt-2 sm:grid-cols-2"
+					value={catchUpMode}
+					onValueChange={(value) => {
+						onCatchUpChange(value === 'ask' ? 'ask' : 'add');
+					}}
+				>
+					<RadioCard
+						value="add"
+						title="Add them automatically"
+						description="They go into the site’s column at once, and the notice offers Undo."
+					/>
+					<RadioCard
+						value="ask"
+						title="Ask first"
+						description="The notice offers Add them and Not now."
+					/>
+				</RadioCardGroup>
+			</div>
+			{sources && listed.length === 0 && (
+				<p className="rounded-md bg-muted px-3 py-3 text-sm text-muted-foreground">
+					No sites added.
+				</p>
+			)}
+			{sources && listed.length > 0 && (
+				<ul className="divide-y divide-border rounded-md border border-border">
+					{listed.map((source) => {
+						const entry = status(source);
+						const isOpen = openId === source.id;
+						const panelId = `${panelBaseId}-${source.id}`;
+						return (
+							<li key={source.id} data-site-source={source.id}>
+								<button
+									type="button"
+									className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+									aria-expanded={isOpen}
+									aria-controls={isOpen ? panelId : undefined}
+									onClick={() => {
+										setOpenId(isOpen ? undefined : source.id);
+									}}
 								>
-									<SiteOptions
-										source={source}
-										entry={entry}
-										columns={columns}
-										controller={controller}
-										onRemove={() => {
-											setRemoving(source);
-											setConfirmOpen(true);
-										}}
+									<SiteSummary source={source} entry={entry} />
+									<ChevronDown
+										className={cn(
+											'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+											isOpen && 'rotate-180',
+										)}
+										aria-hidden="true"
 									/>
-								</div>
-							)}
-						</li>
-					);
-				})}
-			</ul>
+								</button>
+								{isOpen && (
+									<div
+										id={panelId}
+										role="region"
+										aria-label={`${source.label} options`}
+										className="border-t border-border px-3 py-3"
+									>
+										<SiteOptions
+											source={source}
+											entry={entry}
+											columns={columns}
+											controller={controller}
+											onRemove={() => {
+												setRemoving(source);
+												setConfirmOpen(true);
+											}}
+										/>
+									</div>
+								)}
+							</li>
+						);
+					})}
+				</ul>
+			)}
 			<ConfirmationDialog
 				open={confirmOpen}
 				title={`Remove ${removing?.label ?? 'this site'}?`}

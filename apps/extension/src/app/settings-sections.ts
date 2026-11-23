@@ -104,6 +104,11 @@ const sections = (appName: string, firefox: boolean): Section[] => [
 			'github',
 			'hacker news',
 			'keep saves off the site',
+			'catch up',
+			'saved page',
+			'add them automatically',
+			'ask first',
+			'not now',
 		],
 	},
 	{
