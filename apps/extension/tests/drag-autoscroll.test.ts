@@ -13,7 +13,6 @@ import {
 	type ScrollTarget,
 } from '../src/app/drag-autoscroll';
 
-// A pane 0..1000 tall and wide, big enough that the zone is the full EDGE_ZONE_PX.
 const SIZE = 1000;
 
 test('edgeVelocity is zero in the middle and outside both strips', () => {
@@ -30,13 +29,11 @@ test('edgeVelocity speeds up toward the edge and tops out at the maximum', () =>
 	assert.ok(outer < middle);
 	assert.ok(middle < inner);
 	assert.equal(edgeVelocity(0, 0, SIZE), -MAX_SPEED);
-	// Past the edge (a pointer dragged out of the window) is the same top speed.
 	assert.equal(edgeVelocity(-40, 0, SIZE), -MAX_SPEED);
 	assert.equal(edgeVelocity(SIZE + 40, 0, SIZE), MAX_SPEED);
 });
 
 test('edgeVelocity shrinks the strip on a small pane and ignores an empty one', () => {
-	// A 100px pane gets a 30px strip, so its middle never scrolls.
 	assert.equal(edgeVelocity(50, 0, 100), 0);
 	assert.ok(edgeVelocity(10, 0, 100) < 0);
 	assert.equal(edgeVelocity(5, 10, 10), 0);
@@ -104,9 +101,6 @@ function fakeEnv(panes: ScrollTarget[], reduced = false) {
 		get pending() {
 			return frames.size;
 		},
-		/**
-		Runs the queued frames, `ms` apart.
-		*/
 		run(count: number, ms = 16) {
 			for (let i = 0; i < count; i++) {
 				const queued = [...frames];
@@ -158,7 +152,6 @@ test('the controller does not scroll while the pointer is away from the edges', 
 	scroller.update(500, 500);
 	frames.run(20);
 	assert.equal(page.moves, 0);
-	// Moving into the strip starts it; moving out stops it without a stop call.
 	scroller.update(500, SIZE - 2);
 	frames.run(5);
 	const moved = page.position.y;
@@ -205,13 +198,11 @@ test('a long frame is capped so the page does not jump', () => {
 	frames.run(1);
 	const first = page.position.y;
 	frames.run(1, 5000);
-	// 1000 px/s for at most 50 ms.
 	assert.ok(page.position.y - first <= 51);
 	scroller.stop();
 });
 
 test('the innermost pane scrolls first and the window takes over at its end', () => {
-	// An inner pane sitting on the bottom edge of the window, and the window behind it.
 	const inner = fakePane(
 		{left: 0, top: 400, right: SIZE, bottom: SIZE},
 		{x: 0, y: 200},
@@ -229,7 +220,6 @@ test('the innermost pane scrolls first and the window takes over at its end', ()
 });
 
 test('a pane whose far edge lies at the window edge does not pull against the window', () => {
-	// The pane ends at y=14, so a pointer at y=12 is in its bottom strip and in the window's top strip.
 	const inner = fakePane(
 		{left: 0, top: -600, right: SIZE, bottom: 14},
 		{x: 0, y: 900},
@@ -348,7 +338,6 @@ test('ordinary input after a drag that never reported its end stops the scroll',
 test('leaving the window stops the scroll but moving between elements does not', () => {
 	const {frames, source, stopWatching} = watched();
 	fire(source, 'dragover', {clientX: 500, clientY: SIZE - 4});
-	// An element change inside the page: a related element, or a point away from the edges.
 	fire(source, 'dragleave', {clientX: 500, clientY: 500, relatedTarget: null});
 	fire(source, 'dragleave', {
 		clientX: 500,

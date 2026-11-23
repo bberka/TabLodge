@@ -10,9 +10,6 @@ type Entry = {
 	updatedAt?: number;
 };
 
-/**
-A library the way tests seed and read it: the shape the single `tablodge.state` entry had.
-*/
 export type Library = {
 	schemaVersion?: number;
 	groups?: Entry[];
@@ -34,10 +31,6 @@ type StoredIndex = {
 	updatedAt: number;
 };
 
-/**
-The stored library in the old single entry's shape, whichever layout it is in: the index plus its records, or the
-old entry as it is.
-*/
 export function logicalState(
 	storage: Record<string, unknown>,
 ): Library | undefined {
@@ -61,10 +54,6 @@ export function logicalState(
 	});
 }
 
-/**
-The fixture stored the way the worker stores a library: an index and one key per session. A fixture that the
-layout cannot hold (a session without an id, two with the same id) is left to stay in the old single entry.
-*/
 export function recordsLayout(seed: Library): Record<string, unknown> {
 	const groups = seed.groups ?? [];
 	const ids = new Set<string>();
@@ -123,9 +112,6 @@ export function recordsLayout(seed: Library): Record<string, unknown> {
 	};
 }
 
-/**
-Replaces the stored library with `seed`, the way a test edits it after the worker started: per-record when the layout can hold it.
-*/
 export function storeLibrary(storage: Record<string, unknown>, seed: Library) {
 	for (const key of Object.keys(storage)) {
 		if (
@@ -151,10 +137,6 @@ export function storeLibrary(storage: Record<string, unknown>, seed: Library) {
 	);
 }
 
-/**
-Copies a value with every object's keys in sorted order, which is how `chrome.storage` hands values back.
-Mocks use it so a checksum that depends on key order fails here and not in a real browser.
-*/
 export function sortKeysDeep<T>(value: T): T {
 	if (Array.isArray(value)) {
 		return value.map((item: unknown) => sortKeysDeep(item)) as T;

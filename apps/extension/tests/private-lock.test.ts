@@ -26,11 +26,6 @@ const PREFIX = 'tablodge.private.';
 const CONFIG_KEY = `${PREFIX}config`;
 const password = {value: 'correct horse battery'} as const;
 
-/**
-Two in-memory storage areas and a clock, shaped like chrome.storage.local and chrome.storage.session.
-`failSetAfter` lets that many local writes through, then every later one throws: the browser stopping mid pass.
-With `windows`, the lock also watches the private windows: `control.windows` is the list the browser reports.
-*/
 function createEnv(seed: Record<string, unknown> = {}, windows?: number[]) {
 	const local = new Map<string, unknown>(Object.entries(structuredClone(seed)));
 	const session = new Map<string, unknown>();
@@ -134,7 +129,6 @@ test('a sealed value opens only with its key and its storage name', async () => 
 		(await failure(openValue(key, 'tablodge.trash', sealed))).code,
 		'damaged',
 	);
-	// Plain values pass through the reader untouched.
 	assert.deepEqual(await readStored(key, 'x', {plain: true}), {plain: true});
 	assert.equal(JSON.stringify(sealed).includes('two'), false);
 });
@@ -164,7 +158,6 @@ test('an older lock record that says pin still opens with its short number, and 
 	const {env, local} = createEnv(library);
 	const lock = createPrivateLock(env);
 	await lock.enable({value: '2468'});
-	// What an older version stored: the same record, with the kind it used to write.
 	const record = parseLockRecord(local.get(LOCK_RECORD_KEY));
 	assert.equal(record?.kind, 'password');
 	local.set(LOCK_RECORD_KEY, {...record, kind: 'pin'});
@@ -173,7 +166,6 @@ test('an older lock record that says pin still opens with its short number, and 
 	assert.equal((await failure(lock.unlock('1357'))).code, 'wrong-credential');
 	await lock.unlock('2468');
 	assert.ok((await lock.gate())?.key);
-	// Changing it writes the one kind, whatever the record said before.
 	await lock.changeCredential('2468', {value: 'a much longer password'});
 	assert.equal(parseLockRecord(local.get(LOCK_RECORD_KEY))?.kind, 'password');
 });
@@ -243,10 +235,8 @@ test('lock now and a restart that loses the session drop the key; the credential
 	assert.equal((await lock.gate())?.key, null);
 	await lock.unlock(password.value);
 	assert.ok((await lock.gate())?.key);
-	// A worker that restarts while unlocked finds the key in the session store without asking again.
 	const restarted = createPrivateLock(env);
 	assert.ok((await restarted.gate())?.key);
-	// A browser restart empties the session store.
 	session.clear();
 	assert.equal((await createPrivateLock(env).gate())?.key, null);
 });
@@ -277,7 +267,6 @@ test('the idle timeout locks, activity postpones it, and 0 never times out', asy
 	await lock.enable(password, 5);
 	clock.now += 4 * 60_000;
 	assert.ok((await lock.gate())?.key);
-	// The read at minute 4 counted as activity, so minute 8 is still inside the window.
 	clock.now += 4 * 60_000;
 	assert.ok((await lock.gate())?.key);
 	clock.now += 5 * 60_000;
@@ -325,7 +314,6 @@ test('repeated wrong entries lock the form for a while, and a right entry resets
 	await lock.unlock(password.value);
 	assert.ok((await lock.gate())?.key);
 	await lock.lock();
-	// The count started over.
 	assert.equal(
 		(await failure(lock.unlock('wrong wrong wrong'))).code,
 		'wrong-credential',
@@ -343,7 +331,6 @@ test('writes made while sealing is under way stay readable, and a pass cut off a
 		const first = createPrivateLock(env);
 		await first.enable(password).catch(() => undefined);
 		control.failSetAfter = Infinity;
-		// The worker restarted: a new controller, the same stores.
 		const restarted = createPrivateLock(env);
 		const record = parseLockRecord(local.get(LOCK_RECORD_KEY));
 		if (record) {
@@ -351,10 +338,8 @@ test('writes made while sealing is under way stay readable, and a pass cut off a
 				record.state === 'encrypting' || record.state === 'encrypted',
 				true,
 			);
-			// The key is in memory when the pass stopped (or enable stopped before writing anything).
 			assert.equal(await restarted.resume(), record.state === 'encrypting');
 		} else {
-			// Cut off before the record existed: nothing was sealed, and no lock is set.
 			assert.deepEqual(sealedKeys(local), []);
 			continue;
 		}
@@ -439,7 +424,6 @@ test('a removal cut off at any write resumes and never loses a value', async () 
 		await lock.disable(password.value).catch(() => undefined);
 		control.failSetAfter = Infinity;
 		const restarted = createPrivateLock(env);
-		// Mixed sealed and plain values are all readable with the key.
 		const gate = await restarted.gate();
 		if (gate?.key) {
 			for (const key of dataKeys) {
@@ -453,7 +437,6 @@ test('a removal cut off at any write resumes and never loses a value', async () 
 
 		await restarted.resume();
 		if (parseLockRecord(local.get(LOCK_RECORD_KEY))?.state === 'encrypted') {
-			// Stopped before the removal began: the lock simply stays on.
 			assert.deepEqual(sealedKeys(local), dataKeys.toSorted());
 			continue;
 		}
@@ -561,8 +544,6 @@ test('a damaged lock record is reported, never treated as no lock', async () => 
 	assert.equal((await failure(lock.unlock('anything at all'))).code, 'damaged');
 });
 
-// Private windows ---------------------------------------------------------------------------------------------------
-
 test('closing every tracked window locks; one that remains keeps the library open and adopts new ones', () => {
 	const cases: Array<{
 		name: string;
@@ -651,7 +632,6 @@ test('unlocking tracks the private windows, and closing the only one locks befor
 	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
 	assert.equal((await lock.status()).locked, true);
 
-	// The next private window sees the lock screen, and unlocking tracks that window only.
 	control.windows = [12];
 	assert.equal((await lock.gate())?.key, null);
 	await lock.unlock(password.value);
@@ -679,10 +659,8 @@ test('a restarted worker keeps the library open while a tracked window exists, a
 	const restarted = createPrivateLock(env);
 	assert.ok((await restarted.gate())?.key);
 	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [1, 6]);
-	// Window 1 closed while the worker slept; window 6 stays, and it was tracked at the last wake.
 	control.windows = [6];
 	assert.ok((await createPrivateLock(env).gate())?.key);
-	// Both closed while it slept, and window 9 opened: nothing tracked remains.
 	control.windows = [9];
 	assert.equal((await createPrivateLock(env).gate())?.key, null);
 });
@@ -692,7 +670,6 @@ test('a window that opens as the last one closes cannot inherit the unlocked lib
 		const {env, session, control} = createEnv(library, [1]);
 		const lock = createPrivateLock(env);
 		await lock.enable(password);
-		// Window 1 closed while the worker slept and window 2 just opened.
 		control.windows = [2];
 		if (order === 'event first') {
 			await lock.lockWhenWindowsClosed();
@@ -718,10 +695,8 @@ test('a window close the browser still lists is ignored, so a worker that is awa
 	const {env, session} = createEnv(library, [1, 2]);
 	const lock = createPrivateLock(env);
 	await lock.enable(password);
-	// Window 2 closed but is still listed: it stops counting, window 1 keeps the library open.
 	assert.equal(await lock.lockWhenWindowsClosed(2), false);
 	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [1]);
-	// Window 1 closes the same way, and nothing is left.
 	assert.equal(await lock.lockWhenWindowsClosed(1), true);
 	assert.equal(session.has(LOCK_SESSION_KEY), false);
 	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
@@ -749,7 +724,6 @@ test('Lock now clears the tracked windows, and a lock without a window list neve
 	await lock.lock();
 	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
 
-	// A regular worker reads the same status but cannot see private windows.
 	const plain = createEnv(library);
 	const regular = createPrivateLock(plain.env);
 	await regular.enable(password);

@@ -142,10 +142,8 @@ test('encrypting refuses a credential outside the limits', async () => {
 	await failure(encryptBytes(plain, {value: ''}));
 	await failure(encryptBytes(plain, {value: '123'}));
 	await failure(encryptBytes(plain, {value: 'x'.repeat(129)}));
-	// The one rule is 4 to 128 characters of any kind, so a short word or a number-only password is accepted.
 	await encryptBytes(plain, {value: 'abcd'});
 	await encryptBytes(plain, {value: '12345678'});
-	// A value that already opened something is passed on without the new-password rule.
 	await encryptBytes(plain, {value: 'éé', verified: true});
 	await failure(encryptBytes(plain, {value: 'éé'}));
 });

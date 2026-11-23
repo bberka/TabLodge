@@ -2,10 +2,6 @@ import {resolve} from 'node:path';
 import {build} from 'vite-plus';
 import {scriptConfig} from '../scripts/vite-shared';
 
-/**
-The service worker as the browser runs it: one classic script with its `src/app` imports bundled in. Built
-in memory, once per test file, so the tests exercise the same code as `vp run build`.
-*/
 export async function buildWorkerSource(): Promise<string> {
 	const config = scriptConfig({
 		entry: resolve(import.meta.dirname, '..', 'shell', 'service-worker.ts'),

@@ -51,7 +51,6 @@ test('a source column is never the default, even as the first or only column', (
 		defaultBookmarkColumnId([column('source-reddit')], []),
 		undefined,
 	);
-	// An id this version does not know as a source is a plain column.
 	assert.equal(
 		defaultBookmarkColumnId(
 			[column('source-someday')],

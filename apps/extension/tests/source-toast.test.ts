@@ -3,7 +3,6 @@ import {parseHTML} from 'linkedom';
 import {afterEach, beforeEach, test, vi} from 'vite-plus/test';
 import {showSourceToast, type ToastAction} from '../src/app/source-toast';
 
-// The toast's shadow root is closed, so the test keeps the root attachShadow hands out.
 let root: ParentNode & {querySelectorAll: ParentNode['querySelectorAll']};
 let document: Document;
 

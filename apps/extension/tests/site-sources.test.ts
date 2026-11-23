@@ -97,19 +97,12 @@ const fixture = (name: string) =>
 		'utf8',
 	);
 
-/**
-A parsed fixture at `url`: linkedom has no address of its own, and the YouTube reader reads the watched video from it.
-*/
 function load(name: string, url: string) {
 	const {window, document} = parseHTML(fixture(name));
 	Object.defineProperty(document, 'location', {value: new URL(url)});
 	return {window, document};
 }
 
-/**
-A fixture page at `url` with a reader listening the way the content script does: on the window, in the capture
-phase. `click(id)` clicks an element and returns what the reader made of it.
-*/
 function page(
 	name: string,
 	url: string,
@@ -136,7 +129,6 @@ function page(
 		element,
 		click(id: string): SourceRead {
 			last = undefined;
-			// An svg element has no click(); a real click on an icon still reaches the window.
 			element(id).dispatchEvent(new window.Event('click', {bubbles: true}));
 			return last;
 		},
@@ -231,7 +223,6 @@ test('the in-page toast uses the same tokens as the extension stylesheet', () =>
 	assert.equal(TOAST_TOKENS.radius, `${Number.parseFloat(radius) * 16}px`);
 });
 
-// WCAG contrast between two `rgb(r g b)` colors.
 function contrast(...colors: string[]) {
 	const [high, low] = colors
 		.map((color) => {
@@ -264,7 +255,6 @@ test('the in-page toast follows the theme and accent chosen in Settings', () => 
 		),
 		{theme: 'light', accent: 'default'},
 	);
-	// A private window shows its own accent, or the regular one when it is set to the same.
 	const config = (accent: string) => ({'tablodge.private.config': {accent}});
 	assert.equal(
 		toastAppearance({uiAccent: 'green', ...config('rose')}, incognito).accent,
@@ -289,7 +279,6 @@ test('the in-page toast follows the theme and accent chosen in Settings', () => 
 		primary: 'rgb(98 84 215)',
 	});
 	assert.equal(toastColors('dark', [21, 128, 61]).background, 'rgb(17 17 20)');
-	// These grays read on the dark page but not on the toast's lighter background, so they are lifted to 4.5:1.
 	for (const gray of [121, 122]) {
 		const colors = toastColors('dark', [gray, gray, gray]);
 		assert.ok(
@@ -298,7 +287,6 @@ test('the in-page toast follows the theme and accent chosen in Settings', () => 
 		);
 	}
 
-	// Amber is too light to read on the light page, so it darkens there, as the pages' accent does.
 	assert.notEqual(
 		toastColors('light', [217, 119, 6]).primary,
 		'rgb(217 119 6)',
@@ -432,7 +420,6 @@ test('stored source state is read defensively: off unless saved as on', () => {
 	});
 	assert.deepEqual(state.sites.reddit, {enabled: false});
 	assert.equal('extra' in state.sites, false);
-	// Choices are kept as they came, sites this version does not know included, so they sync back unchanged.
 	assert.deepEqual(state.choices, {
 		youtube: {},
 		mastodon: {columnId: 'c', later: 1},
@@ -445,7 +432,6 @@ test('choices from another device are applied unless this browser changed the si
 		sources: {youtube: {enabled: true}, x: {enabled: true}},
 		choices: {youtube: {}, github: {columnId: 'c'}},
 	});
-	// The round read YouTube, X, and GitHub on; X was removed here before the apply.
 	const was = new Map<string, unknown>([
 		['youtube', {}],
 		['x', {}],
@@ -522,7 +508,6 @@ test('a site is on while it has a choice, and runs here only while enabled here'
 			keepOffSite: true,
 		},
 	);
-	// On in another browser: wanted, not enabled here. A save mode the site does not have is not read.
 	assert.deepEqual(
 		statuses.find(({id}) => id === 'medium'),
 		{id: 'medium', enabled: false, wanted: true},
@@ -531,7 +516,6 @@ test('a site is on while it has a choice, and runs here only while enabled here'
 		statuses.find(({id}) => id === 'x'),
 		{id: 'x', enabled: false, wanted: false},
 	);
-	// Changing one field keeps the others as stored.
 	const mediumSource = siteSourceById('medium')!;
 	withChoice(state, mediumSource, 'columnId', 'picked');
 	assert.deepEqual(state.choices.medium, {
@@ -739,7 +723,6 @@ test('Reddit: Save inside the overflow menu shadow root is still found', () => {
 	item.setAttribute('role', 'menuitem');
 	item.textContent = 'Save';
 	root.append(item);
-	// The browser's composed path for a click inside the shadow root: the item, the root, then the host's ancestors.
 	const path: EventTarget[] = [item, root];
 	for (let node: Element | null = menu; node; node = node.parentElement) {
 		path.push(node);
@@ -929,7 +912,6 @@ test('Instagram: a post in a dialog or on its own page saves the post at the add
 			},
 		},
 	);
-	// The grid behind the dialog is never read as the post.
 	assert.deepEqual(
 		instagram('instagram-post.html', 'https://www.instagram.com/natgeo/').click(
 			'dialog-save',
@@ -1175,7 +1157,6 @@ test('dev.to: Save on a feed card saves that article, wherever on the icon the c
 		assert.deepEqual(devto('devto-feed.html').click(id), expected, id);
 	}
 
-	// A server drawn card, with a tracking parameter on its link.
 	assert.deepEqual(devto('devto-feed.html').click('server-save-initial'), {
 		kind: 'save',
 		link: {
@@ -1377,9 +1358,7 @@ test('Bluesky: the save button and the menu item save the post; removing saves n
 		},
 	});
 	assert.equal(site.click('feed-unsave'), undefined);
-	// Another language's label is not taken for a save, so removing a post there saves nothing.
 	assert.equal(site.click('feed-unsave-fr'), undefined);
-	// The thread's main post is the page; quoted posts after its text are not, even one by the same author.
 	assert.deepEqual(site.click('main-save'), {
 		kind: 'save',
 		link: {
@@ -1394,7 +1373,6 @@ test('Bluesky: the save button and the menu item save the post; removing saves n
 			title: 'A reply.',
 		},
 	});
-	// The menu opens outside the post, so it saves the post clicked last.
 	site.click('feed-menu');
 	assert.deepEqual(site.click('menu-save'), {
 		kind: 'save',
@@ -1454,7 +1432,6 @@ test('Spotify: saving the album, a song row, or the playing song; a saved one sa
 		},
 	});
 	assert.equal(site.click('row-saved'), undefined);
-	// An episode card on the page saves the episode, not the page.
 	assert.deepEqual(site.click('episode-save'), {
 		kind: 'save',
 		link: {
@@ -1462,7 +1439,6 @@ test('Spotify: saving the album, a song row, or the playing song; a saved one sa
 			title: 'Episode one',
 		},
 	});
-	// The playing song, not the album page it is played from.
 	assert.deepEqual(site.click('player-save'), {
 		kind: 'save',
 		link: {
@@ -1546,7 +1522,6 @@ test('Goodreads: Want to Read on the book page and on a list row; other shelves 
 	};
 	assert.deepEqual(site.click('page-wtr'), {kind: 'save', link: book});
 	assert.equal(site.click('page-choose'), undefined);
-	// The row's own book, not the page's.
 	assert.deepEqual(site.click('row-wtr'), {
 		kind: 'save',
 		link: {
@@ -1574,7 +1549,6 @@ test('Medium: the story bookmark saves the story, not a story it links to; a car
 			title: 'A Recipe for Training Neural Networks',
 		},
 	});
-	// A click on the button around the icon, not on the icon.
 	assert.deepEqual(site.click('card-save'), {
 		kind: 'save',
 		link: {
@@ -1598,7 +1572,6 @@ test('Substack: Save on a card or a post page; Unsave saves nothing', () => {
 		},
 	});
 	assert.equal(site.click('card-unsave'), undefined);
-	// A relative link keeps the publication's host.
 	assert.deepEqual(site.click('card-relative'), {
 		kind: 'save',
 		link: {
@@ -1619,12 +1592,10 @@ test('deleting a column asks to stop the site that saves into it, here or in ano
 	const columns = [{id: 'source-reddit'}, {id: 'mine'}];
 	const on = {id: 'reddit', enabled: true, wanted: true};
 	assert.equal(sourceSavingInto('source-reddit', columns, [on])?.id, 'reddit');
-	// On in another browser only: its saves there would make the column again.
 	assert.equal(
 		sourceSavingInto('source-reddit', columns, [{...on, enabled: false}])?.id,
 		'reddit',
 	);
-	// The site is off everywhere, or Settings sends its saves to another column that still exists.
 	assert.equal(
 		sourceSavingInto('source-reddit', columns, [
 			{...on, enabled: false, wanted: false},
@@ -1635,12 +1606,10 @@ test('deleting a column asks to stop the site that saves into it, here or in ano
 		sourceSavingInto('source-reddit', columns, [{...on, columnId: 'mine'}]),
 		undefined,
 	);
-	// A picked column that was deleted sends saves back to the source column.
 	assert.equal(
 		sourceSavingInto('source-reddit', columns, [{...on, columnId: 'gone'}])?.id,
 		'reddit',
 	);
-	// Plain columns, and source ids this version does not know, never ask.
 	assert.equal(sourceSavingInto('mine', columns, [on]), undefined);
 	assert.equal(sourceSavingInto('source-mastodon', columns, [on]), undefined);
 });
@@ -1657,7 +1626,6 @@ test('the Reddit saved page reader lists the saved posts in the page order, on n
 			link.url,
 			link.title,
 		]);
-	// The feed only: a post in the sidebar is not a save, and a card without a permalink is skipped.
 	assert.deepEqual(
 		urls('reddit-saved-new.html', 'https://www.reddit.com/user/someone/saved/'),
 		[
@@ -1675,7 +1643,6 @@ test('the Reddit saved page reader lists the saved posts in the page order, on n
 			],
 		],
 	);
-	// Saved comments are read on old Reddit; a promoted row is not a save.
 	assert.deepEqual(
 		urls('reddit-saved-old.html', 'https://old.reddit.com/user/someone/saved/'),
 		[
@@ -1690,7 +1657,6 @@ test('the Reddit saved page reader lists the saved posts in the page order, on n
 			['https://www.reddit.com/r/pics/comments/4nsfw0/a_picture/', 'A picture'],
 		],
 	);
-	// The same markup anywhere else on Reddit is not the saved list.
 	assert.equal(
 		urls('reddit-saved-new.html', 'https://www.reddit.com/user/someone/'),
 		undefined,
@@ -1748,10 +1714,6 @@ test('Not now answers ask again only for an item not answered yet, and the store
 	);
 });
 
-/**
-What a saved page reader lists on a fixture at `url`, as [address, title] pairs, after checking that each address
-is already the one a click-save stores for it (the site's canonical address).
-*/
 function savedPage(
 	read: SavedPageReader,
 	id: SiteSourceId,
@@ -1793,7 +1755,6 @@ test("the GitHub stars reader lists the signed-in user's own stars only, without
 		assert.deepEqual(read('github-stars-list.html', url), [stars[0]], url);
 	}
 
-	// Someone else's stars are public, but not the user's saves; the profile's other tabs are not stars.
 	for (const url of [
 		'https://github.com/someone-else?tab=stars',
 		'https://github.com/stars/someone-else',
@@ -1803,7 +1764,6 @@ test("the GitHub stars reader lists the signed-in user's own stars only, without
 		assert.equal(read('github-stars.html', url), undefined, url);
 	}
 
-	// Signed out, nothing is the user's own.
 	const {document} = load(
 		'github-stars.html',
 		'https://github.com/octo-me?tab=stars',
@@ -1845,7 +1805,6 @@ test('the X reader lists the bookmarked posts, not a post one of them quotes', (
 test('the Instagram reader lists the saved posts and reels of a saved page', () => {
 	const read = (url: string) =>
 		savedPage(readInstagramSavedPage, 'instagram', 'instagram-saved.html', url);
-	// The worker drops the repeat; the reader keeps the page as it is.
 	assert.deepEqual(read('https://www.instagram.com/someone/saved/all-posts/'), [
 		[
 			'https://www.instagram.com/p/DfAAAAAAAAA/',
@@ -1859,14 +1818,10 @@ test('the Instagram reader lists the saved posts and reels of a saved page', () 
 			?.length,
 		3,
 	);
-	// The collections overview and the profile are not a list of saves.
 	assert.equal(read('https://www.instagram.com/someone/saved/'), undefined);
 	assert.equal(read('https://www.instagram.com/someone/'), undefined);
 });
 
-/**
-A fixture page with the content script's listener and a site that saves on a click, as a site's own handlers do. `click(id)` sends a trusted click (Shift held when asked) and says who acted on it.
-*/
 function keepOffPage(
 	name: string,
 	url: string,
@@ -1884,8 +1839,6 @@ function keepOffPage(
 			reads.push({found, kept});
 		},
 	});
-	// Linkedom calls window listeners last and in the order added, whatever the phase, so the site's handler goes on
-	// the window after the content script's; in a browser the capture listener runs before any site handler.
 	window.addEventListener('click', (event) => {
 		handled.push((event.target as Element).closest('[id]')?.id ?? '');
 	});
@@ -1893,7 +1846,6 @@ function keepOffPage(
 		const element = document.querySelector(`#${id}`);
 		assert.ok(element, `fixture has #${id}`);
 		const event = new window.Event('click', {bubbles: true, cancelable: true});
-		// Linkedom marks no event trusted; the browser marks the user's own clicks.
 		Object.defineProperties(event, {
 			isTrusted: {value: trusted},
 			shiftKey: {value: shiftKey},
@@ -1938,7 +1890,6 @@ test('Save to TabLodge only: X Bookmark, button or Share menu, never reaches the
 		menu.last?.kept?.link.url,
 		'https://x.com/alice/status/1850000000000000001',
 	);
-	// Share opened the menu on the site; neither save reached it.
 	assert.deepEqual(site.handled, ['share']);
 });
 
@@ -1989,7 +1940,6 @@ test('Also save on the site replays the click to the site only, unless the contr
 	assert.ok(kept);
 	const reads = site.reads.length;
 	assert.equal(kept.replay(), true);
-	// The icon has no click method, so the element around it is clicked, inside the same button.
 	assert.deepEqual(site.handled, ['bookmark']);
 	assert.equal(site.reads.length, reads, 'the replay is not read again');
 
@@ -2000,10 +1950,6 @@ test('Also save on the site replays the click to the site only, unless the contr
 	assert.equal(menu.replay(), false);
 });
 
-/**
-Every site with Save to TabLodge only, on its fixture: `before` are the clicks that open the menu or dialog holding
-the save, which the site gets as usual, and `save` is the save control.
-*/
 const KEEP_OFF_SITES: Array<{
 	id: SiteSourceId;
 	page: string;

@@ -11,7 +11,6 @@ import {
 	watchSystemAccent,
 } from '../src/shared/accents';
 
-// A minimal stand-in for the page: the root's inline variables and the color AccentColor resolves to.
 function fakePage(initial?: string) {
 	const properties = new Map<string, string>();
 	const listeners = new Map<string, () => void>();
@@ -100,7 +99,6 @@ test('the system accent uses the resolved AccentColor', () => {
 		channels(page.properties.get('--brand-primary-light')),
 		[200, 30, 60],
 	);
-	// Too dark for the dark page, so that variable is lightened.
 	const dark = channels(page.properties.get('--brand-primary-dark'));
 	assert.ok(dark[0] > 200);
 	assert.ok(dark[1] > 30);
@@ -112,7 +110,6 @@ test('the system accent falls back to the stylesheet when there is none or only 
 	assert.ok(page.properties.size > 0);
 	applyAccent('system');
 	assert.equal(page.properties.size, 0);
-	// Chromium reports this blue when the platform has no accent to give.
 	page.accentColor = 'rgb(0, 117, 255)';
 	applyAccent('green');
 	applyAccent('system');
@@ -122,7 +119,6 @@ test('the system accent falls back to the stylesheet when there is none or only 
 test('a custom accent is made legible and gets a readable foreground', () => {
 	const page = fakePage();
 	applyAccent('#ffff00');
-	// Pure yellow is unreadable on the light page, so it is darkened there but kept on the dark page.
 	const light = channels(page.properties.get('--brand-primary-light'));
 	assert.ok(light[0] < 255);
 	assert.ok(light[2] < 255);
@@ -184,7 +180,6 @@ test('a column color gets one shade for the light page and one for the dark page
 	assert.equal(columnColorShades(undefined), undefined);
 	const slate = columnColorShades('slate');
 	assert.ok(slate);
-	// Slate is too dark to read on the dark page as it is, so its dark shade is lighter than its light shade.
 	const brightness = (rgb: number[]) => rgb[0] + rgb[1] + rgb[2];
 	assert.ok(brightness(slate.dark) > brightness(slate.light));
 	assert.equal(columnColorShades('#ffffff')?.light.length, 3);

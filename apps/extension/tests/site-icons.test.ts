@@ -94,9 +94,6 @@ test('stored icons are validated on read', () => {
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 const SERVER = {url: 'https://sync.example.test', token: 'token'};
 
-/**
-A server icon client over an in-memory store, with every request it sends logged.
-*/
 function serverIconsWith(
 	answer: (host: string) => Response | Promise<Response>,
 	overrides: Partial<ServerIconDeps> = {},

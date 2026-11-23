@@ -62,7 +62,6 @@ test('linkDestination strips tracking parameters only when the setting is on', a
 	assert.equal(linkDestination(tracked, settings('new', 'new')), tracked);
 });
 
-// Dashboard: a plain click can show a menu or do nothing.
 test('dashboard rule: each bookmark and saved tab setting value', async () => {
 	const {resolveLinkTarget} = await load();
 	for (const value of ['none', 'current', 'new', 'menu'] as const) {
@@ -77,7 +76,6 @@ test('dashboard rule: each bookmark and saved tab setting value', async () => {
 	}
 });
 
-// Side panel: a click can do nothing, and with no menu to show 'menu' opens the active tab.
 test('side panel rule: menu without a menu opens the current tab', async () => {
 	const {resolveLinkTarget} = await load();
 	assert.equal(
@@ -90,7 +88,6 @@ test('side panel rule: menu without a menu opens the current tab', async () => {
 	);
 });
 
-// Finder: Enter always opens something.
 test('finder rule: menu and none still open a link', async () => {
 	const {resolveLinkTarget} = await load();
 	const opts = {canMenu: false, canIdle: false};

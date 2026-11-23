@@ -73,9 +73,6 @@ const device = (id: string, store = emptyStore()): Device => ({
 	state: newSyncState(id),
 });
 
-/**
-One sync round the way the worker runs it: capture, pull, push, then rewrite the library if needed.
-*/
 function sync(target: Device, log: ChangeLog, now: number) {
 	let records = splitLibrary(target.store);
 	let {state} = target;
@@ -157,7 +154,6 @@ test('a session saved on one device appears on the other, in order and with its 
 	assert.deepEqual(sessionNames(b.store), ['work', 'home']);
 	assert.deepEqual(tabIds(b.store, 'work'), ['t1', 't2']);
 
-	// A move and a delete on b travel back as single record changes.
 	const [work, home] = b.store.groups;
 	b.store = {...b.store, groups: [home, {...work, tabs: [work.tabs[1]]}]};
 	sync(b, log, T0 + 3000);
@@ -225,7 +221,6 @@ test('a new device takes the server copy of shared records and adds its own', ()
 	};
 	sync(a, log, T0 + 1000);
 
-	// B restored an old backup holding the same session, and has one of its own.
 	const b = device('b', {
 		...emptyStore(),
 		groups: [session('work', ['t1']), session('mine', [])],
@@ -266,7 +261,6 @@ test('a device back after the tombstones were purged drops what was deleted mean
 	sync(a, log, T0 + DAY);
 	log.purge(T0 + 100 * DAY);
 
-	// B was offline the whole time, and saved a new session meanwhile.
 	b.store = {...b.store, groups: [...b.store.groups, session('offline', [])]};
 	sync(b, log, T0 + 101 * DAY);
 	assert.deepEqual(sessionNames(b.store), ['kept', 'offline']);
@@ -314,7 +308,6 @@ test('a change waits for the record it belongs in, and is released if that recor
 	({state, records} = receive(state, records, page([link], 1), T0));
 	assert.equal(records.has('bookmark:link'), false);
 	assert.equal(state.held?.length, 1);
-	// Nothing the device sends treats the waiting bookmark as deleted.
 	assert.ok(!capture(state, records, T0).outbox.includes('bookmark:link'));
 
 	const column = {
@@ -423,7 +416,6 @@ test('two devices that create the same source column end with one', () => {
 	sync(a, log, T0);
 	sync(b, log, T0);
 
-	// Both save on Reddit before either has synced the other's column.
 	a.store = {
 		...a.store,
 		bookmarkColumns: [redditColumn(T0 + 1)],
@@ -458,7 +450,6 @@ test('a source column deleted on one device comes back on it when another saves 
 	sync(a, log, T0 + 3000);
 	assert.deepEqual(columnIds(a.store), []);
 
-	// The next save on a makes the column again under the same id, over the tombstone.
 	a.store = {
 		...a.store,
 		bookmarkColumns: [redditColumn(T0 + 4000)],
@@ -488,7 +479,6 @@ test('a source column record has only the fields older versions know, so they ke
 		'isDefault',
 		'name',
 	]);
-	// An older version that renames it writes the same id back, so the column stays the source column.
 	const renamed = normalizeBookmarkColumn({
 		...(record.value as object),
 		name: 'Saved on Reddit',
@@ -722,7 +712,6 @@ test('a pulled tag record is not sent back, and a malformed one is dropped', () 
 	sync(a, log, T0);
 	sync(b, log, T0 + 1000);
 	assert.deepEqual(b.store.bookmarks[0].tags, ['rust', 'web']);
-	// The pulled library, read back as this device's own, holds no edit to send.
 	const again = splitLibrary(structuredClone(b.store));
 	assert.deepEqual(capture(b.state, again, T0 + 2000).outbox, []);
 

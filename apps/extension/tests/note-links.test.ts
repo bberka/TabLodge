@@ -89,7 +89,6 @@ describe('notePieces', () => {
 			pieces[1].kind === 'passage' && pieces[1].name,
 			'Go to passage: the second-oldest European capital…',
 		);
-		// Putting the pieces back together gives the stored note, unchanged.
 		assert.equal(
 			pieces
 				.map((piece) => (piece.kind === 'text' ? piece.text : piece.url))
@@ -132,7 +131,6 @@ describe('NoteText', () => {
 		assert.match(html, /aria-label="Go to passage: It is also the centre of…"/);
 		assert.match(html, />Go to passage<\/a>/);
 		assert.doesNotMatch(html, />https:/);
-		// The link sits inline in the one clamped paragraph, so a long note is still cut to its lines.
 		assert.equal(html.match(/<p /g)?.length, 1);
 	});
 
