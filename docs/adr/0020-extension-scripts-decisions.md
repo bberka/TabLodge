@@ -21,7 +21,7 @@ Status: accepted, 2026-11-23. Issue #442.
 * **The target is set per build step.** `vite-shared.ts:targetFromEnv`: `build.ts` sets it before it starts Vite, because the configs are loaded fresh each time.
 * **Chromium keeps its folder name.** `vite-shared.ts:outDirFor`: existing dev and test tooling loads that path, and a different folder gives the extension another ID and separate storage.
 * **The display name comes from the manifest.** `vite-shared.ts:appName`: HTML shells use `%APP_NAME%`, and pages read it at runtime.
-* **The minimum version is written in two manifests.** `vite-shared.ts:BUILD_TARGETS`: `minimum_chrome_version` for Chromium, `strict_min_version` for Firefox, both in `manifest-targets.ts`.
+* **The minimum version is written in two manifests.** `shell/manifest.json`: `minimum_chrome_version` for Chromium. Firefox's `strict_min_version` is set in `manifest-targets.ts`. A change to browser support updates the field and the matching build target in `vite-shared.ts:BUILD_TARGETS`.
 * **Several builds share a folder, so Vite never empties it.** `vite-shared.ts:sharedBuild`: `build.ts` clears the package folder once before building. CSS is minified with esbuild, because lightningcss (the Vite 8 default) rewrites the `color-scheme` theme rules.
 * **Icons are watched too.** `vite-shared.ts:copyStatic`: they are copied after each write and added to the watch list, so `vp run dev:chrome` picks up icon edits.
 * **The repository URL has one source.** `vite-shared.ts:writeManifest`: `homepage_url` comes from `package.json` `homepage`, adapted to the target.
@@ -57,8 +57,8 @@ No decisions were held by comments in this file beyond its usage notes, which ar
 * **Axe and keyboard checks do not judge reading order or screen reader announcements.** `run.ts` (module). The limit is in [Contributing](../CONTRIBUTING.md).
 * **Each area keeps its checks in its own module.** `run.ts` (module): the helpers they share are in `harness.ts`, `fixtures.ts`, `pages.ts`, and `evidence.ts`.
 * **Waits end as soon as their condition holds.** `run.ts:worker`: the longer limit only matters on a loaded machine.
-* **A check that never settles would hang the run.** `harness.ts:until`: a timeout stops it before the CI job does.
-* **`until` polls for up to 15 seconds.** `harness.ts:until`: the pages redraw asynchronously after each action.
+* **A check that never settles would hang the run.** `harness.ts:check`: a 3 minute limit fails that check before the CI job times out.
+* **`until` polls the condition 150 times, 100 ms apart.** `harness.ts:until`: the pages redraw asynchronously after each action. It awaits each condition without its own timeout, so the 3 minute limit in `check` is what ends a stalled one; the polling count does not give a 15 second wall clock limit.
 * **`A11Y_ONLY` repeats one check.** `harness.ts:onlyChecks`: it runs only the checks whose name contains the text.
 * **`A11Y_SHARD` splits the run.** `harness.ts:shard`: `index/total` runs every total-th check, so CI can split it. Checks run in the same order in every shard, so the split is stable.
 * **The accessibility dev fixture seeds the Board view.** `fixtures.ts:createDevFixture`: it overrides `bookmarkBoardView` to `board`. The checks were written for the Board view. The product default is Focus, and the Focus checks set up their own.
@@ -101,7 +101,7 @@ No decisions were held by comments in this file beyond its usage notes, which ar
 * **The add-on is temporary.** `firefox-driver.ts`: Firefox does not need to sign it.
 * **The add-on has a fixed UUID.** `firefox-driver.ts:UUID`: its pages have a known address, which `openExtensionPage` relies on.
 * **WebDriver cannot open `moz-extension://` pages.** `firefox-driver.ts:service`: chrome-scoped scripts can, which needs system access.
-* **The tab exists before its page loads.** `firefox-driver.ts:EVALUATE_WRAPPER`: scripts run on whatever document is there, so the wrapper waits for it.
+* **The tab exists before its page loads.** `firefox-driver.ts:openExtensionPage`: it waits for the extension protocol and document readiness. `firefox-driver.ts:EVALUATE_WRAPPER` runs its body without waiting for navigation, so a caller that evaluates after a navigation must wait through `openExtensionPage` first.
 * **Icons come from the site.** `firefox-smoke-check.ts:iconed`: the tabs showed the site's icon, so a link to a page of the same site that was never opened shows it too.
 * **Firefox has no side panel for the toolbar button.** `firefox-smoke-check.ts:popup`: the button keeps its popup.
 * **Help and the copy reader never read the library.** `page-startup-check.ts:content`: the startup check skips them when it reads the library.
