@@ -87,13 +87,14 @@ async function putStoppedSourceBack(
 		return `${on.error} Add ${stop.source.label} again in Settings › Sources.`;
 	}
 
+	const failures: string[] = [];
 	if (stop.columnId) {
 		const chosen = await send('SET_SITE_SOURCE_COLUMN', {
 			source: stop.source.id,
 			columnId: stop.columnId,
 		});
 		if (!chosen.ok) {
-			return `${stop.source.label} is on again, but not as it was: ${chosen.error}`;
+			failures.push(chosen.error);
 		}
 	}
 
@@ -103,11 +104,13 @@ async function putStoppedSourceBack(
 			keepOffSite: true,
 		});
 		if (!kept.ok) {
-			return `${stop.source.label} is on again, but not as it was: ${kept.error}`;
+			failures.push(kept.error);
 		}
 	}
 
-	return `${stop.source.label} is on again.`;
+	return failures.length === 0
+		? `${stop.source.label} is on again.`
+		: `${stop.source.label} is on again, but not as it was: ${failures.join(' ')}`;
 }
 
 export async function undoStoppedSource(

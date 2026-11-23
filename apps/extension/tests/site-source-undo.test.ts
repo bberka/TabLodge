@@ -112,6 +112,27 @@ test('a source that saved to its own column with the site save kept needs no ext
 	]);
 });
 
+test('a failed column restore still puts the save mode back and reports both failures', async () => {
+	answers.SET_SITE_SOURCE_COLUMN = {
+		ok: false,
+		error: 'That column no longer exists.',
+	};
+	answers.SET_SITE_SOURCE_KEEP_OFF = {ok: false, error: 'That source is off.'};
+	await undo('youtube', {columnId: 'reading', keepOffSite: true});
+
+	assert.deepEqual(types(), [
+		'permissions:request',
+		'RESTORE_TRASH',
+		'SET_SITE_SOURCE',
+		'SET_SITE_SOURCE_COLUMN',
+		'SET_SITE_SOURCE_KEEP_OFF',
+	]);
+	assert.equal(
+		shown[0].message,
+		'Restored to Bookmarks. YouTube Watch later is on again, but not as it was: That column no longer exists. That source is off.',
+	);
+});
+
 test('a refused access still restores the column and says the source stays off', async () => {
 	granted = false;
 	await undo('youtube');
