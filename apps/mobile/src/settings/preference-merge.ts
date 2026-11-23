@@ -1,10 +1,3 @@
-/*
-Settles the phone's synced preferences against the library's `mobileApp` setting, so that for each preference the
-latest change wins, whichever phone made it. Each synced value sits beside the time it was last changed, under
-`at.<key>`. The library merges `mobileApp` as one record, so two phones that change different preferences while offline
-would otherwise cost one of them its change. This phone compares each key with what the library holds, takes what is
-newer, and sends back what is newer here. Clocks are the phones' own, so a phone with a wrong clock can win or lose.
-*/
 import {
 	readSyncedPreferences,
 	SYNCED_KEYS,
@@ -16,9 +9,6 @@ export type ChangedAt = Record<string, number>;
 
 export const AT_PREFIX = 'at.';
 
-/**
-Stands for the library's `mobileApp` before it has one: a fresh install's empty library has no such setting until a sync brings it.
-*/
 export const NO_MOBILE_APP: MobileApp = {};
 
 const timeOf = (app: MobileApp, key: string): number => {
@@ -27,21 +17,11 @@ const timeOf = (app: MobileApp, key: string): number => {
 };
 
 export type Settled = {
-	/**
-	Values to take from the library, with the time they were changed.
-	*/
 	adopt: Partial<Preferences>;
 	adoptAt: ChangedAt;
-	/**
-	The `mobileApp` setting to write. It is the same object as `remote` when nothing here is newer.
-	*/
 	next: MobileApp;
 };
 
-/**
-Compares every synced preference here with the library's. Equal times go to the library, so phones settle on one value.
-A preference this phone never changed is never sent, and keys this version does not know stay as they are.
-*/
 export function settlePreferences(
 	library: MobileApp | undefined,
 	prefs: Preferences,

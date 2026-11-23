@@ -149,7 +149,6 @@ describe('settings from a newer version', () => {
 		const settings = normalizeSettings({heldSettings: {snapshotKeep: 50}});
 		assert.equal(settings.snapshotKeep, 50);
 		assert.deepEqual(settings.heldSettings, {});
-		// A value already saved here wins over a held one.
 		assert.equal(
 			normalizeSettings({snapshotKeep: 10, heldSettings: {snapshotKeep: 50}})
 				.snapshotKeep,

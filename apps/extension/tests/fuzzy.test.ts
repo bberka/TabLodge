@@ -158,13 +158,13 @@ const rank = (query: string, items: string[]) =>
 
 test('match types rank in a strict order', () => {
 	const ordered = [
-		'Side', // Whole text
-		'Show side', // Whole word
-		'Sidebar', // Word prefix
-		'Inside', // Inside a word
-		'Show it directly everywhere', // Initials
-		'Sunrise dock', // Letters in order in one word
-		'Hide', // Typo
+		'Side',
+		'Show side',
+		'Sidebar',
+		'Inside',
+		'Show it directly everywhere',
+		'Sunrise dock',
+		'Hide',
 	];
 	assert.deepEqual(rank('side', ordered.toReversed()), [
 		'Side',

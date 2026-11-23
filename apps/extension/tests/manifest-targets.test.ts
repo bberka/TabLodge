@@ -48,7 +48,6 @@ test('the Firefox manifest runs the worker as an event page and registers the si
 	);
 	assert.equal(manifest.side_panel, undefined);
 	assert.equal(manifest.minimum_chrome_version, undefined);
-	// Firefox has no "split" private-window mode, so the add-on stays out of private windows.
 	assert.equal(manifest.incognito, 'not_allowed');
 	assert.deepEqual(manifest.browser_specific_settings.gecko, {
 		id: GECKO_ID,
@@ -81,8 +80,6 @@ test('the Firefox manifest keeps the pages, commands and new-tab override of the
 });
 
 test('the palette overlay needs no site access: activeTab and scripting, no host permissions or content scripts', () => {
-	// Host permissions and content scripts are what make browsers warn at install or block an update until approved.
-	// The optional host permissions of Settings › Sources ask nothing at install (tests/site-sources.test.ts).
 	for (const manifest of [source, firefoxManifest()]) {
 		assert.ok(manifest.permissions.includes('activeTab'));
 		assert.ok(manifest.permissions.includes('scripting'));

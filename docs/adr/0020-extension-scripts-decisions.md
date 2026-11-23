@@ -1,4 +1,4 @@
-# 19. Extension build, packaging, and check script decisions that were code comments
+# 20. Extension build, packaging, and check script decisions that were code comments
 
 Status: accepted, 2026-11-23. Issue #442.
 
