@@ -1,8 +1,3 @@
-/*
-Applies an import to the phone's library, and builds what the phone shares and exports. The reading of other apps'
-files, and the share and export formats, are the extension's own pure code in apps/extension/src/app, so a file reads
-the same on both. Only how the result lands in the library is written here.
-*/
 import type {
 	Bookmark,
 	BookmarkColumn,
@@ -39,9 +34,6 @@ import {tagFields} from '../../../extension/src/shared/bookmark-tags';
 
 export type ImportResult = {
 	store: Store;
-	/**
-	Sessions, or bookmark columns, that received links.
-	*/
 	groups: number;
 	links: number;
 	duplicates: number;
@@ -50,9 +42,6 @@ export type ImportResult = {
 const DEFAULT_FOLDER_ID = 'unfiled';
 const DEFAULT_SESSION_NAME = 'Imported tabs';
 
-/**
-The addresses already saved for this kind of import, or deleted to the trash, which an import can skip.
-*/
 export function existingUrls(
 	store: Store,
 	kind: ImportKind,
@@ -66,9 +55,6 @@ export function existingUrls(
 	];
 }
 
-/**
-What an import would add, before it is applied.
-*/
 export function previewFor(
 	store: Store,
 	parsed: ParsedImport,
@@ -83,10 +69,6 @@ export function previewFor(
 const sameName = (a: string, b: string) =>
 	a.trim().toLowerCase() === b.trim().toLowerCase();
 
-/**
-The links of a group that are worth adding: not already saved, and not repeated within the import. Pinned tabs only come
-from the extension's own export, as in the extension.
-*/
 function freshLinks(
 	links: readonly ImportLink[],
 	seen: Set<string>,
@@ -155,7 +137,6 @@ function columnFor(
 	now: number,
 	newId: () => string,
 ): {columns: BookmarkColumn[]; id: string} {
-	// A source column is marked by its id, so it joins the column with that id or keeps the id.
 	if (sourceColumnId) {
 		if (columns.some((column) => column.id === sourceColumnId)) {
 			return {columns, id: sourceColumnId};
@@ -210,11 +191,6 @@ function columnFor(
 	};
 }
 
-/**
-Adds what a parsed file holds to the library: each session becomes a session in its folder, each bookmark folder a
-column. Links already saved or in the `trash`, or repeated in the file, are skipped unless `skipDuplicates` is off.
-Nothing is removed.
-*/
 export function importIntoStore(
 	store: Store,
 	parsed: ParsedImport,
@@ -320,9 +296,6 @@ export function importIntoStore(
 	};
 }
 
-/**
-Sessions as the groups the Share formats take.
-*/
 export function shareGroupsOf(sessions: readonly Session[]): ShareGroup[] {
 	return sessions.map((session) => ({
 		name: session.name,

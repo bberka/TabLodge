@@ -100,8 +100,6 @@ const TABS: Array<BarTab<Tab>> = [
 	},
 ];
 
-// A share that arrives this soon after the JavaScript starts launched the app, so the app can send the user back
-// to where they came from once the link is saved.
 const BOOT = Date.now();
 const COLD_MS = 6000;
 
@@ -109,18 +107,9 @@ type Draft = {
 	key: number;
 	text: string;
 	title: string;
-	/**
-	Every link in a share. More than one asks where to save them.
-	*/
 	urls: string[];
-	/**
-	The drawer for pasting or typing several links, opened from Add link.
-	*/
 	many: boolean;
 	quick: boolean;
-	/**
-	Shared words that can be saved as a quote; `asQuote` opens Save quote with them.
-	*/
 	quote?: string;
 	asQuote?: boolean;
 };
@@ -143,8 +132,6 @@ function Main() {
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
-	// An export file or a backup shared from another app opens the same sheets as Settings › Import and export. Each
-	// share replaces the last one's sheet, and a new `fileKey` starts it fresh.
 	const [sharedFile, setSharedFile] = useState<
 		| {kind: 'import'; source: ImportSource}
 		| {kind: 'backup'; source: RestoreSource}
@@ -153,20 +140,17 @@ function Main() {
 	const closeSharedFile = useCallback(() => {
 		setSharedFile(undefined);
 	}, []);
-	// A search result that leads to a session or column opens that screen.
 	const jump = usePendingJump();
 	useEffect(() => {
 		if (jump) {
 			setTab(jump.screen);
 		}
 	}, [jump]);
-	// The connect drawer is here so an empty screen and Settings can both open it.
 	const [connecting, setConnecting] = useState(false);
 	const connect = useCallback(() => {
 		setConnecting(true);
 	}, []);
 
-	// Back ends a selection first, then returns to Bookmarks from another tab, and only then leaves the app.
 	useEffect(() => {
 		const subscription = BackHandler.addEventListener(
 			'hardwareBackPress',
@@ -197,7 +181,6 @@ function Main() {
 			.then(purgeTrash)
 			.then(startPreferencesSync);
 		const subscription = AppState.addEventListener('change', (state) => {
-			// Behind other apps, the live connection and its timers stop; in front they resume and catch up.
 			if (state === 'active') {
 				void wakeSync();
 				void wakePrivate();
@@ -217,8 +200,6 @@ function Main() {
 
 	useEffect(() => startPrivateAutoLock(), []);
 
-	// A shared link opens the drawer with it filled in, an export file the import preview, and a backup Restore. A
-	// shared file is read once, and the copy the share library made of it is deleted.
 	const openingRef = useRef(0);
 	const openShare = useCallback(
 		async (outcome: ShareOutcome, quick: boolean) => {
@@ -227,7 +208,6 @@ function Main() {
 			openImport(undefined);
 			if (outcome.kind === 'refused') {
 				if (quick) {
-					// The toast stays on screen over the app the file came from.
 					ToastAndroid.show(FILE_REFUSED, ToastAndroid.LONG);
 					BackHandler.exitApp();
 				} else {
@@ -323,14 +303,11 @@ function Main() {
 			for (const path of cacheCopies(share, Paths.cache.uri)) {
 				try {
 					new File(path).delete();
-				} catch {
-					// Already gone; the system clears the cache in any case.
-				}
+				} catch {}
 			}
 		});
 	}, [hasShareIntent, shareIntent, resetShareIntent, openShare]);
 
-	// A Quick Settings tile opens the app at tablodge://save or tablodge://search, always on the regular library.
 	const openTile = useCallback(async (route: TileRoute) => {
 		setView('regular');
 		setTab('bookmarks');
@@ -340,7 +317,6 @@ function Main() {
 			return;
 		}
 
-		// A copied link fills the field, with any words around it as the title; anything else leaves it empty.
 		const quick = Date.now() - BOOT < COLD_MS;
 		const parts = splitShared(await readClipboard());
 		setDraft((current) => ({
@@ -371,7 +347,6 @@ function Main() {
 				return;
 			}
 
-			// The Bookmarks widget's header opens its column, which the widget only ever takes from the regular library.
 			const columnId = parseColumnRoute(url);
 			if (columnId === undefined) {
 				return;
@@ -440,7 +415,6 @@ function Main() {
 	const finish = (saved?: string) => {
 		setOpen(false);
 		if (saved) {
-			// The forms say what happened in full (save-feedback.ts), so every save reads the same.
 			if (Platform.OS === 'android' && draft.quick) {
 				ToastAndroid.show(saved, ToastAndroid.SHORT);
 			} else {
@@ -448,7 +422,6 @@ function Main() {
 			}
 		}
 
-		// Opened by a share: go back to the app the link came from.
 		if (draft.quick) {
 			setTimeout(() => {
 				BackHandler.exitApp();

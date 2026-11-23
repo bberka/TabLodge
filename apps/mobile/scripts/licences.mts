@@ -1,12 +1,3 @@
-// Writes src/about/licences.generated.json, the data behind Settings › Open source licences, from what the release
-// build really contains. Run with `pnpm run mobile:licences` before bundling; the APK scripts and workflows do.
-//
-//   node scripts/licences.mts            the JavaScript bundle's packages, plus the native libraries when android/ exists
-//   node scripts/licences.mts --native   fail when android/ is missing (release builds)
-//   node scripts/licences.mts --stub     only make sure the file exists, for `expo start`
-//
-// It bundles the app once with source maps to learn which npm packages Metro includes, and asks Gradle for the
-// release runtime classpath (scripts/native-licences.gradle). A package without a licence id or text fails the run.
 import {execFileSync} from 'node:child_process';
 import {
 	existsSync,
@@ -40,7 +31,6 @@ const write = (data: LicenceData) => {
 	writeFileSync(output, `${JSON.stringify(data)}\n`);
 };
 
-// The bundle below imports this file, so it has to exist before Metro runs.
 if (!existsSync(output)) {
 	write({packages: [], texts: []});
 }

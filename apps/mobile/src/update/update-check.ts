@@ -1,25 +1,12 @@
-/*
-Whether a newer release is out. This file holds no storage, no network, and no React Native, so every rule here runs
-under Node. `app-update.ts` supplies the clock, the saved answer, and the request.
-*/
-
 export const COOLDOWN_MS = 60 * 60 * 1000;
 export const LATEST_RELEASE_URL =
 	'https://api.github.com/repos/bberka/TabLodge/releases/latest';
 export const APK_NAME = 'tablodge.apk';
 
-// The APK is only fetched from this repository's own releases.
 const DOWNLOAD_PREFIX = 'https://github.com/bberka/TabLodge/releases/download/';
 
-/**
-The newest release. `apkUrl` is missing while the release workflow has not attached the APK yet, which happens a few
-minutes after the release is published.
-*/
 export type LatestRelease = {version: string; apkUrl?: string};
 
-/**
-The last answer GitHub gave and when, so a tap within the cooldown asks nothing.
-*/
 export type UpdateCache = {at: number; latest: LatestRelease};
 
 export type UpdateOutcome =
@@ -36,9 +23,6 @@ function parseVersion(text: string): Triple | undefined {
 		: undefined;
 }
 
-/**
-Whether `latest` is a higher version than `installed`. A version that is not `x.y.z` is never newer.
-*/
 export function isNewer(latest: string, installed: string): boolean {
 	const a = parseVersion(latest);
 	const b = parseVersion(installed);
@@ -55,9 +39,6 @@ export function isNewer(latest: string, installed: string): boolean {
 	return false;
 }
 
-/**
-Reads GitHub's "latest release" answer. Returns undefined when it is not a release this app understands.
-*/
 export function parseRelease(json: unknown): LatestRelease | undefined {
 	if (typeof json !== 'object' || json === null) {
 		return undefined;
@@ -83,9 +64,6 @@ export function parseRelease(json: unknown): LatestRelease | undefined {
 		: {version};
 }
 
-/**
-Reads a saved cache back, or undefined when it is missing or damaged.
-*/
 export function parseCache(value: unknown): UpdateCache | undefined {
 	const {at, latest} = (value ?? {}) as {
 		at?: unknown;
@@ -116,11 +94,6 @@ function outcomeFor(latest: LatestRelease, installed: string): UpdateOutcome {
 		: {status: 'current'};
 }
 
-/**
-Answers "is there an update" from the saved answer while it is under an hour old, and otherwise by asking. Only an
-answer starts the cooldown: a failed request leaves it alone, so the next tap can try again. The saved answer is
-compared with the installed version each time, so installing the update ends its notice at once.
-*/
 export async function checkForUpdate(options: {
 	installed: string;
 	now: number;
@@ -144,10 +117,6 @@ export async function checkForUpdate(options: {
 		: {outcome: {status: 'failed'}};
 }
 
-/**
-The label while the APK downloads: a percentage once the server has said how large the file is, and the megabytes so
-far until then.
-*/
 export function downloadLabel(
 	bytesWritten: number,
 	totalBytes: number,

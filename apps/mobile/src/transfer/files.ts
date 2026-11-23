@@ -7,10 +7,6 @@ export type PickedText = {name: string; text: string};
 
 export class FileTooLargeError extends Error {}
 
-/**
-Lets the person pick a file and reads it as text. Nothing is returned when they back out. A file larger than the
-extension's own import limit is refused.
-*/
 export async function pickTextFile(): Promise<PickedText | undefined> {
 	const result = await DocumentPicker.getDocumentAsync({
 		type: '*/*',
@@ -29,10 +25,6 @@ export async function pickTextFile(): Promise<PickedText | undefined> {
 	return {name: asset.name, text: await new File(asset.uri).text()};
 }
 
-/**
-Opens a file another app shared, which the share library copied into the cache, with the same limits as a picked
-file. `File` reads its size when the share did not say.
-*/
 function sharedFile(
 	path: string,
 	size: number | undefined,
@@ -61,10 +53,6 @@ export async function readSharedBytes(
 	return sharedFile(path, size, MAX_BACKUP_BYTES, 'restore').bytes();
 }
 
-/**
-Hands a file to Android's share sheet, which can save it to Files or Drive or send it to another app. It is written to
-the cache first, which the system clears when it needs room.
-*/
 export async function shareTextFile(
 	filename: string,
 	mime: string,
@@ -83,9 +71,6 @@ export async function shareTextFile(
 	});
 }
 
-/**
-Hands a binary file, such as a backup ZIP, to Android's share sheet, the same way as `shareTextFile`.
-*/
 export async function shareBinaryFile(
 	filename: string,
 	mime: string,
@@ -103,12 +88,8 @@ export async function shareBinaryFile(
 
 export type PickedBytes = {name: string; bytes: Uint8Array};
 
-// A full backup holds the whole library; the extension reads up to this much of one too.
 const MAX_BACKUP_BYTES = 60 * 1024 * 1024;
 
-/**
-Lets the person pick a file and reads it as bytes, for a backup ZIP. Nothing is returned when they back out.
-*/
 export async function pickBinaryFile(): Promise<PickedBytes | undefined> {
 	const result = await DocumentPicker.getDocumentAsync({
 		type: '*/*',

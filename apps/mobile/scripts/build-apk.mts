@@ -1,9 +1,3 @@
-// Builds a standalone Android APK from the current checkout, to install on a phone and try. Run it with
-// `pnpm run mobile:apk`, or `pnpm run mobile:apk --install` to also install it on the device adb sees.
-//
-// The APK is a release build (the JavaScript is bundled in, no Metro needed) signed with the local debug key, so it
-// installs next to nothing else: Android refuses to update the released app with it, and uninstalling the released
-// app first removes its local data. It carries the ARM libraries phones use, and arm64 only unless --all-abis is given.
 import {execFileSync} from 'node:child_process';
 import {copyFileSync, existsSync, mkdirSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -44,7 +38,6 @@ run(
 	['exec', 'expo', 'prebuild', '--platform', 'android', '--no-install'],
 	mobileDir,
 );
-// The Open source licences list, from this build's bundle and release classpath.
 run('node', ['scripts/licences.mts', '--native'], mobileDir);
 run(
 	join(androidDir, 'gradlew'),

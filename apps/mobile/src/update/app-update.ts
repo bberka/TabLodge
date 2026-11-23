@@ -80,11 +80,6 @@ async function install(
 	}
 }
 
-/**
-Asks GitHub for the newest release, at most once an hour, and tells the person what it found. When there is a newer one,
-the dialog's button downloads the APK and hands it to Android's installer. `busy` is told what is going on, and called
-with nothing when it is over.
-*/
 export async function checkAndOfferUpdate(
 	busy: (label?: string) => void,
 ): Promise<void> {
