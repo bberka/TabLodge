@@ -306,7 +306,6 @@ test('a library exported from one server and imported into another is the same l
 		(await pull(to.app)).changes,
 		(await pull(from.app)).changes,
 	);
-	// Importing the same file again changes nothing.
 	assert.deepEqual(await importLibrary(target(to.app), read()), {
 		applied: 0,
 		superseded: 3,

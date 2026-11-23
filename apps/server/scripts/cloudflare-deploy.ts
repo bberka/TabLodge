@@ -1,10 +1,3 @@
-/*
-Builds apps/server/cloudflare-deploy/worker.js, the bundled Worker that the Deploy to Cloudflare button deploys. The button
-copies only that folder, so the Worker is shipped prebuilt instead of from apps/server/src. With `--check`, fails if the
-committed file is out of date instead of writing it.
-
-	node apps/server/scripts/cloudflare-deploy.ts [--check]
-*/
 import {spawnSync} from 'node:child_process';
 import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';

@@ -1,8 +1,3 @@
-/*
-The sync HTTP API, independent of the runtime. `node.ts` serves it in the Docker image and `worker.ts` inside the
-library's Durable Object on Cloudflare. Live updates (the WebSocket) are runtime specific and live in those files;
-this module only reports the new cursor after a push changed something.
-*/
 import {Hono, type MiddlewareHandler} from 'hono';
 import {bearerAuth} from 'hono/bearer-auth';
 import {bodyLimit} from 'hono/body-limit';
@@ -50,10 +45,6 @@ import {
 	verifyPagePassword,
 } from './shared-pages';
 
-/**
-The extension calls the server from its own origin. CORS lets it do that without asking the browser for access to
-the server's site; the token, not the origin, is what protects the library. WebSockets are not subject to CORS.
-*/
 export const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
 	'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -64,31 +55,12 @@ export const CORS_HEADERS = {
 export const MIN_TOKEN_LENGTH = 32;
 
 export type Limits = {
-	/**
-	Records a library may hold, tombstones included.
-	*/
 	maxRecords: number;
-	/**
-	Days a delete is remembered so offline devices learn about it.
-	*/
 	retentionDays: number;
-	/**
-	Authenticated requests per minute. One person's devices stay far below it; it stops a runaway client from
-	running up the server's cost.
-	*/
 	requestsPerMinute: number;
-	/**
-	Size of one shared page, in UTF-8 bytes.
-	*/
 	maxPageBytes: number;
-	/**
-	Shared pages the server keeps, and their total size.
-	*/
 	maxPages: number;
 	maxPageStorageBytes: number;
-	/**
-	Views of shared pages per minute, counted apart from the library's requests so visitors cannot slow down sync.
-	*/
 	pageViewsPerMinute: number;
 };
 
@@ -107,11 +79,6 @@ const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_PUSH_CHANGES = 500;
 const MAX_CHANGE_BYTES = 256 * 1024;
 const MAX_KEY_CHARS = 4096;
-/**
-Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
-second library at /private for private windows; `key` is /v1/key; `shared-pages` is /v1/pages and /p/<id>, on the
-main library only, and `shared-page-import` says a page keeps the id and source its device sent; `page-source` is /v1/page-source, which hands a device a whole page so it can keep a readable copy.
-*/
 const FEATURES = [
 	'private',
 	'key',
@@ -136,22 +103,10 @@ export type ApiOptions = {
 	token: string;
 	log: () => SyncLog;
 	limits?: Partial<Limits>;
-	/**
-	Called after a push applied at least one change, with the new cursor.
-	*/
 	onApplied?: (cursor: number) => void;
 	now?: () => number;
-	/**
-	Gzip answers. The Docker server turns it on; Cloudflare compresses at its edge already.
-	*/
 	compress?: boolean;
-	/**
-	How the server reaches other sites for /v1/icon and /v1/preview.
-	*/
 	preview?: PreviewDeps;
-	/**
-	Where shared pages are kept. Only the main library has them; without it the API has no page routes.
-	*/
 	pages?: () => SqlPageStore;
 };
 
@@ -169,7 +124,6 @@ export function createApi(options: ApiOptions) {
 
 	const app = new Hono();
 	if (options.compress) {
-		// Pull pages compress to a fraction of their size.
 		app.use('*', compress());
 	}
 
@@ -184,7 +138,6 @@ export function createApi(options: ApiOptions) {
 		}),
 	);
 	app.get('/health', (c) => c.json({ok: true}));
-	// The live channel authenticates in its first message; see live.ts.
 	const unauthorized = {error: 'unauthorized'};
 	app.use(
 		'/v1/*',
@@ -199,8 +152,6 @@ export function createApi(options: ApiOptions) {
 		),
 	);
 
-	// A fixed one minute window per server, which serves one library. Counted after the token check, so only the
-	// owner's devices can use it up.
 	let rateWindow = {start: 0, count: 0};
 	app.use('/v1/*', async (c, next) => {
 		if (['/v1/icon', '/v1/preview', '/v1/page-source'].includes(c.req.path)) {
@@ -224,8 +175,6 @@ export function createApi(options: ApiOptions) {
 		await next();
 	});
 
-	// Icons and previews have their own allowance: a screen of links asks for a dozen at once, and they must not use
-	// up the library's.
 	let previewWindow = {start: 0, count: 0};
 	const cache = new Map<string, {at: number; value: unknown}>();
 	const remember = (key: string, value: unknown) => {
@@ -307,7 +256,6 @@ export function createApi(options: ApiOptions) {
 		return c.json(preview);
 	});
 
-	// Not cached: a copy is kept once, and the page is too large to hold for other requests.
 	app.get('/v1/page-source', async (c) => {
 		const url = c.req.query('url') ?? '';
 		if (url.length === 0 || url.length > 2048) {
@@ -327,7 +275,6 @@ export function createApi(options: ApiOptions) {
 		const log = options.log();
 		return c.json({
 			protocol: PROTOCOL_VERSION,
-			// The release this server was built from: a release image stamps it, other builds report 0.0.0.
 			version: SERVER_VERSION,
 			cursor: log.cursor,
 			records: log.size,
@@ -440,8 +387,6 @@ export function createApi(options: ApiOptions) {
 				log.purge(time - limits.retentionDays * DAY_MS);
 			}
 
-			// Checked before the push, so one push can go over the limit by at most its own size. A full library
-			// still takes deletes, which free space once their tombstones are purged.
 			if (
 				log.size >= limits.maxRecords &&
 				changes.some((change) => !change.deleted)
@@ -477,7 +422,6 @@ export function createApi(options: ApiOptions) {
 
 		app.post(
 			'/v1/pages',
-			// JSON escaping can make the body several times the page's size.
 			bodyLimit({
 				maxSize: limits.maxPageBytes * 6 + 4096,
 				onError: (c) =>
@@ -646,8 +590,6 @@ export function createApi(options: ApiOptions) {
 				: c.json(problem('not_found'), 404),
 		);
 
-		// The only route that hands out library data without the token. It has its own allowance, counted before the
-		// lookup, so a crawler gets 429 here while the library's devices keep syncing.
 		let viewWindow = {start: 0, count: 0};
 		const passwordAttempts = new Map<string, {start: number; count: number}>();
 		const passwordAttemptsPerMinute = 10;

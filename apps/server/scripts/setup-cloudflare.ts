@@ -1,10 +1,3 @@
-/*
-Deploys the sync server to the Cloudflare account wrangler is logged in to, sets its token, and prints the address
-and token to enter in TabLodge. Run it again to deploy an update; the token stays the same unless `--rotate-token`
-is given. See docs/self-hosting.md.
-
-	pnpm run cf:setup [--rotate-token]   (from the repository root)
-*/
 import {spawnSync} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {dirname} from 'node:path';
@@ -15,9 +8,6 @@ const SECRET = 'TABLODGE_SYNC_TOKEN';
 const serverDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 const {values} = parseArgs({options: {'rotate-token': {type: 'boolean'}}});
 
-/**
-Runs wrangler and returns its output. `interactive` lets it talk to the terminal, as login needs.
-*/
 function wrangler(
 	arguments_: string[],
 	{input, interactive = false}: {input?: string; interactive?: boolean} = {},

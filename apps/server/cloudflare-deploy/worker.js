@@ -2928,14 +2928,10 @@ var escapeHtml = /* @__PURE__ */ __name((value) => String(value ?? "").replaceAl
 // src/shared-pages.ts
 var PAGE_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
-  // `sandbox` gives the page an opaque origin and no scripts; popups are allowed so its links open in a new tab,
-  // outside the sandbox.
   "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; sandbox allow-popups allow-popups-to-escape-sandbox",
   "X-Content-Type-Options": "nosniff",
-  // Otherwise every site a visitor opens from the page learns its address.
   "Referrer-Policy": "no-referrer",
   "X-Robots-Tag": "noindex, nofollow",
-  // A deleted page must stop showing at once.
   "Cache-Control": "no-store"
 };
 var PASSWORD_PROMPT_HEADERS = {
@@ -3079,10 +3075,6 @@ var SqlPageStore = class {
   static {
     __name(this, "SqlPageStore");
   }
-  /**
-  Adds the page unless its id is taken, the server already holds `maxPages` pages, or the page would take the total
-  over `maxBytes`.
-  */
   add(page, budget) {
     return this.sql.transaction(() => {
       if (this.sql.all("SELECT 1 FROM pages WHERE id = ?", page.id).length > 0) {
@@ -3351,7 +3343,6 @@ function createApi(options) {
     const log = options.log();
     return c.json({
       protocol: PROTOCOL_VERSION,
-      // The release this server was built from: a release image stamps it, other builds report 0.0.0.
       version,
       cursor: log.cursor,
       records: log.size,
@@ -3460,7 +3451,6 @@ function createApi(options) {
     );
     app.post(
       "/v1/pages",
-      // JSON escaping can make the body several times the page's size.
       bodyLimit({
         maxSize: limits.maxPageBytes * 6 + 4096,
         onError: /* @__PURE__ */ __name((c) => c.json(
@@ -3697,7 +3687,6 @@ var SCHEMA = [
 		deleted INTEGER NOT NULL,
 		change TEXT NOT NULL
 	)`,
-  // Purges look only at old tombstones.
   "CREATE INDEX IF NOT EXISTS records_tombstones ON records (h) WHERE deleted = 1",
   "CREATE TABLE IF NOT EXISTS meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)"
 ];

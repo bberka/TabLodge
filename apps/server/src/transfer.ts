@@ -1,14 +1,3 @@
-/*
-Copies a library out of a sync server and into another one, through the sync API, so it works the same for the
-Docker server and for Cloudflare. Used for backups and for moving between servers. The file is JSON lines: a header,
-then one change per line, deletes included, with the stamps the server holds, so importing it anywhere gives the
-same library. An encrypted library (private windows with a password) also carries its wrapped key in the
-header, which the import stores; the values stay encrypted throughout.
-
-The Docker image runs it as `node node.js export` and `node node.js import` against its own server, and
-apps/server/scripts/transfer.ts runs it from a copy of the repository against any server, Cloudflare included. It
-imports nothing from the rest of the repository, so Node can run that script directly.
-*/
 import {createInterface} from 'node:readline';
 import process from 'node:process';
 import {parseArgs} from 'node:util';
@@ -70,10 +59,6 @@ async function storedKey(target: TransferTarget): Promise<string | null> {
 	return isObject(answer) && typeof answer.key === 'string' ? answer.key : null;
 }
 
-/**
-Stores an export's wrapped key, unless the server already holds the same one. A different key would leave the
-imported values unreadable, so it stops the import.
-*/
 async function storeKey(target: TransferTarget, key: string) {
 	const current = await storedKey(target);
 	if (current === key) {
@@ -92,9 +77,6 @@ async function storeKey(target: TransferTarget, key: string) {
 	});
 }
 
-/**
-Writes the whole library, one line at a time, and returns how many changes it wrote.
-*/
 export async function exportLibrary(
 	target: TransferTarget,
 	write: (line: string) => void,
@@ -137,9 +119,6 @@ export async function exportLibrary(
 	}
 }
 
-/**
-Pushes every change of an export. The server keeps the newer version of any record it already has.
-*/
 export async function importLibrary(
 	target: TransferTarget,
 	lines: AsyncIterable<string>,
@@ -204,9 +183,6 @@ export async function importLibrary(
 	return counts;
 }
 
-/**
-`export` or `import` from the command line; the server address defaults to this machine's server.
-*/
 export async function runTransfer(argv: string[]): Promise<void> {
 	const {positionals, values} = parseArgs({
 		args: argv,
