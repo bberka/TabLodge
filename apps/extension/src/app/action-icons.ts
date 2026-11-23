@@ -12,9 +12,6 @@ import {
 	VenetianMask,
 } from 'lucide-react';
 
-/**
-One icon per link action, so bookmarks, session links, and the side panel agree.
-*/
 export const ACTION_ICONS = {
 	openHere: ArrowUpRight,
 	openNew: ExternalLink,

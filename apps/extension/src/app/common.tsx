@@ -54,15 +54,9 @@ import {cn} from '@/lib/utils';
 
 const STORAGE_KEY = 'tablodge.state';
 
-/**
-The message of a rejection reason. Rejections are usually Errors, but any object with a message counts.
-*/
 export const messageOf = (reason: unknown) =>
 	(reason as {message?: string} | null | undefined)?.message;
 
-/**
-Closes this window when Escape is pressed, for the small prompt windows the service worker opens.
-*/
 export function useCloseOnEscape(
 	close: () => void = () => {
 		window.close();
@@ -70,7 +64,6 @@ export function useCloseOnEscape(
 ) {
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
-			// A key some control already used (closing a menu inside the window) does not also close it.
 			if (event.key === 'Escape' && !event.defaultPrevented) {
 				close();
 			}
@@ -81,11 +74,6 @@ export function useCloseOnEscape(
 	}, [close]);
 }
 
-/**
-Ctrl/Shift-click selection in this window's tab strip, matching how the service worker's "selected-or-window"
-save reads it: a selection is more than one tab-strip slot (both halves of a split view are one slot). `count` is
-the selected web tabs that would be saved (pinned ones only when `includePinned`). Updates live.
-*/
 export function useTabSelection(includePinned: boolean) {
 	const [selection, setSelection] = useState({selected: false, count: 0});
 	useEffect(() => {
@@ -118,9 +106,7 @@ export function useTabSelection(includePinned: boolean) {
 				if (alive) {
 					setSelection({selected, count});
 				}
-			} catch {
-				// Without a readable selection the button keeps saving the whole window.
-			}
+			} catch {}
 		};
 
 		void read();
@@ -140,16 +126,11 @@ export function useTabSelection(includePinned: boolean) {
 	return selection;
 }
 
-/**
-Whether this window has a web tab a workspace switch would save and close: not pinned (unless `includePinned`),
-not on an excluded site, and not a browser or TabLodge page. Updates live; unknown until the tabs are read.
-*/
 export function useHasSavableTabs(
 	includePinned: boolean,
 	excludedOrigins: readonly string[],
 ) {
 	const [found, setFound] = useState(false);
-	// A fresh array on every render must not restart the listeners.
 	const excludedKey = excludedOrigins.join('\n');
 	useEffect(() => {
 		if (!chrome.tabs?.query) {
@@ -172,9 +153,7 @@ export function useHasSavableTabs(
 				if (alive) {
 					setFound(savable);
 				}
-			} catch {
-				// Without a readable tab strip the switch stays off.
-			}
+			} catch {}
 		};
 
 		void read();
@@ -200,18 +179,12 @@ export function useHasSavableTabs(
 	return found;
 }
 
-/**
-"Save this window", or "Save 3 selected tabs" while tabs are selected in the tab strip.
-*/
 export function saveWindowLabel(selection: {selected: boolean; count: number}) {
 	return selection.selected
 		? `Save ${selection.count} selected ${selection.count === 1 ? 'tab' : 'tabs'}`
 		: 'Save this window';
 }
 
-/**
-One-line result of a workspace switch, for the toast after "Switch to this session".
-*/
 export function switchSummary(
 	result: {
 		saved: number;
@@ -236,9 +209,6 @@ export function switchSummary(
 	return `${parts.join(', ')}.`;
 }
 
-/**
-Icon components accepted by the layout helpers (lucide icons).
-*/
 export type IconComponent = ComponentType<{
 	className?: string;
 	'aria-hidden'?: boolean | 'true' | 'false';
@@ -246,8 +216,6 @@ export type IconComponent = ComponentType<{
 
 const STORAGE_RELOAD_DELAY_MS = 60;
 
-// Each reload returns brand-new objects. Reusing the previous object for every item that did not change
-// lets memoized cards and rows skip rendering after an unrelated edit.
 const jsonCache = new WeakMap<object, string>();
 const jsonOf = (value: object) => {
 	let json = jsonCache.get(value);
@@ -303,8 +271,6 @@ const isTransportError = (reason: unknown) =>
 		String(messageOf(reason) || reason || ''),
 	);
 
-// The service worker may still be waking up when a page opens. Transport failures are retried
-// quietly so only a definitive failure replaces the loading state with an error.
 export function useTabLodgeState(
 	initialRequest?: Promise<ActionResult<'GET_STATE'> | undefined>,
 ) {
@@ -312,8 +278,6 @@ export function useTabLodgeState(
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(true);
 	const initialRequestRef = useRef(initialRequest);
-	// Each load gets a number; only the newest one may write state, so a slow older response
-	// can never overwrite a newer one.
 	const latestRequestRef = useRef(0);
 	const mountedRef = useRef(true);
 	const load = useCallback(async (): Promise<TabLodgeState | null> => {
@@ -403,7 +367,6 @@ export function useTabLodgeState(
 	useEffect(() => {
 		mountedRef.current = true;
 		void load();
-		// A burst of storage writes (an import, a bulk move, our own reload after an action) is read once.
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const onChanged = (
 			changes: Record<string, chrome.storage.StorageChange>,
@@ -457,25 +420,12 @@ export function LoadingLine({className = ''}: {className?: string}) {
 	);
 }
 
-// Every showStatus call gets a fresh id so a repeated message shows again after it was dismissed.
 export type Status = {
 	message: string;
 	error: boolean;
-	/**
-	Show a success message as a visible toast. Errors are always visible.
-	*/
 	toast?: boolean;
-	/**
-	Set by showStatus; errors without an id (passed in directly) never time out.
-	*/
 	id?: string;
-	/**
-	A notice, not a success or an error: a save that stored nothing because it was a duplicate. It is shown as a toast with an info icon, never the success check.
-	*/
 	notice?: boolean;
-	/**
-	A button on the toast, such as Undo. The toast stays a little longer while it has one.
-	*/
 	action?: StatusAction;
 };
 export type StatusAction = {
@@ -484,33 +434,16 @@ export type StatusAction = {
 	onClose?: () => void;
 };
 export type StatusOptions = {
-	/**
-	Show a success message as a visible toast instead of only announcing it to screen readers.
-	*/
 	toast?: boolean;
-	/**
-	Marks the toast as a notice (see `Status.notice`).
-	*/
 	notice?: boolean;
-	/**
-	Adds a button to the toast (always shown as a toast), for example `{label: 'Undo', onClick}`.
-	*/
 	action?: StatusAction;
 };
-/**
- `showStatus(message)` announces a routine success to screen readers only,
- `showStatus(message, false, { toast: true })` also shows it as a toast, and
- `showStatus(message, true)` shows an error toast. `showStatus(null)` clears the status.
- */
 export type ShowStatus = (
 	message?: string | null,
 	error?: unknown,
 	options?: StatusOptions,
 ) => void;
 
-/**
-The toast button after a save rejected duplicates: saves those still open tabs anyway.
-*/
 export function forceAddAction(
 	tabIds: number[],
 	showStatus: ShowStatus,
@@ -538,11 +471,6 @@ export function forceAddAction(
 	};
 }
 
-/**
-Reports a finished SAVE_TABS the same way on every page (save-feedback.ts has the wording): success, a skipped
-duplicate, or the tabs left open for Force add. A save that closed its tabs offers **Undo**, which reopens them from the
-new session; a save with rejected duplicates offers Force add instead, because a toast holds one button.
-*/
 export function reportSessionSave(
 	result: Pick<
 		SaveResult,
@@ -607,10 +535,6 @@ export function reportSessionSave(
 	});
 }
 
-/**
-Reports a save that stored nothing. A skipped duplicate is a plain notice (it never reads as success, and it is not an
-error either); anything else is the error toast.
-*/
 export function showSaveFailure(
 	showStatus: ShowStatus,
 	result: {error?: string; duplicate?: true} | undefined,
@@ -681,10 +605,6 @@ export function useStatus(): [Status | null, ShowStatus] {
 
 const TOAST_TIMEOUT_MS = {success: 4000, error: 10_000, action: 6000};
 
-/**
-Where toasts appear and how long they stay, asked of the worker when the page opens and again for each toast, so a
-change in Settings reaches an open page.
-*/
 function useToastPrefs(toastId: string | undefined) {
 	const [prefs, setPrefs] = useState<{
 		position: ToastPosition;
@@ -708,15 +628,9 @@ function toastStyle(position: ToastPosition): CSSProperties {
 	return {top, bottom, left, right, transform};
 }
 
-// Routine success messages are only announced to screen readers. Errors and success messages
-// marked `toast` appear as a small dismissible toast, at the bottom center unless Settings moves it. Toasts from
-// showStatus fade after 4s (success), 6s (with an action such as Undo) or 10s (error), twice as long under Messages
-// stay: Longer, and never under Until dismissed; errors passed in directly (such as a failed initial load) stay until
-// dismissed.
 export function StatusLine({status}: {status: Status | null | undefined}) {
 	const prefs = useToastPrefs(status?.id);
 	const [dismissed, setDismissed] = useState<string | null>(null);
-	// The timeout stops while the pointer or keyboard focus is on the toast, so Undo can always be reached.
 	const [paused, setPaused] = useState(false);
 	const visible =
 		status?.message && (status.error || status.toast) ? status : null;
@@ -764,7 +678,6 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 			return undefined;
 		}
 
-		// Ctrl/Cmd+Z runs the toast's action (Undo) from anywhere except text fields, which keep their own undo.
 		const onKeyDown = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
 			if (
@@ -856,8 +769,6 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 	);
 }
 
-// The filled TabLodge logo mark; matches shell/icons/tablodge.svg. Use it wherever TabLodge itself
-// is shown (headers, empty states). The outline lucide Layers2 stays for actions such as saving a window.
 const MARK_PATH =
 	'M12 42 64 14l52 28-52 28ZM12 86l14.9-8L64 98l37.1-20 14.9 8-52 28Z';
 export function TabLodgeMark({
@@ -895,7 +806,6 @@ export function Brand({
 	link?: string;
 	label?: string;
 	newTab?: boolean;
-	// Shows the filled private window badge in place of the logo tile inside a private window.
 	privateBadge?: boolean;
 }) {
 	const showPrivate = privateBadge && chrome.extension.inIncognitoContext;
@@ -926,7 +836,6 @@ export function Brand({
 	);
 }
 
-// Where the skip link lands: an empty, focusable marker right after the header, so the next Tab reaches the page's content.
 const MAIN_CONTENT_ID = 'main-content';
 
 export type AppPage = 'dashboard' | 'settings' | 'help';
@@ -936,11 +845,6 @@ const APP_PAGES: ReadonlyArray<{id: AppPage; label: string; href: string}> = [
 	{id: 'help', label: 'Help', href: 'help.html'},
 ];
 
-/**
-Shared header for the Dashboard, Settings and Help pages: "[logo] TabLodge | Dashboard Settings Help".
-The active page is shown in the foreground color with a primary underline (aria-current="page").
-Page actions go on the right. Navigation stays in the same tab.
-*/
 export function AppHeader({
 	active,
 	children,
@@ -954,7 +858,6 @@ export function AppHeader({
 				href={`#${MAIN_CONTENT_ID}`}
 				className="sr-only rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 				onClick={(event) => {
-					// A plain hash jump would also fire the pages' own hash handlers (Settings and Help topics).
 					event.preventDefault();
 					const target = document.querySelector<HTMLElement>(
 						`#${MAIN_CONTENT_ID}`,
@@ -1011,7 +914,6 @@ export function AppHeader({
 	);
 }
 
-// Shown in place of a page when its saved state definitively failed to load.
 export function LoadError({
 	message,
 	className = '',
@@ -1088,10 +990,6 @@ export function EmptyState({
 	);
 }
 
-// Header is a flex row (space-y reset so the text block is not pushed down) with the icon
-// centered against the title/description block, on a tinted strip separated from the body.
-// `reset` is a small icon button that stays beside the title at every width; `action` is a
-// text button that drops onto its own full width line on a phone.
 export function SectionCard({
 	id,
 	title,

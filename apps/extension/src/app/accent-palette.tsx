@@ -26,7 +26,6 @@ const RAINBOW =
 	'conic-gradient(#ef4444, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444)';
 const TYPED_HEX = /^#?([\da-f]{6})$/i;
 const COLUMNS = 7;
-// The native picker fires on every drag step; the page follows once the drag pauses this long.
 const PICKER_DEBOUNCE_MS = 300;
 const CUSTOM = 'custom';
 const ARROW_STEPS = new Map([
@@ -42,7 +41,6 @@ type Choice = {
 	detail: string;
 	background: string;
 	icon?: 'monitor' | 'pipette';
-	// What gets stored when it differs from the id (a typed hex color).
 	value?: string;
 };
 
@@ -52,7 +50,6 @@ const DEFAULT_CHOICE: Choice = {
 	detail: 'The default theme color',
 	background: DEFAULT_ACCENT_HEX,
 };
-// The system accent is only a real choice where the platform has one; elsewhere it uses the default.
 const systemChoice = (color: Rgb | undefined): Choice => ({
 	id: SYSTEM_ACCENT,
 	label: 'System',
@@ -69,7 +66,6 @@ const CUSTOM_CHOICE: Choice = {
 	background: RAINBOW,
 	icon: 'pipette',
 };
-// A column's color is optional, so the first choice is none, and there is no system accent to follow.
 const NO_COLOR_CHOICE: Choice = {
 	id: DEFAULT_ACCENT,
 	label: 'None',
@@ -124,8 +120,6 @@ function Circle({
 	);
 }
 
-// The accent picker: a popup like the command palette, with a search box over a grid of colored
-// circles. The default and the system accent come first, then the presets and a custom color.
 export function AccentPalette({
 	accent,
 	systemColor,
@@ -135,15 +129,11 @@ export function AccentPalette({
 	accent: string;
 	systemColor: Rgb | undefined;
 	onChange: (accent: string) => void;
-	/**
-	Choosing the color of a bookmark column rather than the page accent: no system accent, and the default is "None".
-	*/
 	forColumn?: boolean;
 }) {
 	const listId = useId();
 	const pickerRef = useRef<HTMLInputElement>(null);
 	const pickerTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-	// What the picker shows while a drag is waiting to be applied.
 	const [draft, setDraft] = useState<string>();
 	useEffect(() => setDraft(undefined), [accent]);
 	useEffect(
@@ -202,7 +192,6 @@ export function AccentPalette({
 
 		setOpen(false);
 		if (choice.id === CUSTOM) {
-			// The native picker opens beneath its input, which is laid over the trigger.
 			requestAnimationFrame(() => pickerRef.current?.showPicker());
 			return;
 		}

@@ -8,9 +8,6 @@ import {
 } from '../shared/ui';
 import {ColumnLabel} from './icon-label';
 
-/**
-A select of bookmark columns, each with its icon. `children` adds items after the columns, such as "New column".
-*/
 export function ColumnSelect({
 	columns,
 	value,

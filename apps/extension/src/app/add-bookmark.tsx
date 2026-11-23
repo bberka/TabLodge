@@ -18,7 +18,6 @@ import {type TagEdit, TagsField} from './bookmark-tags';
 
 type PromptRequest = Promise<ActionResult<'GET_BOOKMARK_PROMPT'> | undefined>;
 
-// Extension/add-bookmark-preload.ts starts this read from the page head, while the bundle loads.
 const preloaded = (
 	globalThis as unknown as {__tablodgeBookmarkPrompt?: PromptRequest}
 ).__tablodgeBookmarkPrompt;
@@ -29,7 +28,6 @@ const wait = async (ms: number) =>
 		setTimeout(resolve, ms);
 	});
 
-// The service worker may still be waking up, so an empty answer is retried quietly.
 function useBookmarkPrompt(url: string) {
 	const [prompt, setPrompt] = useState<
 		Extract<ActionResult<'GET_BOOKMARK_PROMPT'>, {ok: true}> | undefined
@@ -68,9 +66,6 @@ function useBookmarkPrompt(url: string) {
 
 const NEW_COLUMN = '__new-column__';
 
-// The small window the service worker opens for the "Bookmark this page" shortcut. The page and its title arrive in
-// the address; Save adds the bookmark (creating the column first when asked) and closes the window, while Cancel,
-// Escape or closing it saves nothing.
 function AddBookmarkPrompt() {
 	const params = new URLSearchParams(location.search);
 	const url = params.get('url') || '';

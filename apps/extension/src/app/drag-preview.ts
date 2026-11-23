@@ -1,5 +1,3 @@
-// Compact drag previews for the session manager: a small card instead of the full-width row.
-// The card is built offscreen, handed to setDragImage, and removed right after the browser snapshots it.
 import {hostOf} from '../shared/web-url';
 import {faviconUrl} from './favicon';
 
@@ -83,9 +81,6 @@ function show(dataTransfer: ImageTarget | null | undefined, card: HTMLElement) {
 	}, 0);
 }
 
-/**
-Drag image for a whole session: name, tab count, and a few favicons.
-*/
 export function setSessionDragImage(
 	dataTransfer: ImageTarget | null | undefined,
 	session: {name: string; tabs: readonly PreviewLink[]},
@@ -113,9 +108,6 @@ export function setSessionDragImage(
 	show(dataTransfer, card);
 }
 
-/**
-Drag image for one saved link: favicon, title, and domain.
-*/
 export function setLinkDragImage(
 	dataTransfer: ImageTarget | null | undefined,
 	link: PreviewLink,

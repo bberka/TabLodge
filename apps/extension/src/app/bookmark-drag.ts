@@ -1,8 +1,3 @@
-/*
-Drag and drop on the bookmark board: what a drop carries (a column, a bookmark, links from another page or app), where
-it would land, and how a pasted or dropped link is read. The board's React code owns state and persistence; this holds
-the rules that need no component, so they run in tests without a browser.
-*/
 import type {DragEvent} from 'react';
 import type {InsertPosition, LinkEntry} from '../shared/types';
 import {siteName, webUrl} from '../shared/web-url';
@@ -16,9 +11,6 @@ import {
 
 export type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 
-/**
-Where a drag would land: a column edge (column drags) or a slot next to a bookmark card.
-*/
 export type DropIndicator = {
 	kind: DragKind;
 	columnId: string;
@@ -35,10 +27,6 @@ export function parseDraggedBookmark(
 
 const MAX_PASTED_LINKS = 500;
 
-/**
-Every web link in pasted content: one per line in plain text or a URI list, or each link in copied HTML. Lines
-that are not a web address are ignored, and repeated addresses are kept once.
-*/
 export function parsePastedLinks(
 	dataTransfer: DataTransfer | null,
 ): LinkEntry[] {
@@ -85,7 +73,6 @@ export function parsePastedLinks(
 	return [...links.values()];
 }
 
-// Column, bookmark, session, and link drags are accepted by columns; Unfiled takes all but columns.
 export function acceptsDrop(
 	event: DragEvent<HTMLElement>,
 	allowColumn: boolean,
@@ -94,16 +81,8 @@ export function acceptsDrop(
 	return Boolean(kind) && (allowColumn || kind !== 'column');
 }
 
-/**
-The id of the Focus view's All item. It lists every column's bookmarks but is not a column and keeps no order of its
-own, so nothing can be dropped on it.
-*/
 export const ALL_BOOKMARKS_ID = 'bookmark-all';
 
-/**
-`manualOrder` is false while the column is sorted by something else: the stored order is not shown, so no slot next to
-a card is offered and a drop goes to the end of its column.
-*/
 export function previewBookmarkDrop(
 	event: DragEvent<HTMLElement>,
 	columnId: string,
@@ -131,7 +110,6 @@ export function previewBookmarkDrop(
 		return;
 	}
 
-	// All is a view, not a place to drop: no line, and the browser shows that the drop is refused.
 	if (columnId === ALL_BOOKMARKS_ID) {
 		onDropOver(null);
 		return;
@@ -195,7 +173,6 @@ export function handleInternalDragStart(
 	}
 }
 
-// A compact rounded card (favicon, title, domain) replaces the browser's default drag ghost.
 function setBookmarkDragImage(
 	event: DragEvent<HTMLElement>,
 	card: HTMLElement,
