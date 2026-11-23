@@ -61,18 +61,18 @@ No decisions were held by comments in this file beyond its usage notes, which ar
 * **`until` polls for up to 15 seconds.** `harness.ts:until`: the pages redraw asynchronously after each action.
 * **`A11Y_ONLY` repeats one check.** `harness.ts:onlyChecks`: it runs only the checks whose name contains the text.
 * **`A11Y_SHARD` splits the run.** `harness.ts:shard`: `index/total` runs every total-th check, so CI can split it. Checks run in the same order in every shard, so the split is stable.
-* **The new-tab dev fixture is Focus.** `fixtures.ts:createDevFixture`: the checks were written for the Board view, and the Focus checks set up their own.
+* **The accessibility dev fixture seeds the Board view.** `fixtures.ts:createDevFixture`: it overrides `bookmarkBoardView` to `board`. The checks were written for the Board view. The product default is Focus, and the Focus checks set up their own.
 * **Chromium keeps connections open.** `fixtures.ts:sessionUrls`: `close()` waits for them, so the server closes them first.
 * **Theme follows the system by default.** `pages.ts:setTheme`: emulating the color scheme switches the pages.
-* **Contrast waits for the theme transition.** `pages.ts:openMenuByKeyboard`: colors transition between themes, so contrast is measured after they settle.
-* **A style change waits a frame.** `pages.ts:openMenuByKeyboard`: it applies on the next frame, which is when its transitions start.
+* **Contrast waits for the theme transition.** `pages.ts:setTheme`: colors transition between themes, so contrast is measured after they settle.
+* **A style change waits a frame.** `pages.ts:setTheme`: it applies on the next frame, which is when its transitions start.
 * **Menus open by keyboard and repeat the press.** `pages.ts:openMenuByKeyboard`: a card can redraw after the page settles and drop focus, and an open menu hides its trigger from the accessibility tree, so the menu itself is checked.
 * **The extension CSP blocks inline scripts.** `pages.ts:results`: so scripts are evaluated through the protocol.
 * **A single palette result leaves room below the list.** `palette.ts:gap`: the spare room sits between the list and the shortcut bar.
 * **Escape closes the palette window.** `palette.ts:closed`: it ends the key press call itself.
 * **Escape goes up one level first.** `palette.ts:closed`: the window is still there afterwards.
 * **The palette overlay is a frame.** `palette.ts:page`: `palette.html` runs in a frame, and a stand-in parent page receives its close request.
-* **The injected script hands focus to the frame.** `palette.ts:openSettingsLayoutCheck`: the search box takes it from there.
+* **The injected script hands focus to the frame.** `palette.ts:paletteOverlayCheck`: the search box takes it from there.
 * **The popup opens as a tab here.** `popup.ts:openPopupOver`: its own tab would be the active one, so the first read of the active tab reports `activeUrl` as the page it was opened over.
 * **A closing column select returns focus late.** `popup.ts:page`: it can take focus off the Notes field, so focus is set again until it keeps it.
 * **Import focus moves on the next frame.** `import-export.ts:columnPicker`: a key pressed before that lands on Import and runs the import.
@@ -84,11 +84,11 @@ No decisions were held by comments in this file beyond its usage notes, which ar
 * **Computed colors are oklab.** `session-cards.ts:deleteHoverBackground`: they are compared as the color each paints over white.
 * **Settings layout regressions.** `settings.ts:settingsNarrowLayoutCheck`: a section or row reset once wrapped onto its own line on a phone, and the Archive days field stacked under its select.
 * **The page may still scroll.** `settings.ts:skipLinkCheck`: all three lines are read until they agree.
-* **A cancelled animation is done.** `settings.ts:writeSources`: it rejects, and either way it has finished.
+* **A cancelled animation is done.** `settings.ts:animationsDone`: it rejects, and either way it has finished.
 * **A removed site stays listed.** `settings.ts:row`: when the browser took its access, the row stays with Remove and no permission prompt.
 * **Each site is one collapsed row.** `settings.ts:toggle`: Enter opens its options, and only one row is open at a time.
 * **The dialog fades in.** `settings.ts:violations`: mid fade its button fails contrast.
-* **Focus after a removal.** `settings.ts:backupsDialogCheck`: the removed row held focus, so it lands on Add a site.
+* **Focus after a removal.** `settings.ts:siteSourceRemoveCheck`: the removed row held focus, so it lands on Add a site.
 * **Focus stays inside a dialog.** `settings.ts:confirm`: a confirmation opened inside the dialog returns focus inside it.
 * **Every section has a finder entry.** `settings.ts:settingsFinderCheck`: every entry leads to a section that exists, and choosing one from the palette opens Settings at it. The check fails when a new Settings section is not in `settings-sections.ts`.
 * **A long address does not stretch the dialog.** `share.ts:target`: one address with no break points, as a long tracking link has, used to widen the whole dialog.
