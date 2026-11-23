@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState, type ReactNode} from 'react';
+import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ExternalLink, FileText, Trash2} from 'lucide-react';
 import {Button, TooltipProvider} from '../shared/ui';
@@ -112,6 +112,7 @@ function Reader() {
 	const [copy, setCopy] = useState<PageCopy | null | undefined>();
 	const [loadError, setLoadError] = useState('');
 	const [status, showStatus] = useStatus();
+	const deletingRef = useRef(false);
 
 	const load = useCallback(async (isLive: () => boolean = () => true) => {
 		const result = url
@@ -138,7 +139,13 @@ function Reader() {
 	}, [load]);
 
 	async function remove() {
+		if (deletingRef.current) {
+			return;
+		}
+
+		deletingRef.current = true;
 		const result = await send('DELETE_PAGE_COPY', {url});
+		deletingRef.current = false;
 		if (!result.ok) {
 			showStatus(result.error, true);
 			return;
