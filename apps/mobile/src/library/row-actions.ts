@@ -6,9 +6,6 @@ import type {
 import type {Colors} from '../ui/theme';
 import type {IconName} from '../ui/widgets';
 
-/**
-How each bookmark action looks wherever it is named: the swipe reveal, the settings, and the menus.
-*/
 export function rowActionLook(
 	action: RowAction,
 	colors: Colors,
@@ -40,9 +37,6 @@ export function rowActionLook(
 	}
 }
 
-/**
-How each session action looks in the swipe reveal, the settings, and the session menu.
-*/
 export function sessionActionLook(
 	action: SessionAction,
 	colors: Colors,
@@ -66,7 +60,6 @@ export function sessionActionLook(
 		}
 
 		case 'archive': {
-			// A session in the Archived folder is taken out of it instead.
 			return archived
 				? {
 						label: 'Unarchive',
@@ -94,9 +87,6 @@ export function sessionActionLook(
 	}
 }
 
-/**
-How each action on a link inside a session card looks in the swipe reveal and the settings.
-*/
 export function linkActionLook(
 	action: LinkAction,
 	colors: Colors,

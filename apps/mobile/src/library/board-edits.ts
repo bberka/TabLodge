@@ -1,7 +1,3 @@
-/*
-Pure edits of the synced library's bookmark board: columns and bookmarks. The phone keeps the same `Store` the
-extension does, so the sync client in apps/extension/src/shared/sync can merge it with the server.
-*/
 import type {Bookmark, Store} from '../../../extension/src/shared/types';
 import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {isSourceColumnId} from '../../../extension/src/shared/source-columns';
@@ -37,9 +33,6 @@ import {extractUrl, hostOf} from './store-shape';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
 
-/**
-The columns to show: the library's own, plus "Unfiled" when a bookmark points at a column that does not exist.
-*/
 export function columnViews(store: Store): ColumnView[] {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
 	const views: ColumnView[] = store.bookmarkColumns.map(
@@ -79,14 +72,8 @@ export function bookmarksIn(store: Store, columnId: string): Bookmark[] {
 	);
 }
 
-/**
-The id of the system column that lists every bookmark of every column. It is not stored and cannot be changed.
-*/
 export const ALL_BOOKMARKS_ID = 'all-bookmarks';
 
-/**
-Every bookmark, column by column in the columns' order and the Unfiled bucket last, each column in its own order.
-*/
 export function allBookmarks(store: Store): Bookmark[] {
 	const groups = bookmarksByColumn(store);
 	return columnViews(store).flatMap((column) => groups.get(column.id) ?? []);
@@ -129,9 +116,6 @@ export function searchBookmarks(store: Store, query: string): Bookmark[] {
 	});
 }
 
-/**
-Adds a column with an optional icon id from the extension's icon set, and an optional color from its accent palette.
-*/
 export function addColumn(
 	store: Store,
 	name: string,
@@ -166,25 +150,12 @@ type NewBookmark = {
 	url: string;
 	title: string;
 	columnId: string;
-	/**
-	The note. Blank removes it; leaving it out keeps the one a bookmark being changed has.
-	*/
 	notes?: string;
-	/**
-	The tags the person typed and the automatic kinds they removed. Each list, when given, replaces the one the bookmark
-	has; leaving it out keeps it.
-	*/
 	tags?: readonly string[];
 	hiddenKinds?: Bookmark['hiddenKinds'];
-	/**
-	The phone that saves a new bookmark. A bookmark being changed keeps the device it was saved on.
-	*/
 	device?: DeviceStamp;
 };
 
-/**
-The bookmark with `notes` as its note, cleaned as the extension stores it. Undefined keeps the note it has.
-*/
 function withNotes(bookmark: Bookmark, notes: string | undefined): Bookmark {
 	if (notes === undefined) {
 		return bookmark;
@@ -195,11 +166,6 @@ function withNotes(bookmark: Bookmark, notes: string | undefined): Bookmark {
 	return text ? {...rest, notes: text} : rest;
 }
 
-/**
-Adds a bookmark at the end of its column, as the extension does, unless it is a duplicate under the shared rule
-(`save-rules.ts`: the same column never holds a link twice, and the duplicate setting covers the other columns). A column that does not exist falls back as it does there (the column that claims the link's site, the default column, the first). When the library has no column yet, the extension's default one is
-created, so a first link can be saved before the first sync.
-*/
 export function addBookmark(
 	store: Store,
 	input: NewBookmark,
@@ -229,7 +195,6 @@ export function addBookmark(
 	const columnId = landingColumnId(next.bookmarkColumns, input.columnId, {
 		claimedId: columnForUrl(next.bookmarkColumns, url)?.id,
 	});
-	// A duplicate (save-rules.ts) is skipped and the store comes back as it was.
 	if (
 		bookmarkIsDuplicate(
 			next.bookmarks,
@@ -259,10 +224,6 @@ export function addBookmark(
 	return {...next, bookmarks: [...next.bookmarks, bookmark], updatedAt: now};
 }
 
-/**
-Changes a bookmark's link, title, note, or column. It keeps its place, unless the column changes: then it goes to the
-end of the new column, as in the extension. An unusable link or a missing bookmark or column leaves the store as it was.
-*/
 export function updateBookmark(
 	store: Store,
 	id: string,
@@ -301,10 +262,6 @@ export function updateBookmark(
 	return {...store, bookmarks, updatedAt: now};
 }
 
-/**
-Puts a bookmark's tags and removed kinds back as they were, for Undo after an edit took some away. A bookmark that is
-gone leaves the store as it was.
-*/
 export function setBookmarkTags(
 	store: Store,
 	id: string,
@@ -332,9 +289,6 @@ export function setBookmarkTags(
 	};
 }
 
-/**
-Removes several bookmarks at once.
-*/
 export function removeBookmarks(
 	store: Store,
 	ids: ReadonlySet<string>,
@@ -351,9 +305,6 @@ export function removeBookmarks(
 	};
 }
 
-/**
-Moves several bookmarks to the end of another column, keeping their order.
-*/
 export function moveBookmarks(
 	store: Store,
 	ids: ReadonlySet<string>,
@@ -374,15 +325,8 @@ export function moveBookmarks(
 	return {...store, bookmarks: [...rest, ...moved], updatedAt: now};
 }
 
-/**
-A bookmark about to be removed, with where it sat: `after` is the bookmark before it in the same column that stays,
-or null when it was first there.
-*/
 export type RemovedBookmark = {bookmark: Bookmark; after: string | null};
 
-/**
-The bookmarks of `ids`, each with its place, so an undo can put them back where they were.
-*/
 export function removedBookmarks(
 	store: Store,
 	ids: ReadonlySet<string>,
@@ -403,11 +347,6 @@ export function removedBookmarks(
 	return removed;
 }
 
-/**
-Puts bookmarks back after an undo, where they were in their column, as the extension's undo does. They get new ids,
-though the sync server would take the old ones back too, since a newer change beats a delete. A
-bookmark whose column is gone goes to the first column, at its start.
-*/
 export function restoreBookmarks(
 	store: Store,
 	removed: readonly RemovedBookmark[],
@@ -416,7 +355,6 @@ export function restoreBookmarks(
 ): Store {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
 	const bookmarks = [...store.bookmarks];
-	// The last bookmark restored behind each anchor, so neighbours removed together come back in their old order.
 	const lastBehind = new Map<string, string>();
 	for (const [index, {bookmark, after}] of removed.entries()) {
 		const moved = !known.has(bookmark.columnId);
@@ -448,10 +386,6 @@ export function restoreBookmarks(
 
 export type ColumnEdit = {name: string; icon: string; color: string};
 
-/**
-Changes a column's name, icon, and color, and keeps everything else about it, such as the sites that file into it. An
-empty icon or color removes it. A bad name or an unknown column leaves the store as it was.
-*/
 export function updateColumn(
 	store: Store,
 	id: string,
@@ -463,7 +397,6 @@ export function updateColumn(
 		return store;
 	}
 
-	// The icon and color are rebuilt, so an empty or unknown value drops the field rather than leaving the old one.
 	const {icon: _icon, color: _color, ...rest} = current;
 	const changed = {
 		...rest,
@@ -480,10 +413,6 @@ export function updateColumn(
 	};
 }
 
-/**
-Replaces the sites that file into a column. Each entry is normalized and repeats are dropped; an empty list removes the
-field, as in the extension. An unknown column leaves the store as it was.
-*/
 export function setColumnSites(
 	store: Store,
 	id: string,
@@ -506,10 +435,6 @@ export function setColumnSites(
 	};
 }
 
-/**
-Sets a session's color, a preset id or `#rrggbb`, or removes it with an empty or unknown value. An unknown session
-leaves the store as it was.
-*/
 export function setSessionColor(
 	store: Store,
 	id: string,
@@ -536,10 +461,6 @@ export function setSessionColor(
 	};
 }
 
-/**
-Moves a column one place earlier (-1) or later (1) in the order the selectors and the extension show. A column at an
-end, or one that does not exist, leaves the store as it was.
-*/
 export function moveColumn(
 	store: Store,
 	id: string,
@@ -560,10 +481,6 @@ export function moveColumn(
 
 export type BookmarkMove = 'up' | 'down' | 'top' | 'bottom';
 
-/**
-Moves a bookmark within its own column: one place earlier or later, or to the top or the bottom. Other columns keep
-their order. A bookmark already there, or one that does not exist, leaves the store as it was.
-*/
 export function moveBookmark(
 	store: Store,
 	id: string,
@@ -575,7 +492,6 @@ export function moveBookmark(
 		return store;
 	}
 
-	// The positions in the library's list that belong to this bookmark's column, in order.
 	const slots = store.bookmarks.flatMap((item, index) =>
 		item.columnId === bookmark.columnId ? [index] : [],
 	);
@@ -601,10 +517,6 @@ export function moveBookmark(
 	return {...store, bookmarks, updatedAt: now};
 }
 
-/**
-Deletes a column. Its bookmarks move to `moveTo` (another column, going after that column's own), or are deleted with
-it when `moveTo` is null. With no other column to take them they go to the Unfiled bucket, as the extension does.
-*/
 export function deleteColumn(
 	store: Store,
 	id: string,
@@ -639,17 +551,12 @@ export function deleteColumn(
 	return {...store, bookmarkColumns: remaining, bookmarks, updatedAt: now};
 }
 
-/**
-Puts back a column that was deleted, with the bookmarks it held (as they were), for Undo. A bookmark that was moved to
-another column comes back to this one; one that was deleted with it is added again.
-*/
 export function restoreColumn(
 	store: Store,
 	column: Store['bookmarkColumns'][number],
 	bookmarks: ReadonlyArray<Store['bookmarks'][number]>,
 	now: number,
 ): Store {
-	// A source column can be back already (the browser saved on its site again): its bookmarks rejoin it.
 	const there = store.bookmarkColumns.some((entry) => entry.id === column.id);
 	if (there && !isSourceColumnId(column.id)) {
 		return store;
@@ -676,9 +583,6 @@ export function restoreColumn(
 	};
 }
 
-/**
-Saves several links as bookmarks in one column, first link first. `ids` gives each bookmark its id.
-*/
 export function addBookmarks(
 	store: Store,
 	urls: readonly string[],

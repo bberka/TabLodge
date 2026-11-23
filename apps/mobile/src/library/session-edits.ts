@@ -1,6 +1,3 @@
-/*
-Pure edits of the synced library's sessions and their folders, on the same `Store` as `board-edits.ts`.
-*/
 import type {
 	Folder,
 	SavedTab,
@@ -41,26 +38,15 @@ const isArchived = (folder: {id: string; name: string}) =>
 	folder.id === ARCHIVED_FOLDER_ID ||
 	folder.name.toLocaleLowerCase() === 'archived';
 
-/**
-Whether a session folder can be renamed or deleted: not Unfiled, which holds whatever has no other home, and not
-Archived, as in the extension.
-*/
 export const canChangeFolder = (folder: {
 	id: string;
 	name: string;
 	isDefault: boolean;
 }): boolean => !folder.isDefault && !isArchived(folder);
 
-/**
-The message to show when the library holds the most folders it can, so a new one cannot be made, or undefined.
-*/
 export const folderLimitProblem = (store: Store): string | undefined =>
 	folderLimitReached(store.folders) ? FOLDER_LIMIT_MESSAGE : undefined;
 
-/**
-Why this name cannot be a folder's, or undefined when it can: empty, the reserved "All sessions", another folder's, or, for
-a new folder (no `exceptId`), the limit of 200 folders. The rules are the extension's.
-*/
 export const folderNameProblem = (
 	store: Store,
 	name: string,
@@ -68,9 +54,6 @@ export const folderNameProblem = (
 ): string | undefined =>
 	sharedFolderNameProblem(store.folders, name, exceptId ?? null);
 
-/**
-Renames a session folder. A folder that cannot change, or a name that is not allowed, leaves the library as it was.
-*/
 export function renameFolder(
 	store: Store,
 	id: string,
@@ -111,9 +94,6 @@ const folderFields = (edit: FolderEdit) => ({
 	}),
 });
 
-/**
-Makes a session folder with a name, an icon, and a color. A name that is not allowed leaves the library as it was.
-*/
 export function addFolder(
 	store: Store,
 	edit: FolderEdit,
@@ -134,11 +114,6 @@ export function addFolder(
 	};
 }
 
-/**
-Changes a session folder's name, icon, color, and whether it colors the sessions moved into it. The icon and color are
-rebuilt, so an empty value drops the field. A folder that cannot change, or a name that is not allowed, leaves the
-library as it was.
-*/
 export function updateFolder(
 	store: Store,
 	id: string,
@@ -169,10 +144,6 @@ export function updateFolder(
 	};
 }
 
-/**
-Deletes a session folder and moves its sessions to Unfiled, as the extension does. A folder that cannot change leaves
-the library as it was.
-*/
 export function deleteFolder(store: Store, id: string, now: number): Store {
 	const folder = store.folders.find((entry) => entry.id === id);
 	if (!folder || !canChangeFolder(folder)) {
@@ -202,9 +173,6 @@ export function deleteFolder(store: Store, id: string, now: number): Store {
 	};
 }
 
-/**
-Puts back a folder that was deleted, with the sessions it held, for Undo.
-*/
 export function restoreFolder(
 	store: Store,
 	folder: Store['folders'][number],
@@ -236,10 +204,6 @@ export type SessionFolderView = {
 	count: number;
 };
 
-/**
-The folders to filter sessions by, as the extension shows them: All (without what is archived), each folder in
-its own order, and Archived last. Sessions in a folder that no longer exists fall under Other.
-*/
 export function sessionFolders(store: Store): SessionFolderView[] {
 	const known = new Set(store.folders.map((folder) => folder.id));
 	const archivedIds = new Set(
@@ -287,10 +251,6 @@ export function sessionFolders(store: Store): SessionFolderView[] {
 	return views;
 }
 
-/**
-The sessions in one filter, ordered like the extension's sort setting. All leaves out archived ones. `custom` keeps
-the library's own order.
-*/
 export function sessionsIn(
 	store: Store,
 	folderId: string,
@@ -357,29 +317,19 @@ const savedTab = (
 	originalIndex: index,
 });
 
-/**
-Saves links as a new session, in the chosen folder or the default one. `tabIds` gives each tab its id.
-*/
 export function addSession(
 	store: Store,
 	input: {
 		name: string;
 		urls: readonly string[];
 		folderId?: string;
-		/**
-		Where it was saved: the device's name and kind.
-		*/
 		device?: DeviceStamp;
-		/**
-		A title for each link, in order; a link without one is named by its site.
-		*/
 		titles?: readonly string[];
 	},
 	id: string,
 	tabIds: readonly string[],
 	now: number,
 ): Store {
-	// In a new session only the duplicate setting applies (save-rules.ts); nothing left means no session.
 	const duplicates = sessionDuplicates(
 		store.groups,
 		undefined,
@@ -439,9 +389,6 @@ export function addSession(
 	};
 }
 
-/**
-Adds links to the end of an existing session, skipping duplicates under the shared rule (`save-rules.ts`).
-*/
 export function addTabsToSession(
 	store: Store,
 	sessionId: string,
@@ -455,7 +402,6 @@ export function addTabsToSession(
 		return store;
 	}
 
-	// A duplicate (save-rules.ts) is skipped, and the store comes back as it was when nothing is left.
 	const duplicates = sessionDuplicates(
 		store.groups,
 		sessionId,
@@ -517,9 +463,6 @@ const changeSession = (
 			}
 		: store;
 
-/**
-Renames a session. A blank name, or an unknown session, leaves the store as it was.
-*/
 export function renameSession(
 	store: Store,
 	id: string,
@@ -537,12 +480,8 @@ export function renameSession(
 		: store;
 }
 
-// The longest description the extension keeps (`SESSION_TEXT_MAX` in its library-normalize.ts).
 const DESCRIPTION_MAX = 10_502;
 
-/**
-Sets a session's description, which the extension shows under its name and syncs. It is cut to the extension's limit.
-*/
 export function describeSession(
 	store: Store,
 	id: string,
@@ -561,9 +500,6 @@ export function describeSession(
 	);
 }
 
-/**
-Puts a session in another folder. An unknown folder or session leaves the store as it was.
-*/
 export function moveSession(
 	store: Store,
 	id: string,
@@ -575,7 +511,6 @@ export function moveSession(
 		return store;
 	}
 
-	// A folder that colors its sessions gives a session moved into it the folder's color, as in the extension.
 	return changeSession(
 		store,
 		id,
@@ -591,9 +526,6 @@ export function moveSession(
 	);
 }
 
-/**
-Moves a session to the Archived folder, which is made when there is none yet.
-*/
 export function archiveSession(store: Store, id: string, now: number): Store {
 	const found = store.folders.find((folder) => isArchived(folder));
 	const withFolder: Store = found
@@ -638,9 +570,6 @@ export function archiveStale(store: Store, now: number): Store {
 	};
 }
 
-/**
-Whether a session sits in the Archived folder.
-*/
 export function isArchivedSession(
 	folders: readonly Folder[],
 	session: Session,
@@ -649,10 +578,6 @@ export function isArchivedSession(
 	return folder !== undefined && isArchived(folder);
 }
 
-/**
-Takes a session out of the Archived folder, into Unfiled (or the first folder that is not Archived; Unfiled is made
-when there is none).
-*/
 export function unarchiveSession(store: Store, id: string, now: number): Store {
 	const open = store.folders.filter((folder) => !isArchived(folder));
 	const target = open.find((folder) => folder.isDefault) ?? open[0];
@@ -679,9 +604,6 @@ export function unarchiveSession(store: Store, id: string, now: number): Store {
 	);
 }
 
-/**
-Deletes a session.
-*/
 export function removeSession(store: Store, id: string, now: number): Store {
 	return store.groups.some((session) => session.id === id)
 		? {
@@ -692,10 +614,6 @@ export function removeSession(store: Store, id: string, now: number): Store {
 		: store;
 }
 
-/**
-Puts a deleted session back, under its own id, unless one with that id exists again. A folder that is gone sends it
-to the first folder.
-*/
 export function restoreSession(
 	store: Store,
 	session: Session,
@@ -722,11 +640,6 @@ export function restoreSession(
 	};
 }
 
-/**
-Changes the title, notes, and address of one saved tab. An address that is not a web address leaves the library as it
-was. Like the extension, a new address belongs to this one saved link only, while a changed title or note is also
-written to every other saved copy of the same address.
-*/
 export function updateSessionTab(
 	store: Store,
 	id: string,
@@ -781,9 +694,6 @@ export function updateSessionTab(
 	};
 }
 
-/**
-Takes one tab out of a session.
-*/
 export function removeSessionTab(
 	store: Store,
 	id: string,
@@ -802,15 +712,9 @@ export function removeSessionTab(
 	);
 }
 
-/**
-The addresses of a session's tabs, one per line, for sharing or copying.
-*/
 export const sessionLinks = (session: Session): string =>
 	session.tabs.map((tab) => tab.url).join('\n');
 
-/**
-Notes that a session was opened now, which the "recently opened" sort uses.
-*/
 export function markSessionOpened(
 	store: Store,
 	id: string,
@@ -847,10 +751,6 @@ function searchableTexts(session: Session) {
 	return found;
 }
 
-/**
-The sessions a search matches: the plain words as one piece of a name, note, tab title or address, and the operators
-on top of that.
-*/
 export function searchSessions(
 	sessions: readonly Session[],
 	query: string,

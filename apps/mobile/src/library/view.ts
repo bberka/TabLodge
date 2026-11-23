@@ -1,8 +1,5 @@
 import {useSyncExternalStore} from 'react';
 
-/**
-Which library the screens show: the regular one, or the private windows' library (read only).
-*/
 export type View = 'regular' | 'private';
 
 let current: View = 'regular';

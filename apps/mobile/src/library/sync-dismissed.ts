@@ -1,12 +1,7 @@
-/*
-The missing-features banner the user dismissed on this phone, as `dismissKey` gave it. It stays on the phone and
-never syncs; `problemBanner` hides the banner while it still matches.
-*/
 import {useSyncExternalStore} from 'react';
 import {SYNC_DISMISSED_KEY} from '../../../extension/src/shared/sync/compat';
 import {readJson, writeJson} from '../platform/storage';
 
-// Undefined until read from storage, so the banner does not flash before it is known to be dismissed.
 let dismissed: {value: unknown} | undefined;
 let loading: Promise<void> | undefined;
 const listeners = new Set<() => void>();

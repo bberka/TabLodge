@@ -1,8 +1,3 @@
-/*
-Saving a quote shared from another app, the way the extension's "Save quote" does (see
-apps/extension/src/shared/quotes.ts): into the note of the page's bookmark, else of its saved tab and every saved copy
-of it, else of a new bookmark. Undo puts back what the quote changed, unless the note was edited since.
-*/
 import type {Store} from '../../../extension/src/shared/types';
 import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {
@@ -13,9 +8,6 @@ import {
 import {addBookmark, removeBookmarks} from './board-edits';
 import {extractUrl, hostOf} from './store-shape';
 
-/**
-What a saved quote changed, so Undo can put it back: a bookmark it made, or the notes it replaced.
-*/
 export type QuoteUndo =
 	| {kind: 'created'; bookmarkId: string; after: string}
 	| {kind: 'bookmark'; bookmarkId: string; before?: string; after: string}
@@ -129,9 +121,6 @@ function setTabNotes(store: Store, url: string, notes: string, now: number) {
 	};
 }
 
-/**
-The library with the quote taken out again. A note edited after the quote was saved is left alone.
-*/
 export function undoQuote(store: Store, undo: QuoteUndo, now: number): Store {
 	if (undo.kind === 'created') {
 		return store.bookmarks.some(

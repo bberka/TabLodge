@@ -1,8 +1,3 @@
-/*
-The trash on the phone, as the screens use it: deleting puts what was removed here, restoring takes it out and puts
-it back in its library, and `useTrash` keeps a list up to date. The storage is in `trash-storage.ts`. Changes go to
-the server with the next sync, like any edit.
-*/
 import {useEffect, useState} from 'react';
 import {getPrivateStore, nudgePrivate} from '../private/private-library';
 import {isPrivateView} from './view';
@@ -43,9 +38,6 @@ const change = async (
 	}
 };
 
-/**
-Keeps what was just deleted from the library on screen. Call it with the delete.
-*/
 export async function trashDeleted(added: readonly NewTrash[]): Promise<void> {
 	if (added.length === 0) {
 		return;
@@ -57,29 +49,16 @@ export async function trashDeleted(added: readonly NewTrash[]): Promise<void> {
 	);
 }
 
-/**
-Drops what has expired from both lists. Call it once the library has loaded, and again whenever the trash opens. What
-expired is gone on every device at the same moment, so nothing is sent for it.
-*/
 export async function purgeTrash(): Promise<void> {
 	await change('regular', (items) => items, {quiet: true});
 	await change('private', (items) => items, {quiet: true});
 }
 
 export type Restoration = {
-	/**
-	Set when the item went somewhere other than its old place.
-	*/
 	note?: string;
-	/**
-	Set when it could not be put back; it is still in the trash.
-	*/
 	error?: string;
 };
 
-/**
-Puts an entry back in its library and takes it out of the trash.
-*/
 export async function restoreFromTrash(
 	name: LibraryName,
 	entry: TrashEntry,
@@ -105,9 +84,6 @@ export const deleteForever = async (
 export const emptyTrash = async (name: LibraryName): Promise<void> =>
 	change(name, () => []);
 
-/**
-The trash of this library, newest first, kept up to date while the component is shown.
-*/
 export function useTrash(name: LibraryName, active = true): TrashEntry[] {
 	const [items, setItems] = useState<TrashEntry[]>([]);
 	useEffect(() => {

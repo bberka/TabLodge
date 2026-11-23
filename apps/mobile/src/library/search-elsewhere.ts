@@ -1,8 +1,3 @@
-/*
-The phone's two search boxes each look through one screen. When that finds nothing, or the person asks, the same
-query also runs through the extension's ranked search over the other places, so a link saved in a session can be
-found from Bookmarks and the other way round.
-*/
 import {
 	buildFinderIndex,
 	type FinderItem,
@@ -15,17 +10,11 @@ import type {Store} from '../../../extension/src/shared/types';
 
 export type Place = 'sessions' | 'bookmarks';
 
-/**
-What each screen offers from the other places. Bookmarks does not list its own columns, which the screen's chips already show.
-*/
 const ELSEWHERE: Record<Place, readonly FinderKind[]> = {
 	sessions: ['bookmark', 'column', 'saved-tab', 'session', 'setting'],
 	bookmarks: ['session', 'saved-tab', 'setting'],
 };
 
-/**
-The Settings screen's sections as search results: found by their title, other names, and the settings they hold.
-*/
 export function settingsForSearch(
 	sections: Record<
 		string,
@@ -49,9 +38,6 @@ export const PLACE_NAME: Record<Place, string> = {
 	bookmarks: 'Bookmarks',
 };
 
-/**
-Ranked matches for a query outside the given screen, grouped by kind. An empty query matches nothing.
-*/
 export function searchElsewhere(
 	store: Store,
 	query: string,
@@ -77,10 +63,6 @@ export function searchElsewhere(
 	);
 }
 
-/**
-Where a result that is not a link leads: a session on the Sessions screen, a column on Bookmarks, a section of
-Settings (its search filled in with the section's name).
-*/
 export type Jump =
 	| {screen: 'sessions'; sessionId: string}
 	| {screen: 'bookmarks'; columnId: string}

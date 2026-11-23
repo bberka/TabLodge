@@ -36,10 +36,6 @@ async function target(): Promise<SyncConfig> {
 	return config;
 }
 
-/**
-`ready` when the connected server takes shared pages, `old` when it is too old for them, `unknown` while it has not
-answered or cannot be reached, `none` without a server.
-*/
 export function useSharedPagesServer(): 'none' | 'unknown' | 'old' | 'ready' {
 	const {connected} = useSyncStatus();
 	const features = useServerFeatures();

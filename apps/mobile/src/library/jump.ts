@@ -10,17 +10,11 @@ const emit = () => {
 	}
 };
 
-/**
-Asks for a screen to open on a session or bookmark column. The app shows that screen, which takes the jump.
-*/
 export function requestJump(jump: Jump): void {
 	pending = jump;
 	emit();
 }
 
-/**
-Hands over the waiting jump meant for this screen, once.
-*/
 export function takeJump<T extends Jump['screen']>(
 	screen: T,
 ): Extract<Jump, {screen: T}> | undefined {
@@ -33,9 +27,6 @@ export function takeJump<T extends Jump['screen']>(
 	return jump;
 }
 
-/**
-The jump waiting for a screen, if any.
-*/
 export function usePendingJump(): Jump | undefined {
 	return useSyncExternalStore(
 		(listener) => {

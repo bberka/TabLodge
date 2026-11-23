@@ -1,4 +1,3 @@
-// How much of a page is read when looking for its title, the same cut the server makes.
 const READ_LIMIT = 262_144;
 const MAX_TEXT = 300;
 
@@ -35,9 +34,6 @@ const clean = (text: string): string | undefined => {
 	return flat === '' ? undefined : flat;
 };
 
-/**
-The content of a `<meta>` tag with this `property` or `name`, whichever order its attributes are in.
-*/
 function metaContent(html: string, key: string): string | undefined {
 	for (const [tag] of html.matchAll(/<meta\b[^>]*>/gi)) {
 		const named = new RegExp(
@@ -58,10 +54,6 @@ function metaContent(html: string, key: string): string | undefined {
 	return undefined;
 }
 
-/**
-The title and description a page gives itself: the share title when it has one, otherwise the `<title>`. Only the start
-of the page is read.
-*/
 export function readPage(html: string): {title?: string; description?: string} {
 	const head = html.slice(0, READ_LIMIT);
 	const tag = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(head);
