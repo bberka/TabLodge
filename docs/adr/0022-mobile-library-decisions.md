@@ -86,7 +86,7 @@ Status: accepted, 2026-11-23. Issue #442.
 * **Adding an entry purges expired ones.** `trash.ts:addToTrash`. A retention that is not a positive number keeps the default.
 * **An entry restored to a new place says where it went.** `trash.ts:restoreEntry`. Where the folder or column is gone it goes to the first one, and the message says so. Bookmarks get new ids; everything syncs, because a restore is newer than the delete.
 * **A link moved out of a deleted column goes back only if it is still where it was put.** `trash.ts:restoreEntry`.
-* **Expired items are gone on every device at the same moment, so nothing is sent for them.** `trash-store.ts:purgeTrash`.
+* **Expiry runs on each device's own clock, and nothing is sent for it.** `trash-store.ts:purgeTrash` and `trash-storage.ts:changeTrash`. A device drops expired items from its own copy when it opens the trash or starts. `readTrash` hides them without writing them back, so an offline device keeps its stored copy until its next trash write. The comment that said expiry happens on every device at once was wrong, and it is not carried into this ADR.
 * **Trash changes queue, so two deletes made together both land.** `trash-storage.ts`. The regular and private trash each have a list, and the private list is offered only while the private library is open.
 * **A trash change waits for the queued ones.** `trash-storage.ts`, the queue wait. A caller about to delete the trash is not overtaken.
 * **What a round brings in is added in one step of the queue.** `trash-storage.ts:readTrash`. A delete made on the phone meanwhile stays.
