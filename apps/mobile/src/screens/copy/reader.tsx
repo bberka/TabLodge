@@ -15,10 +15,9 @@ import type {
 	CopyBlock,
 	PageCopy,
 } from '../../../../extension/src/shared/page-copy';
-import {deleteCopy, readCopy} from '../../library/page-copies';
+import {deleteCopyWithUndo} from '../../library/copy-undo';
+import {readCopy} from '../../library/page-copies';
 import {openLink} from '../../platform/open-links';
-import {confirm} from '../../ui/dialog';
-import {showSnack} from '../../ui/snackbar';
 import {useColors, type Colors} from '../../ui/theme';
 import {Button, Empty, IconButton} from '../../ui/widgets';
 
@@ -117,17 +116,7 @@ function Reader({url, onClose}: {url: string; onClose: () => void}) {
 	}, [url]);
 
 	const remove = () => {
-		confirm(
-			'Delete this copy?',
-			'The link stays saved. Only the copy on this phone is deleted.',
-			{label: 'Delete copy', destructive: true},
-			() => {
-				void deleteCopy(url).then(() => {
-					showSnack('Copy deleted');
-					onClose();
-				});
-			},
-		);
+		void deleteCopyWithUndo(url, openReader).then(onClose);
 	};
 
 	let body: ReactNode = null;
