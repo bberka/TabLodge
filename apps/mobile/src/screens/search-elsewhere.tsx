@@ -22,14 +22,9 @@ import {TARGET, useColors} from '../ui/theme';
 import {Button, Icon} from '../ui/widgets';
 import {SECTIONS} from './settings/settings-index';
 
-// The Development section only shows in development builds.
 const {development, ...SHOWN_SECTIONS} = SECTIONS;
 const SETTINGS_RESULTS = settingsForSearch(__DEV__ ? SECTIONS : SHOWN_SECTIONS);
 
-/**
-Under a screen's own search results: the same query run over the other places, listed with a line that says so.
-With no results of its own, the screen shows them straight away; otherwise a button asks for them.
-*/
 export function SearchElsewhere({
 	store,
 	query,
@@ -41,9 +36,6 @@ export function SearchElsewhere({
 	query: string;
 	here: Place;
 	localCount: number;
-	/**
-	Runs after a result that leads to a session or column is tapped, so the screen can drop its search.
-	*/
 	onJump: () => void;
 }) {
 	const colors = useColors();
@@ -65,8 +57,6 @@ export function SearchElsewhere({
 		(sum, section) => sum + section.items.length,
 		0,
 	);
-	// The intro carries the count, and speaks it once typing pauses. It is shown the same way, so what is read is what
-	// is on screen.
 	const introNow = elsewhereIntro(PLACE_NAME[here], localCount, found);
 	const intro = useSettledText(visible, introNow);
 	if (!isSearching) {

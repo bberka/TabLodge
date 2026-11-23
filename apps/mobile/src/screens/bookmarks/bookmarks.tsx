@@ -95,13 +95,8 @@ import {
 	SelectionBar,
 } from './bookmark-parts';
 
-// The last chip: choosing it opens the form for a new column instead of showing one.
 const NEW_COLUMN_CHIP = '__new-column__';
 
-/**
-The drawer that is open over the list, if any: one bookmark's edit form, the choice of a column to move to, or the form
-for making or changing a column.
-*/
 type Sheet =
 	| {kind: 'edit'; bookmark: Bookmark}
 	| {kind: 'tags'}
@@ -133,7 +128,6 @@ export function BookmarksScreen({
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
-	// In the list view, whether a column is open, as opposed to the list of every column.
 	const [inside, setInside] = useState(false);
 	const isListView = usePreferences().bookmarkView === 'list';
 	const search = useSearch();
@@ -144,13 +138,9 @@ export function BookmarksScreen({
 	const scrollTop = useScrollTop(listRef);
 	const [sortOpen, setSortOpen] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
-	// The bookmark whose menu is open, from holding down its row.
 	const [rowMenuId, setRowMenuId] = useState<string>();
 	const [columnsOpen, setColumnsOpen] = useState(false);
-	// While true, rows show buttons that move them instead of opening them.
 	const [reordering, setReordering] = useState(false);
-	// The drawer for choosing a column to move the selection to.
-	// The bookmark whose edit drawer is open.
 	const [sheet, setSheet] = useState<Sheet>();
 	const editing = sheet?.kind === 'edit' ? sheet.bookmark : undefined;
 	const isMoving = sheet?.kind === 'move';
@@ -183,8 +173,6 @@ export function BookmarksScreen({
 			count: counts.get(column.id) ?? 0,
 		}));
 	}, [store]);
-	// The All column is the first and the default unless it is turned off. A column that no longer exists falls back
-	// to it, or to the first column when it is off.
 	const showAll = links.showAllBookmarks;
 	const hasPicked = columns.some((column) => column.id === picked);
 	const columnId =
@@ -193,7 +181,6 @@ export function BookmarksScreen({
 			: hasPicked
 				? picked
 				: (columns[0]?.id ?? '');
-	// A result of the search on Sessions that points at a column: show that column.
 	const pending = usePendingJump();
 	useEffect(() => {
 		const jump = takeJump('bookmarks');
@@ -204,10 +191,8 @@ export function BookmarksScreen({
 		search.close();
 		setPicked(jump.columnId);
 		setInside(true);
-		// `search` is a fresh object each render; only the jump matters.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- the effect reacts to the jump or the request only, not to the new search object each render
 	}, [pending]);
-	// The Search tile in Quick Settings opens the search, out of any selection or reordering.
 	const searchWanted = useSearchWanted();
 	useEffect(() => {
 		if (!takeSearchRequest()) {
@@ -217,11 +202,9 @@ export function BookmarksScreen({
 		selection.stop();
 		setReordering(false);
 		search.show();
-		// Only a new request matters, as with the jump above.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- the effect reacts to the jump or the request only, not to the new search object each render
 	}, [searchWanted]);
 	const isSearching = query.trim().length > 0;
-	// The list view starts on the list of columns; a search shows its results instead.
 	const atList = isListView && !inside && !isSearching;
 	const fade = useCrossfade(atList);
 	useBackAction(isListView && inside && !isSearching, () => {
@@ -254,7 +237,6 @@ export function BookmarksScreen({
 		columnId === ALL_BOOKMARKS_ID
 			? 'All'
 			: columns.find((column) => column.id === columnId)?.name;
-	// The Unfiled bucket is not a column of its own and cannot be changed.
 	const isEditableColumn =
 		!atList && store.bookmarkColumns.some((column) => column.id === columnId);
 	const columnIndex = atList
@@ -264,7 +246,6 @@ export function BookmarksScreen({
 	const rowMenuBookmark = store.bookmarks.find(
 		(bookmark) => bookmark.id === rowMenuId,
 	);
-	// What holding a row offers: what the swipes and the menu offer, for that one bookmark.
 	const rowActions: SheetAction[] = rowMenuBookmark
 		? [
 				{
@@ -390,7 +371,6 @@ export function BookmarksScreen({
 		remove(new Set(ids));
 	};
 
-	// What the 3 dot menu offers, from what is on screen: nothing to open, select, or put in order in an empty column.
 	const menuActions: SheetAction[] = [
 		...(!isSearching && shown.length > 0 && columnName
 			? [
@@ -643,7 +623,6 @@ export function BookmarksScreen({
 		</>
 	);
 
-	// Every column the chips and the list view draw: All first when it is on, then the columns.
 	const entries: FolderEntry[] = [
 		...(showAll
 			? [
@@ -673,9 +652,7 @@ export function BookmarksScreen({
 		setInside(true);
 	};
 
-	// Three fingers dragged over the rows select them.
 	const dragSelect = useDragSelect({data: shown, selection, listRef});
-	// Stable, so a row redraws only when its own bookmark or selection changes, not on every screen render.
 	const toggleRow = useStableCallback((bookmark: Bookmark) => {
 		selection.toggle(bookmark.id);
 	});
@@ -727,7 +704,6 @@ export function BookmarksScreen({
 							},
 						]}
 						keyboardShouldPersistTaps="handled"
-						// Long columns draw only what is on screen, and a little around it.
 						initialNumToRender={14}
 						windowSize={9}
 						maxToRenderPerBatch={10}
@@ -777,7 +753,6 @@ export function BookmarksScreen({
 												setSheet({kind: 'column'});
 											}}
 											onMenu={(id) => {
-												// The same menu as the three dots, for the held column.
 												openColumn(id);
 												setMenuOpen(true);
 											}}
@@ -804,7 +779,6 @@ export function BookmarksScreen({
 														return;
 													}
 
-													// The same menu as the three dots, for the held column.
 													setPicked(id);
 													setMenuOpen(true);
 												}}
@@ -1049,7 +1023,6 @@ export function BookmarksScreen({
 				column={editingColumn}
 				onClose={(id) => {
 					setSheet(undefined);
-					// A column that was just made is shown, so the new link or move lands where the person can see it.
 					if (id && !editingColumn) {
 						setPicked(id);
 					}

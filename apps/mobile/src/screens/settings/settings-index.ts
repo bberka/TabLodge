@@ -1,7 +1,3 @@
-/*
-Every setting's name and hint, in one place. The rows read their text from here, and the search matches against the
-same text, so the two cannot drift apart.
-*/
 export type Row = {label: string; hint?: string};
 
 export const ROWS = {
@@ -178,9 +174,6 @@ export const ROWS = {
 	},
 } satisfies Record<string, Row>;
 
-/**
-A card of settings. `aliases` are other words that should find the whole card, such as "dark" for the look.
-*/
 export type Section = {title: string; aliases: string[]; rows: Row[]};
 
 export const SECTIONS = {
@@ -449,16 +442,10 @@ const has = (text: string, query: string) =>
 export const rowHit = (row: Row, query: string) =>
 	has(`${row.label} ${row.hint ?? ''}`, query);
 
-/**
-True when the title or an alias matches, so the whole card shows.
-*/
 export const headHit = (section: Section, query: string) =>
 	has(section.title, query) ||
 	section.aliases.some((alias) => has(alias, query));
 
-/**
-Whether a card shows anything for the query: its name, an alias, or one of its rows.
-*/
 export function sectionVisible(section: Section, query: string): boolean {
 	return (
 		query === '' ||
@@ -467,9 +454,6 @@ export function sectionVisible(section: Section, query: string): boolean {
 	);
 }
 
-/**
-How many settings a search finds: the rows that show, and a card with no rows of its own counts as one.
-*/
 export function matchCount(query: string): number {
 	let count = 0;
 	for (const section of Object.values(SECTIONS) as Section[]) {

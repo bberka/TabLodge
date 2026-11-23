@@ -39,8 +39,6 @@ function FolderForm({
 		folder?.colorSessions ?? false,
 	);
 	const [saving, setSaving] = useState(false);
-	// A name that is not allowed is only reported once it was typed, so an empty new form does not start in error. A
-	// library at its folder limit says so at once, because no name would work.
 	const problem =
 		name === '' && !folder
 			? folderLimitProblem(store)
@@ -119,10 +117,6 @@ function FolderForm({
 	);
 }
 
-/**
-The drawer for making a session folder, or changing one's name, icon, and color. Pass the folder to change, or nothing for
-a new one.
-*/
 export function FolderEditSheet({
 	visible,
 	folder,

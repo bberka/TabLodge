@@ -24,10 +24,6 @@ import {SECTIONS} from './settings-index';
 
 type Erasing = 'sessions' | 'bookmarks' | 'everything';
 
-/**
-Bringing links in from a file or pasted text, and saving the library out as a file. What an import reads is the
-extension's own code, so a file reads the same on both.
-*/
 export function DataCard() {
 	const [source, setSource] = useState<ImportSource>();
 	const [exporting, setExporting] = useState(false);

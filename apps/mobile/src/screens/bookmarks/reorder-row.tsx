@@ -5,10 +5,6 @@ import {SiteIcon} from '../../ui/site-icon';
 import {TARGET, useColors} from '../../ui/theme';
 import {IconButton} from '../../ui/widgets';
 
-/**
-A bookmark while the column is being put in order: its title, and buttons that move it. Moving by buttons works
-without dragging, so a long column can be ordered with a screen reader or a switch.
-*/
 export function ReorderRow({
 	bookmark,
 	first,

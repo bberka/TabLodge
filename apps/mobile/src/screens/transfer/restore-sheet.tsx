@@ -24,9 +24,6 @@ export type RestoreSource = {name: string; bytes: Uint8Array};
 
 type Read = Extract<BackupRead, {ok: true}>;
 
-/**
-Puts back what the last restore replaced in this library, and forgets the copy.
-*/
 export async function undoRestore(
 	library: 'regular' | 'private',
 ): Promise<void> {
@@ -45,10 +42,6 @@ export async function undoRestore(
 const plural = (count: number, word: string) =>
 	`${count} ${count === 1 ? word : `${word}s`}`;
 
-/**
-Restores a backup the phone or the extension made. A password-protected one asks for its password. Then the person
-chooses what comes back: everything (the library and the phone's settings) or only the phone's own settings.
-*/
 export function RestoreSheet({
 	source,
 	onClose,
@@ -108,7 +101,6 @@ function RestoreForm({
 			() => {
 				void (async () => {
 					try {
-						// A copy first: if it cannot be kept, nothing is replaced.
 						await keepSafetyCopy(view, store, Date.now(), backupPreferences());
 						await editIn(view, (current) =>
 							replaceLibrary(current, read.store, Date.now()),

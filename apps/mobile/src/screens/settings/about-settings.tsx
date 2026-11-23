@@ -81,10 +81,6 @@ function LicenceText({entry}: {entry: LicenceEntry}) {
 	);
 }
 
-/**
-Every third party package in this build, from the list scripts/licences.mts generates. Tapping one shows its licence
-text; Back returns to the list.
-*/
 function LicencesSheet({
 	visible,
 	onClose,
@@ -170,9 +166,6 @@ function LicencesSheet({
 	);
 }
 
-/**
-Settings › About: one row into the licences of the code this app is built from.
-*/
 export function AboutCard() {
 	const [open, setOpen] = useState(false);
 	return (

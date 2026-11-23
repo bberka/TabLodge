@@ -21,10 +21,6 @@ import {trashDeleted} from '../../library/trash-store';
 import {useColors} from '../../ui/theme';
 import {Button, Field, IconButton} from '../../ui/widgets';
 
-/**
-Deletes a column at once and offers Undo. Its bookmarks move to another column; with no other column they stay unfiled.
-`onDeleted` runs right after.
-*/
 export function confirmDeleteColumn(
 	store: Store,
 	column: {id: string; name: string},
@@ -67,13 +63,7 @@ function ColumnForm({
 	column,
 	onDone,
 }: {
-	/**
-	The column to change, or nothing to make a new one.
-	*/
 	column?: Editing;
-	/**
-	Called when the drawer should close; `id` is the column that was made or changed.
-	*/
 	onDone: (id?: string) => void;
 }) {
 	const colors = useColors();
@@ -83,7 +73,6 @@ function ColumnForm({
 	const [color, setColor] = useState(column?.color ?? '');
 	const [sites, setSites] = useState<readonly string[]>(column?.domains ?? []);
 	const [siteText, setSiteText] = useState('');
-	// Nothing is reported until something was typed; a typed site that cannot be added says why under the field.
 	const siteCheck =
 		siteText.trim() === '' ? undefined : checkColumnSite(sites, siteText);
 	const siteError =
@@ -99,7 +88,6 @@ function ColumnForm({
 
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
-	// A name that is not allowed is only reported once it was typed, so an empty new form does not start in error.
 	const nameProblem =
 		name === '' && !column
 			? undefined
@@ -244,10 +232,6 @@ function ColumnForm({
 	);
 }
 
-/**
-The drawer for making a bookmark column, or changing one's name, icon, color, and sites, or deleting it. Pass the column to
-change, or nothing for a new one.
-*/
 export function ColumnSheet({
 	visible,
 	column,

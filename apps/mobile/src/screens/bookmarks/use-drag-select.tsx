@@ -18,7 +18,6 @@ import {
 } from 'react-native';
 import type {Selection} from '../../ui/use-selection';
 
-// How close to the list's top or bottom edge the fingers must be for it to scroll, and how far it scrolls each move.
 const EDGE = 72;
 const STEP = 28;
 
@@ -29,12 +28,6 @@ type CellProps = {
 	children?: ReactNode;
 };
 
-/**
-Three fingers dragged down or up a list select every row they pass, from the row they started on, and keep what was
-already selected. The list scrolls by itself while the fingers are near its top or bottom edge. Spread `panHandlers` and
-`containerRef`/`onContainerLayout` on a view that wraps the list, pass `CellRenderer`, `onScroll` and `scrollEnabled` to
-the list.
-*/
 export function useDragSelect<T extends {id: string}>({
 	data,
 	selection,
@@ -46,7 +39,6 @@ export function useDragSelect<T extends {id: string}>({
 }) {
 	const [dragging, setDragging] = useState(false);
 	const containerRef = useRef<ComponentRef<typeof View>>(null);
-	// Where each row is in the list's content, by its place in `data`.
 	const layoutsRef = useRef(new Map<number, {y: number; height: number}>());
 	const scrollOffsetRef = useRef(0);
 	const areaRef = useRef({top: 0, height: 0});
@@ -97,7 +89,6 @@ export function useDragSelect<T extends {id: string}>({
 			...baseRef.current,
 			...rows.slice(from, to + 1).map((row) => row.id),
 		]);
-		// Near an edge the list moves under the fingers, so the drag can reach rows that are off screen.
 		if (pageY < areaRef.current.top + EDGE) {
 			listRef.current?.scrollToOffset({
 				offset: Math.max(0, scrollOffsetRef.current - STEP),
@@ -154,7 +145,6 @@ export function useDragSelect<T extends {id: string}>({
 					setDragging(false);
 				},
 			}),
-		// The responder reads everything through refs, so it is made once.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- refs only
 		[],
 	);
@@ -178,7 +168,6 @@ export function useDragSelect<T extends {id: string}>({
 			);
 		}
 
-		// The list hands its cells more than this (a key, the item); only these are used, the rest pass through.
 		return Row as NonNullable<FlatListProps<T>['CellRendererComponent']>;
 	}, []);
 

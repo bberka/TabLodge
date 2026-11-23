@@ -9,30 +9,14 @@ import type {Colors} from '../ui/theme';
 
 type Request = {
 	urls: string[];
-	/**
-	Open all: no chooser, and the question asked before opening many, even for a column or session of one link.
-	*/
 	several: boolean;
-	/**
-	What the links are, for the question asked before opening many.
-	*/
 	from: string;
-	/**
-	Runs once the links were sent off, after the question when there is one, such as marking a session opened.
-	*/
 	onOpen?: () => void;
 };
 
-/**
-The request and the library it came from: locking the private library returns to the regular one, which drops a
-request made in the private one, so its links cannot be opened after the lock.
-*/
 let request: (Request & {view: View}) | undefined;
 const listeners = new Set<() => void>();
 
-/**
-Opens the **Open in** drawer for some links. `OpenInHost`, mounted once near the root, draws it.
-*/
 export function openIn(next: Request | undefined): void {
 	request = next && {...next, view: isPrivateView() ? 'private' : 'regular'};
 	for (const listener of listeners) {
@@ -58,7 +42,6 @@ export function OpenInHost() {
 		}
 	}, [pending, current]);
 	const several = current?.several ?? false;
-	// Read when the drawer opens, so a browser installed meanwhile shows up.
 	const browsers = useMemo(
 		() => (current && several ? installedBrowsers() : []),
 		[current, several],
@@ -95,9 +78,6 @@ export function OpenInHost() {
 	);
 }
 
-/**
-Open in… and Copy link, for a link's menu, after its Open.
-*/
 export function linkOpenActions(url: string, colors: Colors): SheetAction[] {
 	return [
 		{

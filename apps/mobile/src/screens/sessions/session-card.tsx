@@ -29,7 +29,6 @@ import {
 
 const PREVIEW_TABS = 4;
 
-// The actions a screen reader offers on a session card, besides the ones a swipe can also run.
 const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
@@ -46,9 +45,6 @@ const shortDate = (time: number) =>
 		day: 'numeric',
 	});
 
-/**
-A row of small site badges that overlap, as a glance at what a session holds.
-*/
 function TabPreview({session}: {session: Session}) {
 	const colors = useColors();
 	const shown = session.tabs.slice(0, PREVIEW_TABS);
@@ -97,30 +93,15 @@ function SessionCardView({
 }: {
 	session: Session;
 	folderName: string;
-	/**
-	The session is in the Archived folder, so its Archive action takes it out instead.
-	*/
 	archived: boolean;
 	tint: string;
 	expanded: boolean;
-	/**
-	Selecting several sessions: a tap picks this one, and the card shows a check instead of its tile.
-	*/
 	selecting: boolean;
 	checked: boolean;
 	onPick: (id: string) => void;
 	onToggle: (id: string) => void;
-	/**
-	Runs a session action; missing where the library is read only, which allows only opening and sharing.
-	*/
 	onAct: (action: SessionAction, session: Session) => void;
-	/**
-	Opens the menu of one link in the session: edit, add to bookmarks, delete.
-	*/
 	onTabMenu?: (session: Session, tabId: string) => void;
-	/**
-	Runs what swiping a link does; missing where the library is read only.
-	*/
 	onTabAct?: (action: LinkAction, session: Session, tabId: string) => void;
 	onMenu: (session: Session) => void;
 }) {
@@ -419,7 +400,6 @@ function SessionCardView({
 	);
 }
 
-// Cards re-draw only when their own session, folder, or expanded state changes, not on every keystroke in the search.
 export const SessionCard = memo(SessionCardView);
 
 const styles = StyleSheet.create({
@@ -448,7 +428,6 @@ const styles = StyleSheet.create({
 	preview: {flexDirection: 'row', alignItems: 'center', paddingTop: 6},
 	badge: {borderWidth: 2, borderRadius: 13},
 	more: {marginLeft: 6, fontSize: 13, fontWeight: '600'},
-	// The round chevron at the end of the header, which shows the tabs.
 	round: {
 		width: TARGET,
 		height: TARGET,

@@ -19,10 +19,6 @@ import {
 	sessionCount,
 } from './session-changes';
 
-/**
-The buttons at the bottom while sessions are being selected, and the drawer the Move button opens. Each acts on the
-`chosen` sessions, ends the selection, and offers Undo.
-*/
 export function SessionSelectionBar({
 	active,
 	chosen,
@@ -57,9 +53,7 @@ export function SessionSelectionBar({
 		});
 	};
 
-	// Sessions in the Archived folder come out of it when the whole selection is archived already, and go in otherwise.
 	const archiveChosen = () => {
-		// The button is off while nothing is picked.
 		void edit((current) =>
 			archiveSessions(current, chosen, !allArchived, Date.now),
 		);

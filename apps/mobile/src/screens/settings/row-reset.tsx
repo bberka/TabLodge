@@ -20,14 +20,8 @@ import type {Row} from './settings-index';
 
 const DEFAULT_VALUES: SettingValues = {prefs: defaults, synced: DEFAULTS};
 
-/**
-Whether a setting can be put back to its default from the list.
-*/
 export const canReset = (row: Row): boolean => RESETS.has(row);
 
-/**
-Puts these settings back to their defaults. Extension settings go through the library, so they sync.
-*/
 export function resetRows(rows: readonly Row[]): void {
 	const prefs = new Set<keyof Preferences>();
 	const synced = new Set<keyof LinkSettings>();
@@ -52,11 +46,6 @@ export function resetRows(rows: readonly Row[]): void {
 	}
 }
 
-/**
-Holding a setting opens a drawer with one action, putting it back to its default, named when the row's `choices` have
-it. Spread `onLongPress` and the accessibility props on the row and render `sheet` beside it. `changed` is true while
-the setting differs from its default, for the row's marker.
-*/
 export function useRowReset(
 	row: Row,
 	choices?: ReadonlyArray<{id: string; name: string}>,
@@ -73,7 +62,6 @@ export function useRowReset(
 					setOpen(true);
 				}
 			: undefined,
-		// The same drawer for TalkBack and switch users, who cannot hold a row.
 		accessibilityActions: resettable ? [{name: 'reset', label}] : undefined,
 		onAccessibilityAction: resettable
 			? () => {
@@ -101,18 +89,12 @@ export function useRowReset(
 	};
 }
 
-/**
-Whether any setting in these rows differs from its default, for showing a card's reset button.
-*/
 export function useAnyChanged(rows: readonly Row[]): boolean {
 	const prefs = usePreferences();
 	const synced = useLinkSettings(true);
 	return rows.some((row) => isChanged(row, {prefs, synced}, DEFAULT_VALUES));
 }
 
-/**
-Asks before putting every setting of a section back to its default.
-*/
 export function confirmResetSection(title: string, rows: readonly Row[]): void {
 	confirm(
 		`Reset ${title}?`,

@@ -106,10 +106,6 @@ const LOOK_NAMES = {
 	ios: 'the iOS look',
 };
 
-/**
-Puts settings back to their defaults. Without sync everything resets; while syncing, the choice is between this
-phone's own settings and also the ones shared with the extension, which reset on every synced device.
-*/
 function restoreDefaults(syncing: boolean): void {
 	const phone = () => {
 		resetPreferences();
@@ -172,7 +168,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		prefs.accent;
 	useLibrary();
 	const search = useSearch();
-	// A Settings result of the search on Sessions or Bookmarks: show its section through this screen's search.
 	const pending = usePendingJump();
 	useEffect(() => {
 		const jump = takeJump('settings');
@@ -201,7 +196,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		try {
 			await syncClient.syncNow();
 		} catch {
-			// The status line shows why.
 		} finally {
 			await refreshStatus();
 			setBusy(undefined);

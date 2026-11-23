@@ -32,11 +32,6 @@ export type SavedQuote = {
 	undo: QuoteUndo;
 };
 
-/**
-The save drawer for text shared as a quote. It goes into the note of the page's bookmark (or saved tab) with a link to
-the passage, as the extension's Save quote does. When no page link came with the text, the person pastes one or picks
-a bookmark, which the link field searches.
-*/
 export function SaveQuoteForm({
 	initialQuote,
 	initialUrl,
@@ -45,9 +40,6 @@ export function SaveQuoteForm({
 }: {
 	initialQuote: string;
 	initialUrl: string;
-	/**
-	Opens Save link with the shared text instead.
-	*/
 	onLink: () => void;
 	onDone: (saved?: SavedQuote) => void;
 }) {
@@ -72,7 +64,6 @@ export function SaveQuoteForm({
 		target?.kind === 'new' ? url : undefined,
 		savePreview,
 	);
-	// Words in the link field search the bookmarks, so a quote can go on a page saved before.
 	const matches = url
 		? []
 		: (text.trim()
