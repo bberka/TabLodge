@@ -1,6 +1,3 @@
-// Uploads proof images to the `evidence` branch through the GitHub contents API and prints Markdown for the
-// pull request body. Run it with `vp run evidence <pr-number> <file>...`. It needs `gh` signed in with write access.
-// It makes no git push, so the Git hooks do not run. The branch is only a file host: nothing merges from it.
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {basename} from 'node:path';
@@ -28,7 +25,6 @@ const repo = gh([
 try {
 	gh(['api', `repos/${repo}/git/ref/heads/${BRANCH}`]);
 } catch {
-	// First use: start the branch at the default branch's head.
 	const sha = gh(['api', `repos/${repo}/commits/HEAD`, '-q', '.sha']);
 	gh([
 		'api',
@@ -48,9 +44,7 @@ for (const file of files) {
 	let existing: string | undefined;
 	try {
 		existing = gh(['api', `${endpoint}?ref=${BRANCH}`, '-q', '.sha']);
-	} catch {
-		// A new file has no sha to replace.
-	}
+	} catch {}
 
 	const body = {
 		message: `evidence: ${name} for #${pr}`,

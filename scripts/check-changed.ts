@@ -3,10 +3,6 @@ import {existsSync} from 'node:fs';
 import process from 'node:process';
 import {pathToFileURL} from 'node:url';
 
-// `vp run check:changed`: the quick loop while you work. It lints, type checks, and tests only what differs from
-// origin/master. It does not replace `vp run check`, which the pre-push hook and the validation gate still run in full,
-// because a change can break a file it did not touch in ways `--changed` cannot see (a renamed export, a shared type).
-
 const CODE = /\.[cm]?[jt]sx?$/;
 const TYPES = /(?:^|\/)(?:tsconfig[^/]*\.json|package\.json)$|^tsconfig\//;
 
