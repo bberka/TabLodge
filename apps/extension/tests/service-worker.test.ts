@@ -13684,6 +13684,101 @@ test('Keep a copy reads the tab, bookmarks an unsaved page, and goes to the tras
 	assert.deepEqual(structuredClone(listed.urls), []);
 });
 
+const copyKeys = (harness: ReturnType<typeof createWorkerHarness>) =>
+	Object.keys(harness.extraStorage).filter((key) =>
+		key.startsWith('tablodge.copy.'),
+	);
+
+test('DELETE_PAGE_COPY removes the copy at once and Undo brings back the same copy, link intact', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+	});
+	await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	const url = 'https://current.example/';
+	const before = structuredClone(
+		(await harness.sendMessage({type: 'GET_PAGE_COPY', url})).copy,
+	);
+	assert.ok(before);
+
+	const deleted = await harness.sendMessage({type: 'DELETE_PAGE_COPY', url});
+	assert.equal(deleted.ok, true);
+	assert.ok(deleted.undoId);
+	const {undoId} = deleted;
+	assert.deepEqual(copyIndexUrls(harness), []);
+	assert.deepEqual(copyKeys(harness), []);
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_PAGE_COPY', url})).copy,
+		null,
+	);
+	assert.ok(
+		harness.state.bookmarks.some((entry) => entry.url === url),
+		'the link stays saved',
+	);
+
+	const undone = await harness.sendMessage({type: 'UNDO', id: undoId});
+	assert.equal(undone.ok, true, undone.error);
+	assert.deepEqual(copyIndexUrls(harness), [url]);
+	assert.deepEqual(
+		structuredClone(
+			(await harness.sendMessage({type: 'GET_PAGE_COPY', url})).copy,
+		),
+		before,
+	);
+});
+
+test('a deleted copy and its Undo record are gone once the Undo window has passed', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+	});
+	await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_PAGE_COPY',
+		url: 'https://current.example/',
+	});
+	assert.ok(deleted.undoId);
+
+	const undo = harness.extraStorage['tablodge.undo'] as {
+		records: Array<{createdAt: number}>;
+	};
+	for (const record of undo.records) {
+		record.createdAt -= 10 * 60_000;
+	}
+
+	await harness.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.equal(harness.extraStorage['tablodge.undo'], undefined);
+	assert.deepEqual(copyIndexUrls(harness), []);
+	assert.deepEqual(copyKeys(harness), []);
+	const late = await harness.sendMessage({type: 'UNDO', id: deleted.undoId});
+	assert.equal(late.ok, false);
+});
+
+test('Undo of a deleted copy is refused when a new copy was kept since', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+	});
+	await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_PAGE_COPY',
+		url: 'https://current.example/',
+	});
+	await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	const undone = await harness.sendMessage({type: 'UNDO', id: deleted.undoId!});
+	assert.equal(undone.ok, false);
+	assert.match(undone.error!, /changed since/);
+	assert.deepEqual(copyIndexUrls(harness), ['https://current.example/']);
+});
+
+test('deleting a copy that is not there offers no Undo', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const result = await harness.sendMessage({
+		type: 'DELETE_PAGE_COPY',
+		url: 'https://nothing.example/',
+	});
+	assert.equal(result.ok, true);
+	assert.equal(result.undoId, undefined);
+});
+
 test('Keep a copy attaches to the saved link and refuses with the budget message when full', async () => {
 	const state = stateWithSession();
 	const savedUrl = state.groups[0].tabs[0].url!;

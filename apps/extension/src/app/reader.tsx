@@ -1,12 +1,13 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {useCallback, useEffect, useState, type ReactNode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ExternalLink, FileText, Trash2} from 'lucide-react';
-import {Button, ConfirmationDialog, TooltipProvider} from '../shared/ui';
+import {Button, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import type {CopyBlock, PageCopy} from '../shared/page-copy';
+import {COPY_DELETED, type CopyBlock, type PageCopy} from '../shared/page-copy';
 import {webUrl} from '../shared/web-url';
 import {PrivateWindowAppearance} from './private-window-appearance';
+import {offerUndo} from './recovery-core';
 import {
 	Brand,
 	EmptyState,
@@ -105,48 +106,46 @@ function renderBlocks(blocks: readonly CopyBlock[]) {
 
 // The page shows one copy, named in its own address.
 const url = webUrl(new URLSearchParams(location.search).get('url')) ?? '';
+const pageTitle = document.title;
 
 function Reader() {
 	const [copy, setCopy] = useState<PageCopy | null | undefined>();
 	const [loadError, setLoadError] = useState('');
-	const [confirming, setConfirming] = useState(false);
 	const [status, showStatus] = useStatus();
+
+	const load = useCallback(async (isLive: () => boolean = () => true) => {
+		const result = url
+			? await send('GET_PAGE_COPY', {url})
+			: {ok: true as const, copy: null};
+		if (!isLive()) {
+			return;
+		}
+
+		setLoadError(result.ok ? '' : result.error);
+		setCopy(result.ok ? result.copy : null);
+	}, []);
+
+	useEffect(() => {
+		document.title = copy ? `${copy.title} · ${pageTitle}` : pageTitle;
+	}, [copy]);
 
 	useEffect(() => {
 		let live = true;
-		void (async () => {
-			const result = url
-				? await send('GET_PAGE_COPY', {url})
-				: {ok: true as const, copy: null};
-			if (!live) {
-				return;
-			}
-
-			if (!result.ok) {
-				setLoadError(result.error);
-			}
-
-			setCopy(result.ok ? result.copy : null);
-			if (result.ok && result.copy) {
-				document.title = `${result.copy.title} · ${document.title}`;
-			}
-		})();
-
+		void load(() => live);
 		return () => {
 			live = false;
 		};
-	}, []);
+	}, [load]);
 
 	async function remove() {
 		const result = await send('DELETE_PAGE_COPY', {url});
-		setConfirming(false);
 		if (!result.ok) {
 			showStatus(result.error, true);
 			return;
 		}
 
 		setCopy(null);
-		showStatus('Copy deleted. The link stays saved.', false, {toast: true});
+		offerUndo(COPY_DELETED, result.undoId, showStatus, async () => load());
 	}
 
 	const original = url && (
@@ -165,11 +164,7 @@ function Reader() {
 				<div className="flex flex-wrap gap-2">
 					{original}
 					{copy && (
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => setConfirming(true)}
-						>
+						<Button variant="outline" size="sm" onClick={() => void remove()}>
 							<Trash2 aria-hidden="true" />
 							Delete copy
 						</Button>
@@ -217,14 +212,6 @@ function Reader() {
 					{loadError || 'This device has no copy of this page.'}
 				</EmptyState>
 			)}
-			<ConfirmationDialog
-				open={confirming}
-				title="Delete this copy?"
-				description="The link stays saved. Only the copy on this device is deleted."
-				confirmLabel="Delete copy"
-				onOpenChange={setConfirming}
-				onConfirm={() => void remove()}
-			/>
 			<StatusLine status={status} />
 		</PageShell>
 	);

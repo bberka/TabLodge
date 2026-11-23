@@ -52,6 +52,7 @@ export type CopyStorage = {
 };
 
 export const COPY_INDEX_KEY = 'tablodge.copies';
+export const COPY_DELETED = 'Copy deleted. The link stays saved.';
 /**
 Where the extension's capture script leaves a copy in the tab for the worker to collect.
 */

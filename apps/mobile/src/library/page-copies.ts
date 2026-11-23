@@ -76,9 +76,17 @@ export const useCopyUrls = (): ReadonlySet<string> =>
 export const readCopy = async (url: string): Promise<PageCopy | undefined> =>
 	copies.read(url);
 
-export async function deleteCopy(url: string): Promise<void> {
+export async function deleteCopy(url: string): Promise<PageCopy | undefined> {
+	const copy = await copies.read(url);
 	await copies.remove(url);
 	await refresh();
+	return copy;
+}
+
+export async function putCopyBack(copy: PageCopy): Promise<KeepOutcome> {
+	const kept = await copies.keep(copy);
+	await refresh();
+	return kept.ok ? {ok: true} : {ok: false, error: kept.error};
 }
 
 async function server(): Promise<{url: string; token: string} | undefined> {

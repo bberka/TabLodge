@@ -128,6 +128,7 @@ import {
 	CAPTURE_GLOBAL,
 	COPY_BUDGET,
 	COPY_ERRORS,
+	COPY_INDEX_KEY,
 	copyLinkUrls,
 	createCopyStore,
 	parsePageCopy,
@@ -8010,6 +8011,26 @@ async function keepPageCopy(
 	return {ok: true, url, title: copy.title, bookmarked: true};
 }
 
+function deletePageCopy(
+	url: string,
+): Promise<ActionResult<'DELETE_PAGE_COPY'>> {
+	if (privateContext) {
+		return Promise.resolve({ok: true});
+	}
+
+	return mutate(async () => {
+		const entry = (await pageCopies.list()).find((item) => item.url === url);
+		if (!entry) {
+			return {ok: true};
+		}
+
+		return withUndo('Delete copy', [COPY_INDEX_KEY, entry.key], async () => {
+			await pageCopies.remove(url);
+			return {ok: true};
+		});
+	});
+}
+
 /**
 Drops the copies no link holds any more. It reads the whole library and trash first, and waits while an Undo could
 still bring links back; a library it cannot read leaves every copy alone.
@@ -11302,11 +11323,7 @@ async function handleMessage(
 		}
 
 		case 'DELETE_PAGE_COPY': {
-			if (!privateContext) {
-				await pageCopies.remove(String(message.url));
-			}
-
-			return {ok: true};
+			return deletePageCopy(String(message.url));
 		}
 
 		case 'ADD_PAGE_COPIES': {

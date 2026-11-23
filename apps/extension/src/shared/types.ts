@@ -1405,7 +1405,7 @@ export type TabLodgeResponses = {
 	*/
 	GET_PAGE_COPIES: {urls: string[]; size: number; budget: number};
 	GET_PAGE_COPY: {copy: PageCopy | null};
-	DELETE_PAGE_COPY: {};
+	DELETE_PAGE_COPY: Undoable;
 	ADD_PAGE_COPIES: {copies: number};
 	/**
 	`urls`: the link addresses in the trash, which an import skips like saved links.
