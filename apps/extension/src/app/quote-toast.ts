@@ -1,23 +1,24 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference -- the worker project has no DOM types, and this function runs in a page
 /// <reference lib="dom" />
 /**
-The confirmation of a "Save quote" click, shown at the bottom of the page. The service worker passes this function to
-chrome.scripting.executeScript under the activeTab grant of the menu click, so it runs in the page's isolated world, is
+A message on a web page, at the bottom by default: the confirmation of a "Save quote" click, or the Undo after a
+palette restore that moved a session to the trash. The service worker passes this function to
+chrome.scripting.executeScript under an activeTab grant, so it runs in the page's isolated world, is
 serialized as source, and must not use anything declared outside it (no imports, no helpers).
 
 It sits in a closed shadow root with every style set on the element, like the palette overlay, so the page's CSS cannot
 reach it. It never takes focus: the message is announced through a status region, and Undo is a normal button that Tab
-reaches. Undo sends QUOTE_UNDO with `undoId`, which the worker accepts only from the tab it showed this toast in. The toast closes on its own, but not while the pointer or focus
-is on it, and Escape closes it while it has focus.
+reaches. Undo sends `undo.type` with `undo.id`, which the worker accepts only from the tab it showed this toast in. The
+toast closes on its own, but not while the pointer or focus is on it, and Escape closes it while it has focus.
 */
 export function showQuoteToast(toast: {
 	message: string;
 	failed: boolean;
-	undoId?: string;
+	undo?: {type: 'QUOTE_UNDO' | 'TRASH_UNDO'; id: string; done: string};
 	theme: 'system' | 'light' | 'dark';
 	/**
 	The edges to sit at (from `toastEdges`, as the worker cannot pass this function an import) and how long to stay,
-	null for never.
+	absent for never: chrome.scripting drops null and undefined arguments, so a null here arrives missing.
 	*/
 	edges: {
 		top?: string;
@@ -26,7 +27,7 @@ export function showQuoteToast(toast: {
 		right?: string;
 		transform?: string;
 	};
-	closeMs: number | null;
+	closeMs?: number;
 }): boolean {
 	const hostId = 'tablodge-quote-toast';
 	document.querySelector(`#${hostId}`)?.remove();
@@ -100,7 +101,7 @@ export function showQuoteToast(toast: {
 
 	const later = () => {
 		clearTimeout(timer);
-		if (toast.closeMs !== null) {
+		if (toast.closeMs !== undefined) {
 			timer = setTimeout(close, toast.closeMs);
 		}
 	};
@@ -130,28 +131,33 @@ export function showQuoteToast(toast: {
 		return element;
 	};
 
-	if (toast.undoId) {
-		const {undoId} = toast;
-		const undo = button('Undo');
-		undo.addEventListener('click', () => {
-			undo.remove();
+	if (toast.undo) {
+		const {undo} = toast;
+		const undoButton = button('Undo');
+		undoButton.addEventListener('click', () => {
+			undoButton.remove();
 			void chrome.runtime
-				.sendMessage({type: 'QUOTE_UNDO', id: undoId})
-				.then((result: {ok?: boolean; error?: string} | undefined) => {
-					text.textContent = result?.ok
-						? 'Quote removed.'
-						: (result?.error ?? 'Could not undo.');
-				})
+				.sendMessage({type: undo.type, id: undo.id})
+				.then(
+					(
+						result:
+							{ok?: boolean; error?: string; message?: string} | undefined,
+					) => {
+						text.textContent = result?.ok
+							? (result.message ?? undo.done)
+							: (result?.error ?? 'Could not undo.');
+					},
+				)
 				.catch(() => {
 					text.textContent = 'Could not undo.';
 				})
 				.finally(later);
 		});
-		box.append(undo);
+		box.append(undoButton);
 	}
 
 	// Under Messages stay: Until dismissed nothing closes it by itself, so it has a button that does.
-	if (toast.closeMs === null) {
+	if (toast.closeMs === undefined) {
 		const closeButton = button('Close');
 		closeButton.addEventListener('click', close);
 		box.append(closeButton);

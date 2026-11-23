@@ -193,7 +193,7 @@ function createHarness(
 		tabId: number;
 		message: string;
 		failed: boolean;
-		undoId?: string;
+		undo?: {id: string};
 		theme: string;
 	}> = [];
 	const menus = new Map<string, MenuItem>();
@@ -1467,7 +1467,7 @@ test('Save quote bookmarks the page with the quote and a link to it, then append
 	assert.equal(harness.toasts.length, 1);
 	assert.equal(harness.toasts[0].message, 'Quote saved to Reading.');
 	assert.equal(harness.toasts[0].failed, false);
-	assert.ok(harness.toasts[0].undoId);
+	assert.ok(harness.toasts[0].undo);
 	assert.deepEqual(harness.badges, [], 'the toast replaces the badge');
 
 	// The page opened from the saved link reports the address with the fragment; it is still the same bookmark.
@@ -1580,7 +1580,7 @@ test('Save quote refuses a quote that does not fit the note and leaves it as it 
 	assert.equal(harness.toasts.length, 1);
 	assert.equal(harness.toasts[0].failed, true);
 	assert.match(harness.toasts[0].message, /note for this page is full/);
-	assert.equal(harness.toasts[0].undoId, undefined);
+	assert.equal(harness.toasts[0].undo, undefined);
 });
 
 test('Undo from the quote toast removes the quote and the bookmark it made', async () => {
@@ -1588,7 +1588,7 @@ test('Undo from the quote toast removes the quote and the bookmark it made', asy
 	await harness.install();
 	await harness.click(quoted('https://current.example/page', 'Hello'));
 	assert.equal(harness.state.bookmarks.length, 1);
-	const id = harness.toasts[0].undoId!;
+	const {id} = harness.toasts[0].undo!;
 
 	// A page may not run Undo itself, and another tab may not take back this toast's quote.
 	assert.equal((await harness.sendFromPage({type: 'UNDO', id})).ok, false);

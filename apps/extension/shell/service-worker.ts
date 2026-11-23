@@ -2826,7 +2826,7 @@ async function openPaletteInPage(commandTab?: chrome.tabs.Tab) {
 	}
 
 	const frameUrl = chrome.runtime.getURL(
-		`palette.html?overlay=1&window=${commandTab.windowId}`,
+		`palette.html?overlay=1&window=${commandTab.windowId}&tab=${commandTab.id}`,
 	);
 	try {
 		const [result] = await chrome.scripting.executeScript({
@@ -2885,9 +2885,19 @@ async function openPalette(commandTab?: chrome.tabs.Tab) {
 		*/
 	}
 
+	const params = new URLSearchParams();
+	if (isInteger(anchor?.id)) {
+		params.set('window', String(anchor.id));
+	}
+
+	if (isInteger(commandTab?.id)) {
+		params.set('tab', String(commandTab.id));
+	}
+
+	const query = params.toString();
 	const options: chrome.windows.CreateData = {
 		type: 'popup',
-		url: `${palettePrefix}${isInteger(anchor?.id) ? `?window=${anchor.id}` : ''}`,
+		url: `${palettePrefix}${query ? `?${query}` : ''}`,
 		width: PALETTE_WIDTH,
 		height: PALETTE_HEIGHT,
 		focused: true,
@@ -2915,13 +2925,8 @@ no place to restore tabs into): the sender becomes the active tab of that window
 async function paletteSender(
 	sender: chrome.runtime.MessageSender,
 ): Promise<chrome.runtime.MessageSender> {
-	const palettePrefix = chrome.runtime.getURL('palette.html');
-	if (!sender.url?.startsWith(palettePrefix)) {
-		return sender;
-	}
-
-	const id = Number(new URL(sender.url).searchParams.get('window'));
-	if (!isInteger(id)) {
+	const id = paletteAnchorWindow(sender);
+	if (id === undefined) {
 		return sender;
 	}
 
@@ -2933,6 +2938,18 @@ async function paletteSender(
 	} catch {
 		return sender;
 	}
+}
+
+function paletteAnchorWindow(
+	sender: chrome.runtime.MessageSender,
+): number | undefined {
+	const palettePrefix = chrome.runtime.getURL('palette.html');
+	if (!sender.url?.startsWith(palettePrefix)) {
+		return undefined;
+	}
+
+	const id = Number(new URL(sender.url).searchParams.get('window'));
+	return isInteger(id) ? id : undefined;
 }
 
 /**
@@ -10662,15 +10679,48 @@ async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
 }
 
 /**
-The undo id of each Save quote toast, with the tab that shows it: Undo in a page may only take back the quote that
-page's toast reported (see QUOTE_UNDO).
+The undo id of each Save quote toast, and each palette restore toast, with the tab that shows it: Undo in a page may
+only take back what that page's toast reported (see QUOTE_UNDO and TRASH_UNDO). Session storage, because a toast set to
+stay until dismissed outlives the idle worker, and a restarted worker must still let its tab undo.
 */
-const quoteUndoTabs = new Map<string, number>();
+const TOAST_UNDO_PREFIX = 'toastUndoTab:';
+
+async function bindToastUndo(
+	type: 'QUOTE_UNDO' | 'TRASH_UNDO',
+	id: string,
+	tabId: number,
+) {
+	try {
+		await chrome.storage.session?.set({
+			[`${TOAST_UNDO_PREFIX}${type}:${id}`]: tabId,
+		});
+	} catch {}
+}
+
+async function claimToastUndo(
+	type: 'QUOTE_UNDO' | 'TRASH_UNDO',
+	id: string,
+	tabId: number | undefined,
+): Promise<boolean> {
+	const key = `${TOAST_UNDO_PREFIX}${type}:${id}`;
+	try {
+		const stored = await chrome.storage.session?.get(key);
+		if (!isInteger(tabId) || stored?.[key] !== tabId) {
+			return false;
+		}
+
+		await chrome.storage.session?.remove(key);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 /**
-Messages from code in a web page: the site content script and the Save quote toast. They get the source actions (a
-save, the saved page catch-up, and their Undo), Undo of the toast's own quote, and where toasts appear, and nothing
-else: no page can read or change the library through them, and the catch-up answers only how many of its site's links are missing.
+Messages from code in a web page: the site content script and the toasts the worker draws on a page. They get the source
+actions (a save, the saved page catch-up, and their Undo), Undo of the toast's own quote or restore, and where toasts
+appear, and nothing else: no page can read or change the library through them, and the catch-up answers only how many of
+its site's links are missing.
 */
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
@@ -10765,14 +10815,27 @@ async function handleSourceMessage(
 			const {id} = message;
 			if (
 				typeof id !== 'string' ||
-				!isInteger(sender.tab?.id) ||
-				quoteUndoTabs.get(id) !== sender.tab.id
+				!(await claimToastUndo('QUOTE_UNDO', id, sender.tab?.id))
 			) {
 				return {ok: false, error: "Can't undo: it was too long ago."};
 			}
 
-			quoteUndoTabs.delete(id);
 			return undoAction(id);
+		}
+
+		case 'TRASH_UNDO': {
+			const {id} = message;
+			if (
+				typeof id !== 'string' ||
+				!(await claimToastUndo('TRASH_UNDO', id, sender.tab?.id))
+			) {
+				return {ok: false, error: "Can't undo: it was too long ago."};
+			}
+
+			const result = await restoreTrash(id);
+			return result.ok
+				? {ok: true, message: `Restored to ${result.placed}.`}
+				: result;
 		}
 
 		case 'SITE_SOURCE_UNDO': {
@@ -11338,6 +11401,10 @@ async function handleMessage(
 			return restoreTrash(message.id);
 		}
 
+		case 'SHOW_TRASH_UNDO': {
+			return showTrashUndo(sender, message);
+		}
+
 		case 'DELETE_TRASH': {
 			return deleteTrash(message.id);
 		}
@@ -11436,9 +11503,9 @@ async function handleMessage(
 }
 
 /**
-Where the Save quote toast sits and how long it stays, as the page script needs them (it cannot import `toast-prefs`).
+Where a page toast sits and how long it stays, as the page script needs them (it cannot import `toast-prefs`).
 */
-async function quoteToastPlacement() {
+async function pageToastPlacement() {
 	const {toastPosition, toastDuration} = await readSettings();
 	const {top, bottom, left, right, transform} = toastEdges(
 		toastPlace(toastPosition, 'bottom'),
@@ -11446,13 +11513,59 @@ async function quoteToastPlacement() {
 	);
 	return {
 		edges: {top, bottom, left, right, transform},
-		closeMs: toastMs(6000, toastDuration) ?? null,
+		closeMs: toastMs(6000, toastDuration),
 	};
 }
 
 async function toastPrefs(): Promise<ActionResult<'TOAST_PREFS'>> {
 	const {toastPosition, toastDuration} = await readSettings();
 	return {ok: true, position: toastPosition, duration: toastDuration};
+}
+
+async function showTrashUndo(
+	sender: chrome.runtime.MessageSender,
+	message: {tabId: number; message: string; trashId: string},
+): Promise<ActionResult<'SHOW_TRASH_UNDO'>> {
+	const windowId = paletteAnchorWindow(sender);
+	const tab = isInteger(message.tabId)
+		? await chrome.tabs.get(message.tabId).catch(() => undefined)
+		: undefined;
+	if (
+		windowId === undefined ||
+		tab?.windowId !== windowId ||
+		!isInteger(tab.id) ||
+		!/^https?:/i.test(tab.url ?? '')
+	) {
+		return {ok: false, error: 'That page cannot show a message.'};
+	}
+
+	try {
+		const [injected] = await chrome.scripting.executeScript({
+			target: {tabId: tab.id},
+			func: showQuoteToast,
+			args: [
+				{
+					message: message.message,
+					failed: false,
+					undo: {
+						type: 'TRASH_UNDO' as const,
+						id: message.trashId,
+						done: 'Restored.',
+					},
+					theme: asTheme(await readKey(UI_THEME_KEY)),
+					...(await pageToastPlacement()),
+				},
+			],
+		});
+		if (injected?.result !== true) {
+			return {ok: false, error: 'That page cannot show a message.'};
+		}
+
+		await bindToastUndo('TRASH_UNDO', message.trashId, tab.id);
+		return {ok: true};
+	} catch {
+		return {ok: false, error: 'That page cannot show a message.'};
+	}
 }
 
 const EXTENSION_ORIGIN = chrome.runtime.getURL('');
@@ -12528,13 +12641,19 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 		? {
 				message: `Quote saved to ${result.placed}.`,
 				failed: false,
-				...(result.undoId && {undoId: result.undoId}),
+				...(result.undoId && {
+					undo: {
+						type: 'QUOTE_UNDO' as const,
+						id: result.undoId,
+						done: 'Quote removed.',
+					},
+				}),
 			}
 		: {message: result.error, failed: true};
 	let shown = false;
 	if (isInteger(tab?.id)) {
 		if (result.ok && result.undoId) {
-			quoteUndoTabs.set(result.undoId, tab.id);
+			await bindToastUndo('QUOTE_UNDO', result.undoId, tab.id);
 		}
 
 		try {
@@ -12545,7 +12664,7 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 					{
 						...toast,
 						theme: asTheme(await readKey(UI_THEME_KEY)),
-						...(await quoteToastPlacement()),
+						...(await pageToastPlacement()),
 					},
 				],
 			});

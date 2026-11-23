@@ -45,6 +45,7 @@ import {
 import {highlightWords} from '../shared/search-query';
 import {isFirefox, toolbarOpensSidePanel} from '../shared/browser';
 import {send, useCloseOnEscape, type IconComponent} from './common';
+import {paletteUndoToast} from './session-restore-message';
 import {faviconUrl, LinkKindBadge, useServerIcon} from './favicon';
 import {
 	filterItemActions,
@@ -212,7 +213,7 @@ type FinderProps = {
 	Links, searches and session restores then go to `windowId`, the window that was in front when the shortcut was
 	pressed, and the palette window closes after the action succeeded.
 	*/
-	standalone?: {windowId?: number};
+	standalone?: {windowId?: number; tabId?: number};
 };
 
 function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
@@ -380,6 +381,15 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 						if (!result?.ok) {
 							setError(result?.error || 'Could not restore this session.');
 							return;
+						}
+
+						const undoToast = paletteUndoToast(
+							result,
+							item.title,
+							standalone.tabId,
+						);
+						if (undoToast) {
+							await send('SHOW_TRASH_UNDO', undoToast);
 						}
 
 						await focusWindow(standalone.windowId, newTab);
@@ -1053,7 +1063,7 @@ function PaletteBody(props: {
 	state: TabLodgeState;
 	actions: readonly FinderAction[];
 	onDone: () => void;
-	standalone?: {windowId?: number};
+	standalone?: {windowId?: number; tabId?: number};
 	/**
 	Filled with a function that leaves the actions menu (true when one was open), for a Escape handler outside.
 	*/
@@ -1252,11 +1262,13 @@ export function FinderPaletteWindow({
 	state,
 	actions,
 	windowId,
+	tabId,
 	overlay = false,
 }: {
 	state: TabLodgeState;
 	actions: readonly FinderAction[];
 	windowId?: number;
+	tabId?: number;
 	/**
 	The palette is a frame over a web page (see palette-overlay.ts): closing asks the page to remove the frame, and Tab
 	stays inside it.
@@ -1304,7 +1316,7 @@ export function FinderPaletteWindow({
 		document.addEventListener('keydown', trap);
 		return () => document.removeEventListener('keydown', trap);
 	}, [overlay]);
-	const standalone = useMemo(() => ({windowId}), [windowId]);
+	const standalone = useMemo(() => ({windowId, tabId}), [windowId, tabId]);
 	return (
 		<main
 			aria-label="Search TabLodge"

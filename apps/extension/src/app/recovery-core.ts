@@ -2,13 +2,8 @@
 // dialogs live in recovery.tsx and are loaded only when opened.
 import {useCallback, useEffect, useState} from 'react';
 import type {ActionSuccess, RestoreResult} from '../shared/types';
-import {
-	messageOf,
-	plural,
-	restoreSummary,
-	send,
-	type ShowStatus,
-} from './common';
+import {messageOf, plural, send, type ShowStatus} from './common';
+import {sessionRestoreMessage} from './session-restore-message';
 import {claimUndo} from './message-client';
 
 /**
@@ -101,13 +96,9 @@ export function reportSessionRestore(
 	showStatus: ShowStatus,
 	reload: () => unknown,
 ) {
-	const summary =
-		result.failed || result.skipped || result.splitsSeparated
-			? restoreSummary(result)
-			: `Restored “${name}”.`;
 	const {trashId} = result;
 	showStatus(
-		result.removed ? `${summary} Removed it from your sessions.` : summary,
+		sessionRestoreMessage(result, name),
 		Boolean(result.failed),
 		trashId
 			? {

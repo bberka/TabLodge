@@ -28,11 +28,14 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-const toast = (closeMs: number | null, undoId?: string) =>
+const toast = (
+	closeMs?: number,
+	undo?: {type: 'QUOTE_UNDO' | 'TRASH_UNDO'; id: string; done: string},
+) =>
 	showQuoteToast({
 		message: 'Quote saved to Reading.',
 		failed: false,
-		...(undoId && {undoId}),
+		...(undo && {undo}),
 		theme: 'light',
 		edges: {top: '24px', left: '50%', transform: 'translateX(-50%)'},
 		closeMs,
@@ -49,7 +52,7 @@ test('a numeric time closes the toast on its own', async () => {
 });
 
 test('until dismissed it stays, and its Close button closes it without Undo', async () => {
-	toast(null);
+	toast(undefined);
 	await vi.advanceTimersByTimeAsync(10 * 60_000);
 	assert.equal(hostGone(), false);
 	const buttons = [...root.querySelectorAll('button')];
@@ -59,4 +62,44 @@ test('until dismissed it stays, and its Close button closes it without Undo', as
 	);
 	buttons[0].dispatchEvent(new document.defaultView!.Event('click'));
 	assert.equal(hostGone(), true);
+});
+
+test('Undo sends the message the toast was built for and shows the answer', async () => {
+	const sent: unknown[] = [];
+	vi.stubGlobal('chrome', {
+		runtime: {
+			async sendMessage(message: unknown) {
+				sent.push(message);
+				return {ok: true, message: 'Restored to Research.'};
+			},
+		},
+	});
+	toast(6000, {type: 'TRASH_UNDO', id: 'trash-1', done: 'Restored.'});
+	await vi.advanceTimersByTimeAsync(100);
+	const undo = [...root.querySelectorAll('button')].find(
+		(button) => button.textContent === 'Undo',
+	);
+	assert.ok(undo, 'the toast offers Undo');
+	undo.dispatchEvent(new document.defaultView!.Event('click'));
+	await vi.advanceTimersByTimeAsync(0);
+	assert.deepEqual(sent, [{type: 'TRASH_UNDO', id: 'trash-1'}]);
+	assert.equal(
+		root.querySelector('[role="status"]')?.textContent,
+		'Restored to Research.',
+	);
+});
+
+test('a quote toast falls back to its own wording when the answer carries no message', async () => {
+	toast(6000, {type: 'QUOTE_UNDO', id: 'undo-1', done: 'Quote removed.'});
+	await vi.advanceTimersByTimeAsync(100);
+	const undo = [...root.querySelectorAll('button')].find(
+		(button) => button.textContent === 'Undo',
+	);
+	assert.ok(undo, 'the toast offers Undo');
+	undo.dispatchEvent(new document.defaultView!.Event('click'));
+	await vi.advanceTimersByTimeAsync(0);
+	assert.equal(
+		root.querySelector('[role="status"]')?.textContent,
+		'Quote removed.',
+	);
 });

@@ -210,51 +210,6 @@ export function saveWindowLabel(selection: {selected: boolean; count: number}) {
 }
 
 /**
-Why a restored link could not be opened: "<title>: <reason>", or '' without a failure.
-*/
-export function restoreFailureText(failure?: {
-	title?: string;
-	url?: string;
-	error?: string;
-}) {
-	return failure ? `${failure.title || failure.url}: ${failure.error}` : '';
-}
-
-/**
-One-line result of a session restore, with partial failures and their first reason spelled out.
-*/
-export function restoreSummary(result: {
-	count: number;
-	skipped?: number;
-	failed?: number;
-	failures?: Array<{title?: string; url?: string; error?: string}>;
-	splitsSeparated?: number;
-}) {
-	const parts = [
-		`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'}`,
-	];
-	if (result.skipped) {
-		parts.push(
-			`skipped ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'}`,
-		);
-	}
-
-	if (result.failed) {
-		parts.push(`${result.failed} failed`);
-		const reason = restoreFailureText(result.failures?.[0]);
-		if (reason) {
-			parts.push(reason);
-		}
-	}
-
-	if (result.splitsSeparated) {
-		parts.push(splitNote(result.splitsSeparated));
-	}
-
-	return `${parts.join(' · ')}.`;
-}
-
-/**
 One-line result of a workspace switch, for the toast after "Switch to this session".
 */
 export function switchSummary(
@@ -280,12 +235,6 @@ export function switchSummary(
 
 	return `${parts.join(', ')}.`;
 }
-
-/**
-Soft restore note for saved split views the browser would not recreate (the tabs still opened).
-*/
-export const splitNote = (count: number) =>
-	`${count} split ${count === 1 ? 'view' : 'views'} opened as separate tabs`;
 
 /**
 Icon components accepted by the layout helpers (lucide icons).

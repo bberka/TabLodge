@@ -15,13 +15,14 @@ import {
 import {syncNowOutcome} from './sync-now';
 import {keptCopyMessage} from './page-copies';
 import {inPrivateWindow} from './private-config';
-import {paletteOverlay, paletteWindowId} from './page-params';
+import {paletteOverlay, paletteTabId, paletteWindowId} from './page-params';
 
 // The small window the service worker opens for the "Open the search palette" shortcut. It works on every page,
 // restricted ones included, because it is a window of its own and not part of the page. `window` in the address
 // is the browser window that was in front; links, searches and restores go there.
 function PalettePage() {
 	const windowId = paletteWindowId(location.search);
+	const tabId = paletteTabId(location.search);
 	const overlay = paletteOverlay(location.search);
 	const {state, error} = useTabLodgeState();
 	const {setTheme} = useTheme();
@@ -130,6 +131,7 @@ function PalettePage() {
 			state={state}
 			actions={actions}
 			windowId={windowId}
+			tabId={tabId}
 			overlay={overlay}
 		/>
 	);

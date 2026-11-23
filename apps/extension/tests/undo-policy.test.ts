@@ -129,6 +129,8 @@ const notLibraryEdits = [
 	'SITE_SOURCE_CATCH_UP',
 	'SITE_SOURCE_UNDO',
 	'QUOTE_UNDO',
+	'TRASH_UNDO',
+	'SHOW_TRASH_UNDO',
 	'TOAST_PREFS',
 	'UNDO',
 	'DROP_UNDO',
