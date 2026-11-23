@@ -26,6 +26,7 @@ Status: accepted, 2026-11-23. Issue #442.
 
 ### CORS and rate limits
 
+* **Gzip is an option.** `ApiOptions.compress` is on in the Docker server, where pull pages compress to a fraction of their size. Cloudflare compresses at its edge already.
 * **CORS is open.** `createApi` sends `Access-Control-Allow-Origin: *`. The extension calls the server from its own origin and CORS lets it do that without a host permission; the token, not the origin, protects the library.
 * **Limits are fixed windows per server,** which serves one library. The library window (`rateWindow`, `limits.requestsPerMinute`) counts after the token check, so only the owner's devices can use it up. It stops a runaway client from running up the server's cost.
 * **Icons and previews have their own window** (`previewWindow`; `/v1/icon`, `/v1/preview`, `/v1/page-source` skip the library window), because a screen of links asks for a dozen at once and must not use up the library's allowance.
