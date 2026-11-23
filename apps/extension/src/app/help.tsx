@@ -471,8 +471,9 @@ function Help() {
 							so saves on a site do not change where your own bookmarks go. When
 							you delete a site&apos;s column, {PROJECT.name} also offers to
 							stop saving from that site, which removes the site as Remove does;
-							without that, the next save there creates the column again. On the
-							Android app, the column list says which site a column is saved
+							without that, the next save there creates the column again. Undo
+							brings the site back too, after asking for its access again. On
+							the Android app, the column list says which site a column is saved
 							from. It saves a video you add to Watch later, a Reddit post or
 							comment, an X post you bookmark, an Instagram post or reel, a
 							GitHub repository you star (titled with its name and description),

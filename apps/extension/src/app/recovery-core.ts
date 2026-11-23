@@ -92,9 +92,6 @@ export async function undoFromTrash(
 }
 
 /**
-A success toast with an Undo button that restores `trashId` from the trash.
-*/
-/**
 The toast after restoring a session from the popup or side panel. With Remove restored tabs on, what was removed went
 to the trash and Undo brings it back, failures and skipped tabs included.
 */
@@ -123,11 +120,16 @@ export function reportSessionRestore(
 	);
 }
 
+/**
+A success toast with an Undo button that restores `trashId` from the trash. `undo` replaces that click, for a delete
+that also changed something the trash does not hold; `trashId` still decides whether there is an Undo.
+*/
 export function offerTrashUndo(
 	message: string,
 	trashId: string | undefined,
 	showStatus: ShowStatus,
 	reload: () => unknown,
+	undo?: () => Promise<void>,
 ) {
 	showStatus(
 		message,
@@ -136,7 +138,7 @@ export function offerTrashUndo(
 			? {
 					action: {
 						label: 'Undo',
-						onClick: () => undoFromTrash(trashId, showStatus, reload),
+						onClick: undo ?? (() => undoFromTrash(trashId, showStatus, reload)),
 					},
 				}
 			: {toast: true},
