@@ -1,17 +1,3 @@
-// Release versioning (ZeroVer): every release is 0.<minor>.<patch>.
-// <minor> comes from the root VERSION file; <patch> is derived from the existing v0.* release tags:
-//   - no release for this minor yet → 0.<minor>.0
-//   - latest release has the same minor → patch + 1
-//   - VERSION lower than the latest released minor → error (versions never go backwards)
-//
-// CLI (used by .github/workflows/release.yml):
-//   node scripts/release-version.ts next        print the next release version
-//   node scripts/release-version.ts set 0.2.0   write a version into apps/extension/shell/manifest.json
-//   node scripts/release-version.ts set-android 0.2.0   write the version and version code into apps/mobile/app.json
-//   node scripts/release-version.ts set-server 0.2.0   write the version into apps/server/package.json, which the
-//     server reports at /v1/status. Only the image build runs it (.github/workflows/sync-server.yml): the committed
-//     Cloudflare Worker is built from the unstamped file, so the release checks keep finding it current. The release
-//     workflow also runs it for the worker.js on the `release` branch (scripts/release-branch.sh).
 import {execFileSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
@@ -32,9 +18,6 @@ export function parseMinor(text: string): number {
 	return Number(value);
 }
 
-/**
-Parses a ZeroVer release tag such as "v0.1.2" (or "0.1.2"); returns null for anything else.
-*/
 export function parseReleaseTag(
 	tag: string,
 ): {minor: number; patch: number} | null {
@@ -69,9 +52,6 @@ export function nextVersion(minor: number, tags: readonly string[]): string {
 	);
 }
 
-/**
-Replaces the top-level `"version"` value in a JSON file's text, leaving the rest of the file byte-for-byte unchanged so it still matches the repo's formatting (re-serializing would fail `vp run check`).
-*/
 export function stampVersion(text: string, version: string): string {
 	if (!VERSION_PATTERN.test(version)) {
 		throw new Error(`Not a ZeroVer version (0.x.y): "${version}".`);
@@ -93,10 +73,6 @@ export function stampVersion(text: string, version: string): string {
 	return stamped;
 }
 
-/**
-The Android version code of a release. Android only installs an update with a higher code, so it grows with the
-version: 0.2.5 gives 2005, and a minor number or patch of 1000 or more is refused rather than collide.
-*/
 export function androidVersionCode(version: string): number {
 	const match = VERSION_PATTERN.exec(version);
 	if (!match) {
@@ -113,10 +89,6 @@ export function androidVersionCode(version: string): number {
 	return minor * 1000 + patch;
 }
 
-/**
-Writes the release version and version code into the text of mobile/app.json. The file is rewritten as JSON with
-tab indentation, which is how the repo keeps it.
-*/
 export function stampAndroid(text: string, version: string): string {
 	const code = androidVersionCode(version);
 	const config = JSON.parse(text) as {

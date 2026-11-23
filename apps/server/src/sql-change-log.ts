@@ -1,13 +1,3 @@
-/*
-The change log over SQLite, with the rules of the in memory `ChangeLog` in ../../extension/src/shared/sync/change-log.ts. Both
-runtimes have synchronous SQLite: `node:sqlite` in the Docker server and the storage of a Durable Object on
-Cloudflare, so one implementation serves both through the small `Sql` interface.
-
-It is written to stay cheap on a small server and on a Durable Object, which is billed by rows read and written:
-the cursor, purge marks, and record count are kept in a small `meta` table and in memory, read once at start, a push reads only the stamp
-columns of the records it touches, and a purge finds old deletes through a partial index. That assumes this object
-is the only writer of its database, which holds for one Docker server per data folder and for a Durable Object.
-*/
 import {
 	mustResync,
 	pushResult,
@@ -27,13 +17,7 @@ export type SqlRow = Record<string, SqlValue>;
 
 export type Sql = {
 	all(query: string, ...parameters: SqlValue[]): SqlRow[];
-	/**
-	Runs `work` so that either all of its writes happen or none do.
-	*/
 	transaction<T>(work: () => T): T;
-	/**
-	Gives space freed by deleted rows back to the disk, where the runtime does not do that by itself.
-	*/
 	compact?(): void;
 };
 
@@ -46,7 +30,6 @@ const SCHEMA = [
 		deleted INTEGER NOT NULL,
 		change TEXT NOT NULL
 	)`,
-	// Purges look only at old tombstones.
 	'CREATE INDEX IF NOT EXISTS records_tombstones ON records (h) WHERE deleted = 1',
 	'CREATE TABLE IF NOT EXISTS meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)',
 ];
@@ -74,7 +57,6 @@ export class SqlChangeLog implements SyncLog {
 		this.purgedSeq = Number(meta.get('purgedSeq') ?? 0);
 		this.purgedH = meta.get('purgedH') ?? '';
 		this.storedKey = meta.get('key') ?? null;
-		// Kept in `meta` so a Durable Object waking from hibernation does not read every row to count them.
 		const stored = meta.get('count');
 		if (stored === undefined) {
 			this.count = numberOf(sql.all('SELECT COUNT(*) AS n FROM records')[0]?.n);
@@ -154,7 +136,6 @@ export class SqlChangeLog implements SyncLog {
 
 			return {results, seq, added};
 		});
-		// Only once the transaction has committed.
 		this.seq = outcome.seq;
 		this.count += outcome.added;
 		return outcome.results;
@@ -190,7 +171,6 @@ export class SqlChangeLog implements SyncLog {
 			let h = this.purgedH;
 			for (const row of rows) {
 				seq = Math.max(seq, numberOf(row.seq));
-				// Stamps compare as strings.
 				if (String(row.h) > h) {
 					h = String(row.h);
 				}
@@ -215,9 +195,6 @@ export class SqlChangeLog implements SyncLog {
 	}
 }
 
-/**
-A stored change, checked again so a damaged row is skipped instead of sent to devices.
-*/
 function readChange(row: SqlRow): SyncChange | undefined {
 	try {
 		return parseChange(JSON.parse(String(row.change)));

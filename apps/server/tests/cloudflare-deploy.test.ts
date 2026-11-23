@@ -7,7 +7,6 @@ import {PROTOCOL_VERSION} from '../../extension/src/shared/sync/change-log';
 
 const serverDirectory = join(import.meta.dirname, '..');
 
-// Comments and trailing commas out, so JSONC parses as JSON.
 const readJsonc = (path: string) =>
 	JSON.parse(
 		readFileSync(path, 'utf8')
@@ -24,7 +23,6 @@ test('the Deploy to Cloudflare Worker is built from the current server source', 
 	assert.equal(result.status, 0, result.stderr);
 }, 60_000);
 
-// The update workflow (apps/server/cloudflare-deploy/.github/workflows/update-tablodge.yml) reads this line to stop before a release with another protocol.
 test('the Deploy to Cloudflare Worker states its sync protocol where the update workflow reads it', () => {
 	const worker = readFileSync(
 		join(serverDirectory, 'cloudflare-deploy', 'worker.js'),

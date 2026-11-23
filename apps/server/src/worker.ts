@@ -1,10 +1,3 @@
-/*
-The Cloudflare deployment: a Worker in front of one Durable Object that holds the library in its SQLite storage
-and the devices' live WebSockets. A self hosted deployment serves one library, in the object named "default",
-plus the private windows' library under /private, in the object named "private". The Worker answers health checks and refuses a wrong token itself, so those requests never wake the
-object. Live sockets use the hibernation API: an idle object with open sockets is not billed for duration, and
-keepalive pings are answered without waking it.
-*/
 import {DurableObject} from 'cloudflare:workers';
 import {
 	SHARED_PAGE_ID,
@@ -47,10 +40,6 @@ const positive = (raw: string | undefined, fallback: number) => {
 
 type Attachment = {authenticated: boolean; openedAt: number};
 
-/**
-Set by the Worker on every request it forwards, so the object knows which library it holds. Only the main library
-has shared pages.
-*/
 const SPACE_HEADER = 'TabLodge-Library';
 
 export class SyncLibrary extends DurableObject<Env> {
@@ -71,7 +60,6 @@ export class SyncLibrary extends DurableObject<Env> {
 			transaction: (work) => storage.transactionSync(work),
 		};
 		this.log = new SqlChangeLog(sql);
-		// Made on first use, so the private library's object never gets the table.
 		let pages: SqlPageStore | undefined;
 		const api = (withPages: boolean) =>
 			createApi({
@@ -132,7 +120,6 @@ export class SyncLibrary extends DurableObject<Env> {
 			authenticated: false,
 			openedAt: Date.now(),
 		} satisfies Attachment);
-		// An alarm closes it if no token arrives in time; it fires only while such sockets exist.
 		if ((await this.ctx.storage.getAlarm()) === null) {
 			await this.ctx.storage.setAlarm(Date.now() + LIVE_AUTH_TIMEOUT_MS);
 		}
@@ -184,7 +171,6 @@ export class SyncLibrary extends DurableObject<Env> {
 export default {
 	async fetch(request, env): Promise<Response> {
 		const url = new URL(request.url);
-		// The private windows' library is the same API under /private, kept in its own object.
 		const space =
 			url.pathname === PRIVATE_PREFIX ||
 			url.pathname.startsWith(`${PRIVATE_PREFIX}/`)
@@ -195,7 +181,6 @@ export default {
 		}
 
 		const {pathname} = url;
-		// Answered here like the token check below, so neither wakes the Durable Object.
 		if (request.method === 'OPTIONS') {
 			return new Response(null, {status: 204, headers: CORS_HEADERS});
 		}
@@ -212,7 +197,6 @@ export default {
 			);
 		}
 
-		// A shared page is public: no token, and an id that cannot exist does not wake the object.
 		const sharedPage =
 			space === 'default' &&
 			(request.method === 'GET' || request.method === 'POST') &&

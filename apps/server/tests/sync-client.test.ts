@@ -36,16 +36,11 @@ test('a generated token is long enough, safe to paste anywhere, and different ev
 });
 const URL_BASE = 'https://sync.example.test';
 
-/**
-The reference server behind a fake network, with live sockets that hear about every applied push.
-*/
 function makeServer(options: {legacy?: boolean} = {}) {
 	let legacy = options.legacy ?? false;
 	let resyncNext = false;
 	let rewriteStatus: ((body: Record<string, unknown>) => unknown) | undefined;
-	// Requests by path, so a test can tell whether a device pulled or pushed.
 	const requests: string[] = [];
-	// Pushes by how many changes each carried.
 	const pushes: number[] = [];
 	const sockets = new Set<FakeSocket>();
 	let currentLog = new ChangeLog();
@@ -75,33 +70,21 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		sockets,
 		requests,
 		pushes,
-		/**
-		Changes what /v1/status answers, as another server version would; undefined goes back to the real answer.
-		*/
 		setStatus(rewrite: typeof rewriteStatus) {
 			rewriteStatus = rewrite;
 		},
 		setOnline(value: boolean) {
 			online = value;
 		},
-		/**
-		Makes /v1/status answer with a server error, as a proxy in front of the server might for a moment.
-		*/
 		setStatusFails(value: boolean) {
 			statusFails = value;
 		},
 		setLegacy(value: boolean) {
 			legacy = value;
 		},
-		/**
-		Answers the next pull with `resync`, as a server does once it purged tombstones a device has not seen.
-		*/
 		resyncOnce() {
 			resyncNext = true;
 		},
-		/**
-		Forgets every delete older than `before`, as the server does after its retention.
-		*/
 		purge(before: number) {
 			currentLog.purge(before);
 		},
@@ -139,7 +122,6 @@ function makeServer(options: {legacy?: boolean} = {}) {
 				return response;
 			}
 
-			// A server from before the trash, notes, tags, Sources, and newer settings: it lists none of them and refuses a kind it does not know.
 			if (new URL(url).pathname === '/v1/status') {
 				const body = (await response.json()) as {features: string[]};
 				return Response.json({
@@ -162,9 +144,6 @@ function makeServer(options: {legacy?: boolean} = {}) {
 
 			return response;
 		},
-		/**
-		A copy of the library as `node node.js export` writes it.
-		*/
 		async export() {
 			const lines: string[] = [];
 			await exportLibrary(
@@ -175,9 +154,6 @@ function makeServer(options: {legacy?: boolean} = {}) {
 			);
 			return lines;
 		},
-		/**
-		Wipes the server and loads `lines` into it, like restoring a backup.
-		*/
 		async restore(lines: string[]) {
 			app = createServerApi();
 			const read = async function* () {
@@ -257,21 +233,9 @@ let deviceCount = 0;
 
 type Device = {
 	store: Store;
-	/**
-	The trash, for a device whose host has one.
-	*/
 	trash: TrashEntry[];
-	/**
-	The Sources choices, for a device whose host has them (the extension's regular library).
-	*/
 	sources: SyncedSource[];
-	/**
-	Runs as sync applies Sources choices; true stands for an edit made here meanwhile, which the host keeps instead.
-	*/
 	editedDuringApply?: () => boolean;
-	/**
-	Settings kept outside the library, for a device whose host has them (the extension's theme and accents).
-	*/
 	outside: Record<string, unknown>;
 	storage: Map<string, unknown>;
 	backups: string[];
@@ -319,7 +283,6 @@ function makeDevice(
 			async fetch(url, init) {
 				const response = await server.fetch(url, init);
 				if (beforeNotes && new URL(url).pathname === '/v1/status') {
-					// 0.3.0 has no `setting` kind: it neither sends nor takes one, which is what a missing feature does here.
 					const body = (await response.json()) as {features?: string[]};
 					return Response.json({
 						...body,
@@ -333,7 +296,6 @@ function makeDevice(
 					return response;
 				}
 
-				// A version from before notes, tags, and Sources (0.3.0) skips a kind it does not know (its `parseChange` refuses it).
 				const body = (await response.json()) as {
 					changes?: Array<{kind: string}>;
 				};
@@ -402,7 +364,6 @@ function makeDevice(
 			async writeLibrary(next) {
 				device.store = structuredClone(next);
 				if (beforeNotes) {
-					// Its normalizer rebuilds every bookmark from the fields it knows.
 					device.store.bookmarks = device.store.bookmarks.map(
 						({notes: _notes, tags: _tags, hiddenKinds: _hidden, ...rest}) =>
 							rest,
@@ -419,9 +380,6 @@ function makeDevice(
 			},
 			now: () => Date.now(),
 		}),
-		/**
-		A local edit the way the worker reports it.
-		*/
 		edit(change: (store: Store) => Store) {
 			device.store = change(device.store);
 			device.client.localChanged();
@@ -580,8 +538,6 @@ test('tabs pulled a page before their session are kept, and nothing is sent back
 	const server = makeServer();
 	const device = makeDevice(server);
 	await device.client.connect(URL_BASE, TOKEN);
-	// Another device saved 600 tabs, then renamed their session, so the session comes after the tabs and the
-	// device gets the tabs on one page (500 changes) and the session on the next.
 	const now = Date.now();
 	const stamp = (offset: number) =>
 		(now + offset).toString(36).padStart(11, '0') + '00000';
@@ -763,7 +719,6 @@ test('the theme and accents sync between browsers, and a phone holds them withou
 		'held, not read',
 	);
 
-	// What the phone sends back leaves the browsers' theme as it was.
 	phone.edit((store) => ({...store, bookmarks: [bookmark('p1')]}));
 	await phone.client.syncNow();
 	await b.client.syncNow();
@@ -853,7 +808,6 @@ test('when settings start to sync, the server wins over values that never synced
 	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
 	try {
 		await a.client.syncNow();
-		// B syncs last, with a value of its own that never synced: it takes A's instead of sending its own.
 		await b.client.syncNow();
 		await a.client.syncNow();
 	} finally {
@@ -872,7 +826,6 @@ test("a new install that never changed a setting takes the server's values inste
 		withSettings({snapshotKeep: 50, browserBookmarkAction: 'ask'}),
 	);
 	await a.client.connect(URL_BASE, TOKEN);
-	// A phone or a new browser carries every default.
 	const fresh = makeDevice(
 		server,
 		withSettings({snapshotKeep: 25, browserBookmarkAction: 'off'}),
@@ -889,7 +842,6 @@ test("a new install that never changed a setting takes the server's values inste
 test('a device at the defaults that syncs first sends none of them, so the values another browser chose win', async () => {
 	const server = makeServer({legacy: true});
 	const a = makeDevice(server, withSettings({autoBackup: 'daily'}));
-	// A phone, or a browser nobody changed these settings in.
 	const phone = makeDevice(
 		server,
 		withSettings({autoBackup: 'off', snapshotKeep: 25}),
@@ -914,7 +866,6 @@ test('a device at the defaults that syncs first sends none of them, so the value
 	assert.equal(a.store.settings.autoBackup, 'daily');
 	assert.equal(phone.store.settings.autoBackup, 'daily');
 
-	// Once synced, going back to the default is an edit like any other.
 	phone.edit((store) => ({
 		...store,
 		settings: {...store.settings, autoBackup: 'off'},
@@ -924,13 +875,8 @@ test('a device at the defaults that syncs first sends none of them, so the value
 	assert.equal(a.store.settings.autoBackup, 'off');
 });
 
-/**
-Wraps every value as `{sealed}`, the way the private library seals it; a value that arrived plain is resealed.
-*/
 const wrapCodec: SyncCodec = {
-	async prepare() {
-		// Nothing to fetch.
-	},
+	async prepare() {},
 	async seal(change) {
 		return change.deleted ? change : {...change, value: {sealed: change.value}};
 	},
@@ -949,7 +895,6 @@ const settingLine = async (server: ReturnType<typeof makeServer>, id: string) =>
 	);
 
 test('a setting that synced and went back to its default is still resent, and resealed', async () => {
-	// Plain, then a device that seals: the default that arrived plain goes back sealed.
 	const server = makeServer();
 	const plain = makeDevice(server, withSettings({snapshotKeep: 50}));
 	await plain.client.connect(URL_BASE, TOKEN);
@@ -968,7 +913,6 @@ test('a setting that synced and went back to its default is still resent, and re
 		/"sealed":25/,
 	);
 
-	// A server that lost everything gets the default back from resendAll.
 	const lost = makeServer();
 	const a = makeDevice(lost, withSettings({snapshotKeep: 50}));
 	await a.client.connect(URL_BASE, TOKEN);
@@ -984,7 +928,6 @@ test('a setting that synced and went back to its default is still resent, and re
 
 test('a setting from a newer version is held and goes back unchanged', async () => {
 	const server = makeServer();
-	// A newer version sends a setting this one does not know, the way this version keeps one it holds.
 	const newer = makeDevice(
 		server,
 		withSettings({heldSettings: {fromNewer: {mode: 'x'}}}),
@@ -1060,13 +1003,11 @@ test('the trash follows the library: a delete reaches the other device, a restor
 	assert.equal(b.trash[0].label.startsWith('gone'), true);
 	assert.deepEqual(b.trash[0].data.bookmark, bookmark(b.trash[0].id));
 
-	// Restored on b: gone from the trash there, and from a's.
 	b.trash = b.trash.filter((entry) => entry.id !== 'gone-1');
 	b.client.localChanged();
 	await until(() => trashIds(a).length === 1);
 	assert.deepEqual(trashIds(a), ['gone-2']);
 
-	// Emptied on a.
 	a.trash = [];
 	a.client.localChanged();
 	await until(() => b.trash.length === 0);
@@ -1143,7 +1084,6 @@ test('bookmark notes sync, and a version from before notes never sees or erases 
 	await old.client.connect(URL_BASE, TOKEN);
 	assert.deepEqual(ids(old.store), ['b1']);
 
-	// The old version renames the bookmark: the rename reaches the others, the note stays.
 	old.edit((store) => ({
 		...store,
 		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
@@ -1190,9 +1130,7 @@ test('a resync against a server without the notes feature keeps the notes this d
 	await a.client.connect(URL_BASE, TOKEN);
 	assert.equal((await a.client.status()).pending, 0);
 
-	// The server is rolled back to a version without notes, and asks for a full pull.
 	server.setLegacy(true);
-	// Past the ten minutes the client trusts the server's earlier list of features.
 	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
 	try {
 		server.resyncOnce();
@@ -1252,7 +1190,6 @@ test('a connected device notices a new protocol on a later sync, stops, and keep
 		bookmarks: [...store.bookmarks, bookmark('b2')],
 	}));
 	server.requests.length = 0;
-	// Past the ten minutes the client trusts the server's last answer.
 	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
 	try {
 		await a.client.syncNow();
@@ -1268,7 +1205,6 @@ test('a connected device notices a new protocol on a later sync, stops, and keep
 	assert.deepEqual(server.requests, ['/v1/status']);
 	assert.equal(problemBanner(readCompat(stopped))?.stopped, true);
 
-	// The answer that stopped sync is not kept: once the server is back on this protocol, the next round goes ahead.
 	server.setStatus(undefined);
 	await a.client.syncNow();
 	const resumed = await a.client.status();
@@ -1288,7 +1224,6 @@ test('a live reconnect asks the server again, so an update is noticed at once', 
 		await vi.advanceTimersByTimeAsync(100);
 		assert.equal((await a.client.status()).live, true);
 
-		// The server restarts on another protocol: the socket drops and comes back within the ten minutes.
 		server.setStatus((body) => ({...body, protocol: 0}));
 		for (const socket of server.sockets) {
 			socket.close();
@@ -1315,7 +1250,6 @@ test('a server without some features keeps syncing and lists what stays on the d
 	assert.equal(status.phase, 'idle');
 	assert.equal(status.error, null);
 	const compat = readCompat(status);
-	// This test server keeps no shared pages either.
 	assert.deepEqual(
 		compat.missing.map(({name}) => name),
 		[
@@ -1331,7 +1265,6 @@ test('a server without some features keeps syncing and lists what stays on the d
 	);
 	assert.equal(problemBanner(compat)?.stopped, false);
 
-	// Disconnecting forgets what the server said.
 	const off = await a.client.disconnect();
 	assert.equal(off.server, undefined);
 });
@@ -1407,7 +1340,6 @@ test('a status request that fails ends the round, so the tags in that pull are n
 	const b = makeDevice(server);
 	await a.client.connect(URL_BASE, TOKEN);
 	await b.client.connect(URL_BASE, TOKEN);
-	// No live notice: b only pulls when asked to.
 	for (const socket of server.sockets) {
 		socket.close();
 	}
@@ -1415,7 +1347,6 @@ test('a status request that fails ends the round, so the tags in that pull are n
 	a.edit((store) => ({...store, bookmarks: [withTags('b1', ['later'])]}));
 	await a.client.syncNow();
 	server.setStatusFails(true);
-	// Past the ten minutes the client trusts the server's earlier list of features.
 	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
 	try {
 		await b.client.syncNow();
@@ -1464,7 +1395,6 @@ test('a site or field this version does not know goes back to the server unchang
 	const b = makeDevice(server, emptyStore(), {withSources: true});
 	await b.client.connect(URL_BASE, TOKEN);
 	assert.deepEqual(sourceOf(b, 'mastodon'), {columnId: 'col', later: {x: 1}});
-	// Device b edits the library; nothing it sends touches the choice.
 	b.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
 	await until(() => ids(a.store).length === 1);
 	await a.client.syncNow();
@@ -1477,7 +1407,6 @@ test('a version from 0.3.0 and the Android app sync with Sources choices present
 	a.sources = [{id: 'youtube', value: {columnId: 'col'}}];
 	await a.client.connect(URL_BASE, TOKEN);
 	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
-	// The Android app's host has no Sources.
 	const phone = makeDevice(server, emptyStore(), {withTrash: true});
 	await old.client.connect(URL_BASE, TOKEN);
 	await phone.client.connect(URL_BASE, TOKEN);
@@ -1514,7 +1443,6 @@ test('a server without the sources feature keeps syncing the library and leaves 
 	assert.deepEqual(sourceIds(a), ['github']);
 	assert.equal((await a.client.status()).pending, 0);
 
-	// Once the server is updated, the choices go out.
 	server.setLegacy(false);
 	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
 	try {
@@ -1532,7 +1460,6 @@ test('a browser that skipped Sources choices on 0.3.0 gets them once it updates,
 	const a = makeDevice(server, emptyStore(), {withSources: true});
 	a.sources = [{id: 'youtube', value: {columnId: 'col'}}];
 	await a.client.connect(URL_BASE, TOKEN);
-	// Pages past one push, so the pull from the start runs over several of them.
 	a.edit((store) => ({
 		...store,
 		bookmarks: Array.from({length: 600}, (_, index) => bookmark(`b${index}`)),
@@ -1542,7 +1469,6 @@ test('a browser that skipped Sources choices on 0.3.0 gets them once it updates,
 	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
 	await old.client.connect(URL_BASE, TOKEN);
 	assert.equal(ids(old.store).length, 600);
-	// An edit made on 0.3.0 that is still waiting when the browser updates.
 	server.setOnline(false);
 	old.edit((store) => ({
 		...store,
@@ -1554,7 +1480,6 @@ test('a browser that skipped Sources choices on 0.3.0 gets them once it updates,
 	old.client.stop();
 	server.setOnline(true);
 
-	// The same browser on this version: same storage, now with Sources.
 	const updated = makeDevice(server, old.store, {
 		withSources: true,
 		storage: old.storage,
@@ -1564,7 +1489,6 @@ test('a browser that skipped Sources choices on 0.3.0 gets them once it updates,
 	assert.deepEqual(updated.sources, [
 		{id: 'youtube', value: {columnId: 'col'}},
 	]);
-	// One push with the waiting edit, not a restart that sends every record again as after a server reset.
 	assert.deepEqual(server.pushes.slice(before), [1]);
 	await a.client.syncNow();
 	assert.equal(
@@ -1598,7 +1522,6 @@ test('a Settings edit made while sync applies choices is kept and sent in the sa
 	a.client.localChanged();
 	await until(() => sourceIds(b).includes('reddit'));
 
-	// A changes Reddit's column while B removes Reddit just as that change is applied.
 	b.editedDuringApply = () => {
 		b.editedDuringApply = undefined;
 		b.sources = [];
@@ -1633,7 +1556,6 @@ test('a browser that updates from 0.3.0 still drops a record deleted elsewhere w
 	await a.client.syncNow();
 	server.purge(Date.now() + 1000);
 
-	// Its waiting edit, made on 0.3.0 before the update, is kept and sent.
 	const local = {
 		...old.store,
 		bookmarks: [...old.store.bookmarks, bookmark('mine')],
@@ -1642,10 +1564,6 @@ test('a browser that updates from 0.3.0 still drops a record deleted elsewhere w
 		withSources: true,
 		storage: old.storage,
 	});
-	/*
-	A second on: the server refuses a record it never had whose stamp is not past the newest purged delete, and a stamp
-	from the same millisecond as that delete would be refused as stale.
-	*/
 	vi.useFakeTimers({now: Date.now() + 1000, toFake: ['Date']});
 	try {
 		await updated.client.wake();

@@ -1,19 +1,3 @@
-/*
-The Docker server: the sync API on Node, with the library in one SQLite file and the private windows' library,
-served under /private, in a second one.
-
-Environment:
-	TABLODGE_SYNC_TOKEN   required, at least 32 characters; devices send it as the bearer token
-	PORT                  default 8787
-	DATA_DIR              default ./data; holds library.db and private.db
-	MAX_RECORDS           default 500000
-	RETENTION_DAYS        default 90
-	RATE_LIMIT_PER_MINUTE default 300; requests per minute before the server answers 429
-
-Commands, run inside the container with `docker exec`:
-	node node.js export   writes the library to stdout as JSON lines (a backup)
-	node node.js import   reads such a file from stdin into the server
-*/
 import {mkdirSync} from 'node:fs';
 import {lookup} from 'node:dns/promises';
 import {join} from 'node:path';
@@ -44,9 +28,6 @@ import {SqlChangeLog} from './sql-change-log';
 import {SqlPageStore} from './shared-pages';
 import {runTransfer} from './transfer';
 
-/**
-Every address a host name points at, so a site that points at this server's own network is refused.
-*/
 async function resolveAddresses(host: string) {
 	const found = await lookup(host, {all: true});
 	return found.map(({address}) => address);
@@ -62,9 +43,6 @@ function positive(name: string, fallback: number): number {
 	return value;
 }
 
-/**
-Starts the server; runs until the container stops.
-*/
 function startServer() {
 	const token = process.env.TABLODGE_SYNC_TOKEN ?? '';
 	if (token.length < MIN_TOKEN_LENGTH) {
@@ -84,11 +62,9 @@ function startServer() {
 			DEFAULT_LIMITS.requestsPerMinute,
 		),
 	};
-	// Sockets that have not authenticated yet, with the timer that closes them. Shared by both libraries.
 	const waiting = new Map<WSContext, ReturnType<typeof setTimeout>>();
 	let openSockets = 0;
 
-	// Shared pages belong to the main library only.
 	const space = (file: string, withPages: boolean) => {
 		const sql = sqlite(join(dataDirectory, file));
 		const log = new SqlChangeLog(sql);
@@ -111,7 +87,6 @@ function startServer() {
 	};
 
 	const main = space('library.db', true);
-	// Opened on first use, so a server whose devices never sync private windows has no second file.
 	let privateSpace: ReturnType<typeof space> | undefined;
 	const privateLibrary = () => {
 		privateSpace ??= space('private.db', false);
@@ -140,8 +115,8 @@ function startServer() {
 				const {log, sockets} = library();
 				if (event.data === LIVE_PING) {
 					socket.send(LIVE_PONG);
+					// eslint-disable-next-line no-empty -- authenticated devices have nothing else to say
 				} else if (sockets.has(socket)) {
-					// Authenticated devices have nothing else to say.
 				} else if (isAuthMessage(event.data, token)) {
 					clearTimeout(waiting.get(socket));
 					waiting.delete(socket);
@@ -168,7 +143,6 @@ function startServer() {
 		const url = new URL(c.req.url);
 		url.pathname = url.pathname.slice(PRIVATE_PREFIX.length);
 		const {method} = c.req;
-		// A new request rather than one built from the incoming one, which Node's server adapter does not allow.
 		return privateLibrary().api.fetch(
 			new Request(url, {
 				method,
@@ -196,7 +170,6 @@ function startServer() {
 	}
 }
 
-// `node node.js export` and `node node.js import` copy the library out of or into this server (see transfer.ts).
 const command = process.argv[2];
 if (command === 'export' || command === 'import') {
 	try {
