@@ -1,9 +1,3 @@
-/*
-The phone's private library, run through its real logic with the native crypto module replaced by a Node stand-in
-(tests/support/fake-crypto.ts). The server is the real sync API; the "extension side" is the extension's own sync client,
-private codec, and key code. What these tests cannot show: that the Kotlin TablodgeCryptoModule behaves like its
-stand-in, and anything on screen.
-*/
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, describe, test, vi} from 'vite-plus/test';
 import type * as PhoneModule from '../src/private/private-library';
@@ -72,13 +66,9 @@ const newId = () => {
 	return `id-${counter}`;
 };
 
-// A short, number-only password, the kind an older version called a PIN, and a long one.
 const PIN = {value: '4821'};
 const PASSWORD = {value: 'correct horse battery'};
 
-/**
-Loads the phone's modules afresh and starts them from what is saved, as an app start does.
-*/
 async function startPhone(): Promise<Phone> {
 	vi.resetModules();
 	const phone = await import('../src/private/private-library');
@@ -87,9 +77,6 @@ async function startPhone(): Promise<Phone> {
 	return phone;
 }
 
-/**
-What connecting a server does: the address is saved, and the private library starts using it.
-*/
 async function connectPhone(phone: Phone) {
 	memory.set(SYNC_CONFIG_KEY, JSON.stringify({url: URL_BASE, token: TOKEN}));
 	await phone.reconnectPrivate();
@@ -102,9 +89,6 @@ const addLink = async (phone: Phone, url: string, title = url) =>
 const urlsOf = (store: {bookmarks: Array<{url: string}>}) =>
 	store.bookmarks.map((bookmark) => bookmark.url).toSorted();
 
-/**
-What the server holds for the private library, as the values on the wire.
-*/
 async function serverRecords(): Promise<Array<{kind: string; value: unknown}>> {
 	const response = await server.fetch(
 		`${URL_BASE}/private/v1/changes?cursor=0&limit=1000`,
@@ -132,8 +116,6 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	// Lets a round started by an unlock finish, then stops the live connections and timers of every phone this test
-	// started, so none reaches the next test's server.
 	await new Promise((resolve) => {
 		setTimeout(resolve, 80);
 	});
@@ -187,7 +169,6 @@ describe('without a server', () => {
 		await phone.wakePrivate();
 		const result = await phone.openFromServer();
 		assert.deepEqual(result, {ok: false, reason: 'not-connected'});
-		// The status the private card reads: off, with no error and no key request.
 		await phone.refreshPrivateStatus();
 		const status = phone.getPrivateStatus();
 		assert.equal(status.phase, 'off');
@@ -205,7 +186,6 @@ describe('without a server', () => {
 		await phone.lockPrivate();
 		assert.equal(phone.isPrivateOpen(), false);
 
-		// A restart finds it locked, with its data on the phone.
 		phone = await startPhone();
 		assert.equal(phone.isPrivateOpen(), false);
 		assert.equal(await phone.unlockPrivate('0000'), 'wrong');
@@ -222,7 +202,6 @@ describe('without a server', () => {
 		await phone.setupPrivate({value: '2468'});
 		await addLink(phone, 'https://a.example/');
 		await phone.lockPrivate();
-		// What an older version stored: the same record, saying it is a PIN.
 		const stored = JSON.parse(memory.get('tablodge.private.lock')!) as object;
 		memory.set(
 			'tablodge.private.lock',
@@ -235,7 +214,6 @@ describe('without a server', () => {
 		assert.equal(await phone.unlockPrivate('2468'), 'ok');
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 
-		// The same short number is the password of the extension's library on the server, and the phone joins with it.
 		const extension = makeExtension(server);
 		await extension.protect({value: '2468'});
 		extension.edit((store) =>
@@ -247,7 +225,6 @@ describe('without a server', () => {
 			),
 		);
 		await extension.sync();
-		// A second phone, with nothing of its own.
 		memory.clear();
 		const other = await startPhone();
 		await connectPhone(other);
@@ -260,7 +237,6 @@ describe('without a server', () => {
 		let phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://a.example/');
-		// A library from an earlier version has no PIN, and does not open until it gets one.
 		assert.equal(phone.getPrivateState().needsPassword, true);
 		assert.equal(phone.isPrivateOpen(), false);
 		await phone.protectPrivate(PIN);
@@ -292,17 +268,14 @@ describe('without a server', () => {
 		await addLink(phone, 'https://a.example/');
 		failRemoval.add('tablodge.private.lock');
 		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
-		// Closed at once: nothing opens it and nothing syncs it while the erase is unfinished.
 		assert.equal(phone.privateExists(), false);
 		assert.equal(phone.isPrivateOpen(), false);
 		assert.equal(phone.getPrivateState().needsPassword, false);
 
-		// A restart while storage still fails keeps it closed.
 		phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
 		assert.equal(phone.isPrivateOpen(), false);
 
-		// Once storage works, the next start finishes the erase.
 		failRemoval.clear();
 		phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
@@ -326,7 +299,6 @@ describe('without a server', () => {
 		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 
-		// When writes work again, the same erase goes through.
 		failWrite.clear();
 		await phone.removePrivate();
 		assert.equal(phone.privateExists(), false);
@@ -364,7 +336,6 @@ describe('without a server', () => {
 		);
 		phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
-		// Starting over asks for a new PIN, and the old one no longer opens anything.
 		await phone.setupPrivate(PASSWORD);
 		assert.deepEqual(phone.getPrivateStore().bookmarks, []);
 		await phone.lockPrivate();
@@ -414,13 +385,11 @@ describe('with the extension on the same server', () => {
 		await extension.sync();
 		assert.equal((await extension.client.status()).needsKey, true);
 		assert.deepEqual(extension.store.bookmarks, []);
-		// A wrong PIN does not open the server's key.
 		await assert.rejects(extension.enterCredential('0000'), Error);
 		await extension.enterCredential(PIN.value);
 		await extension.sync();
 		assert.deepEqual(urlsOf(extension.store), ['https://a.example/']);
 
-		// And what the extension adds comes back to the phone.
 		extension.edit((store) =>
 			addBookmark(
 				store,
@@ -500,7 +469,6 @@ describe('with the extension on the same server', () => {
 		assert.equal(phone.isPrivateOpen(), true);
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://ext.example/']);
 
-		// The phone now holds the extension's lock: the same PIN opens it after a restart.
 		const restarted = await startPhone();
 		assert.equal(restarted.isPrivateOpen(), false);
 		assert.equal(await restarted.unlockPrivate(PIN.value), 'ok');
@@ -508,7 +476,6 @@ describe('with the extension on the same server', () => {
 			'https://ext.example/',
 		]);
 
-		// Edits made on the phone reach the extension, sealed.
 		await addLink(restarted, 'https://phone.example/');
 		await restarted.syncPrivate();
 		await extension.sync();
@@ -564,7 +531,6 @@ describe('with the extension on the same server', () => {
 		);
 		await extension.sync();
 
-		// The device-only choice turns the private sync off before the library is made.
 		const before = (await serverRecords()).length;
 		prefs.syncPrivate = false;
 		const phone = await startPhone();
@@ -653,14 +619,12 @@ describe('with the extension on the same server', () => {
 		assert.equal(result.ok, false);
 		failRemoval.clear();
 
-		// The retry checks the credential again, even though the lock already carries the server's id.
 		assert.deepEqual(await phone.openFromServer('0000'), {
 			ok: false,
 			reason: 'wrong',
 		});
 		assert.deepEqual(await phone.openFromServer(PASSWORD.value), {ok: true});
 
-		// A sync round now seals with the server's key, which the extension holds.
 		await phone.syncPrivate();
 		await extension.sync();
 		assert.deepEqual(urlsOf(extension.store), ['https://phone.example/']);
@@ -706,7 +670,6 @@ describe('with the extension on the same server', () => {
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://phone.example/');
 
-		// Pause the PIN change inside its turn of the queue, while the join is started and finishes its own checks.
 		const {unwrapHold} = await import('./support/fake-crypto');
 		const {promise: hold, resolve: release} = Promise.withResolvers<void>();
 		unwrapHold.next = hold;
@@ -775,7 +738,6 @@ describe('with the extension on the same server', () => {
 		});
 		const joining = phone.openFromServer(PASSWORD.value);
 		await reached;
-		// Both run at once: the join's writes and the setup's are queued, not interleaved.
 		release();
 		await Promise.all([joining, phone.setupPrivate(PIN)]);
 
@@ -790,7 +752,6 @@ describe('with the extension on the same server', () => {
 		await phone.setupPrivate(PIN);
 		await connectPhone(phone);
 		await addLink(phone, 'https://one.example/');
-		// Two rounds, so the next pull is empty and the round goes on to send.
 		await phone.syncPrivate();
 		await phone.syncPrivate();
 		assert.ok(
@@ -798,7 +759,6 @@ describe('with the extension on the same server', () => {
 			'what is sent before the lock is sealed',
 		);
 
-		// Hold the next round after it has read the server's key, then lock the library under it.
 		await addLink(phone, 'https://two.example/');
 		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
 		const {promise: reached, resolve: markReached} =
@@ -894,7 +854,6 @@ describe('with the extension on the same server', () => {
 			'the server’s key is untouched',
 		);
 		assert.equal(phone.getPrivateStatus().needsKey, true);
-		// The server's credential still opens the server's library, and the phone's own does not.
 		assert.deepEqual(await phone.openFromServer(PIN.value), {
 			ok: false,
 			reason: 'wrong',
@@ -953,7 +912,6 @@ describe('with the extension on the same server', () => {
 		await connectPhone(phone);
 		await addLink(phone, 'https://a.example/');
 		await phone.syncPrivate();
-		// A new PIN changed while the server was away is still to be sent.
 		server.setOnline(false);
 		assert.equal(await phone.changePrivateLock(PIN.value, PASSWORD), 'ok');
 		server.setOnline(true);
@@ -1028,7 +986,6 @@ describe('with the extension on the same server', () => {
 		await connectPhone(phone);
 		await addLink(phone, 'https://a.example/');
 		await phone.syncPrivate();
-		// A new PIN changed while the server was away is still to be recorded as sent.
 		server.setOnline(false);
 		assert.equal(await phone.changePrivateLock(PIN.value, PASSWORD), 'ok');
 		server.setOnline(true);
@@ -1110,7 +1067,6 @@ describe('with the extension on the same server', () => {
 		const phone = await startPhone();
 		await connectPhone(phone);
 
-		// Hold the join's key request, as a slow server would, while a phone-only library is set up.
 		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
 		const {promise: reached, resolve: markReached} =
 			Promise.withResolvers<void>();
@@ -1124,7 +1080,6 @@ describe('with the extension on the same server', () => {
 			return real(url, init);
 		});
 		const joining = phone.openFromServer(PASSWORD.value);
-		// The join is now waiting on the server, past the point where it notes the library's state.
 		await reached;
 		await phone.setupPrivate(PIN);
 		release();
@@ -1162,7 +1117,6 @@ describe('with the extension on the same server', () => {
 		);
 		await extension.sync();
 
-		// The phone already has a library with its own links, and has never synced it.
 		const phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://phone-1.example/');
@@ -1193,7 +1147,6 @@ describe('with the extension on the same server', () => {
 			(await serverRecords()).every((record) => isSealed(record.value)),
 		);
 
-		// The same record edited on both sides ends the same on both.
 		const shared = phone
 			.getPrivateStore()
 			.bookmarks.find((bookmark) => bookmark.id === 'ext-1')!;
@@ -1246,7 +1199,6 @@ describe('with the extension on the same server', () => {
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://phone.example/');
 		await connectPhone(phone);
-		// Its own lock does not match the server's key.
 		assert.equal(phone.getPrivateStatus().needsKey, true);
 		assert.deepEqual(await phone.openFromServer(PIN.value), {
 			ok: false,
@@ -1282,7 +1234,6 @@ describe('with the extension on the same server', () => {
 
 		const phone = await startPhone();
 		await connectPhone(phone);
-		// The drawer asked while the network was out: it reports a failed lookup, not "no key on the server".
 		server.setOnline(false);
 		assert.deepEqual(await phone.privateServerInfo(), {
 			connected: true,
@@ -1293,14 +1244,11 @@ describe('with the extension on the same server', () => {
 		await addLink(phone, 'https://phone.example/');
 		server.setOnline(true);
 
-		// Back online, the round finds the server's key. The phone's own key is not stored over it (the server only
-		// takes a key when it has none), and nothing the phone holds is sent.
 		await phone.syncPrivate();
 		assert.equal(server.privateLog.key, keyBefore);
 		assert.equal((await serverRecords()).length, recordsBefore);
 		assert.equal(phone.getPrivateStatus().needsKey, true);
 
-		// The way back is the same as for a device-only library: the server's PIN, entered from Settings.
 		assert.deepEqual(await phone.openFromServer(PASSWORD.value), {ok: true});
 		assert.equal(server.privateLog.key, keyBefore);
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), [
@@ -1315,7 +1263,6 @@ describe('with the extension on the same server', () => {
 	});
 
 	test('a password added to a library from an earlier version seals what is already plain on the server, and the extension can still read it', async () => {
-		// An earlier version synced this library plain: the server holds plain records.
 		const older = makeExtension(server);
 		older.edit((store) =>
 			addBookmark(
@@ -1355,7 +1302,6 @@ describe('with the extension on the same server', () => {
 			'https://b.example/',
 		]);
 
-		// New edits stay sealed, and a restart unlocks with the same PIN and keeps syncing.
 		await phone.lockPrivate();
 		const restarted = await startPhone();
 		assert.equal(await restarted.unlockPrivate(PIN.value), 'ok');
@@ -1512,7 +1458,6 @@ describe('disconnecting and locking by itself', () => {
 		await phone.setupPrivate(PIN);
 		assert.ok(phone.isPrivateOpen());
 
-		// Never: nothing locks it.
 		prefs.privateLockMode = 'manual';
 		hooks.appState!('background');
 		hooks.screenOff!();
@@ -1538,7 +1483,6 @@ describe('disconnecting and locking by itself', () => {
 			hooks.appState!('active');
 			await vi.waitFor(() => undefined);
 			assert.ok(phone.isPrivateOpen(), 'four minutes is not yet five');
-			// Coming back to the app counts as a touch, so the wait starts over.
 			vi.setSystemTime(Date.now() + 6 * 60_000);
 			hooks.appState!('active');
 		} finally {

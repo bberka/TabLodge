@@ -22,11 +22,6 @@ import {
 import {emptyStore} from '../src/library/store-shape';
 import {addToTrash, restoreEntry, type NewTrash} from '../src/library/trash';
 
-/*
-Undo and the trash's Restore, against the Docker server's own storage (SQLite) and the extension's sync client: the
-phone deletes something, both devices sync, the phone brings it back, both sync again, and the other device must hold
-what the phone holds. A restore that the server refuses to bring back shows up as a library that differs.
-*/
 const TOKEN = 'undo-test-token-0123456789-abcdefghijkl';
 const URL_BASE = 'https://sync.example.test';
 
@@ -159,9 +154,6 @@ async function setup() {
 	return {phone, extension};
 }
 
-/**
-Runs a phone edit, then syncs both devices, like a person waiting for the sync after each action.
-*/
 async function edit(
 	phone: Device,
 	extension: Device,
@@ -215,7 +207,6 @@ describe('Undo of something that already synced reaches the other device', () =>
 			extension.store.groups.find((g) => g.id === 's1')?.tabs.map((t) => t.id),
 			['t1', 't3'],
 		);
-		// The app's Undo puts the whole session back as it was.
 		await edit(phone, extension, (s) =>
 			restoreSession(removeSession(s, 's1', clock), session, clock),
 		);
@@ -239,7 +230,6 @@ describe('Undo of something that already synced reaches the other device', () =>
 			2,
 		);
 
-		// Deleted together with its bookmarks.
 		await edit(phone, extension, (s) => deleteColumn(s, 'c2', null, clock));
 		assert.equal(extension.store.bookmarks.length, 1);
 		await edit(phone, extension, (s) => restoreColumn(s, whole, own, clock));

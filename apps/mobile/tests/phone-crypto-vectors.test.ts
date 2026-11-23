@@ -1,9 +1,3 @@
-/*
-What the phone's Kotlin crypto module (TablodgeCryptoModule) really wrote, opened by the extension's own code. The
-fixture was captured from a release build on an Android emulator: the phone wrapped a data key with the PIN 2468
-(`wrapKey`) and sealed a bookmark with that key (`sealValue`), and a Web Crypto reader in Node must read both. The
-other direction, the extension's output opened by the Kotlin module, can only be shown on a device.
-*/
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {

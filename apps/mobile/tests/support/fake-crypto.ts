@@ -1,10 +1,3 @@
-/*
-Stands in for the phone's native TablodgeCryptoModule under Node. It follows the same contract as the Kotlin code
-(modules/tablodge-crypto/android/.../TablodgeCryptoModule.kt) with Web Crypto, so the phone's JavaScript can be tested
-against the extension's own envelope code. The Kotlin code itself is checked against the extension's reader by tests/phone-crypto-vectors.test.ts, which opens output captured from a real device.
-The wrap work factor is kept low so a test does not wait on 600,000 rounds each time; the envelope records it, and the
-extension's reader honors it.
-*/
 import {Buffer} from 'node:buffer';
 
 const ITERATIONS = 1000;
@@ -63,9 +56,6 @@ export async function wrapKey(
 	return b64(new Uint8Array([...header, ...sealed]));
 }
 
-/**
-Holds the next unwrap until the promise settles, for a test that needs to pause one step of the phone.
-*/
 const holds = globalThis as {
 	__phoneUnwrapHold?: {next: Promise<void> | undefined};
 };

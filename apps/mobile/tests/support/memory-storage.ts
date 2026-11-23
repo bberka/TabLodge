@@ -1,7 +1,3 @@
-/*
-The phone's key-value storage in memory. The map lives on `globalThis` so a test can load the app's modules again,
-the way a restart does, and find what was saved.
-*/
 const globals = globalThis as {
 	__phoneStorage?: Map<string, string>;
 	__phoneFailRemoval?: Set<string>;
@@ -44,19 +40,10 @@ export async function writeJson(key: string, value: unknown): Promise<void> {
 	memory.set(key, JSON.stringify(value));
 }
 
-/**
-Keys whose removal fails, for a test of an erase that stops halfway.
-*/
 export const failRemoval = globals.__phoneFailRemoval;
 
-/**
-Keys whose write fails, for a test of an erase that cannot even start.
-*/
 export const failWrite = globals.__phoneFailWrite;
 
-/**
-Keys whose next read or write waits for a promise, for a test that holds one storage operation.
-*/
 export const holds = globals.__phoneHolds;
 
 export async function removeKeys(keys: string[]): Promise<void> {

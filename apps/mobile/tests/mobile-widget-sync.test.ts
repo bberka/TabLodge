@@ -1,7 +1,3 @@
-/*
-The widget snapshot writer, run against the app's real regular and private libraries with the native widget module
-replaced by a recorder. What these tests cannot show: that the Kotlin widget draws what it is given.
-*/
 import assert from 'node:assert/strict';
 import {beforeEach, describe, test, vi} from 'vite-plus/test';
 import {addBookmark, addColumn} from '../src/library/board-edits';
@@ -50,10 +46,6 @@ const newId = () => {
 	return `id-${counter}`;
 };
 
-/**
-Starts the app's libraries the way app.tsx does: the regular library loads, then the writer starts, then the private
-library.
-*/
 async function startApp() {
 	vi.resetModules();
 	const regular = await import('../src/library/library-store');
@@ -65,9 +57,6 @@ async function startApp() {
 	return {regular, privateLibrary, stop};
 }
 
-/**
-The last snapshot handed to the widget, parsed, or undefined when the last write deleted it.
-*/
 const last = (): WidgetSnapshot | undefined => {
 	const json = written.at(-1);
 	return json ? (JSON.parse(json) as WidgetSnapshot) : undefined;

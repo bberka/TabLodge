@@ -141,7 +141,6 @@ describe('importing a file into the library', () => {
 			['source-reddit', 'source-mastodon'],
 		);
 
-		// The phone's own JSON export carries the ids too, so a round trip keeps them.
 		const exported = buildExport(
 			{
 				kind: 'bookmarks',
@@ -269,7 +268,6 @@ describe('importing a file into the library', () => {
 	});
 });
 
-// The phone reads exports from other bookmark tools with the extension's reader.
 describe('exports from other bookmark tools', () => {
 	for (const [file, label, links, columns] of [
 		[
@@ -278,7 +276,6 @@ describe('exports from other bookmark tools', () => {
 			4,
 			['Reading', 'Tools', 'Rust'],
 		],
-		// Bookmarks in no list go to the phone's default column.
 		[
 			'karakeep-export.json',
 			'Karakeep export (JSON)',
