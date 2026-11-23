@@ -119,7 +119,6 @@ describe('linkKind', () => {
 	});
 
 	test('every Sources site has a kind for the links it saves', () => {
-		// Keyed by every Sources site, so a new site does not compile until it has a case here.
 		const saved: Record<SiteSourceId, [string | null, LinkKind]> = {
 			youtube: [youtubeVideoUrl('https://youtu.be/dQw4w9WgXcQ'), 'video'],
 			reddit: [

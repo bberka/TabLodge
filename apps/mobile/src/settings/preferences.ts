@@ -1,8 +1,3 @@
-/*
-The phone's current preferences: loaded once at startup, saved on every change, and read by screens with
-`usePreferences`. What each preference is, and which ones sync, is in `preference-schema.ts`; keeping them in step
-between phones is `preferences-sync.ts`.
-*/
 import {Appearance, Platform} from 'react-native';
 import {useSyncExternalStore} from 'react';
 import {readJson, writeJson} from '../platform/storage';
@@ -19,9 +14,6 @@ import type {ChangedAt} from './preference-merge';
 
 export * from './preference-schema';
 
-/**
-The look to draw: the one chosen, or for Automatic the phone's own: iOS on an iPhone, and Material on Android.
-*/
 export const resolveLook = (look: Look): 'material' | 'ios' => {
 	if (look !== 'auto') {
 		return look;
@@ -30,11 +22,7 @@ export const resolveLook = (look: Look): 'material' | 'ios' => {
 	return Platform.OS === 'ios' ? 'ios' : 'material';
 };
 
-/**
-Makes the whole app, and the system dialogs it opens, follow the chosen theme; `system` hands the choice back to the phone.
-*/
 function applyTheme(theme: Theme) {
-	// `unspecified` hands the choice back to the phone.
 	Appearance.setColorScheme(theme === 'system' ? 'unspecified' : theme);
 }
 
@@ -43,7 +31,6 @@ const CHANGED_AT_KEY = 'tablodge.prefs.changed-at';
 
 let current = defaults;
 let legacySiteIcons: 'browser' | undefined;
-// When this phone last changed each synced preference, or took it from another phone. Settings sync compares these.
 let changedAt: ChangedAt = {};
 const listeners = new Set<() => void>();
 
@@ -90,9 +77,6 @@ const withLegacySiteIcons = (prefs: Preferences) =>
 
 let onLocalChange: ((change: Partial<Preferences>) => void) | undefined;
 
-/**
-Registers what runs after the user changes a preference, so settings sync can send it without this module knowing.
-*/
 export function watchLocalChanges(
 	callback: (change: Partial<Preferences>) => void,
 ): void {
@@ -113,9 +97,6 @@ function apply(change: Partial<Preferences>): void {
 	void writeJson(CHANGED_AT_KEY, changedAt);
 }
 
-/**
-Changes preferences, as the user's own choice: a synced one is stamped with the time and sent to the other phones.
-*/
 export function setPreferences(change: Partial<Preferences>): void {
 	const now = Date.now();
 	for (const key of SYNCED_KEYS) {
@@ -128,9 +109,6 @@ export function setPreferences(change: Partial<Preferences>): void {
 	onLocalChange?.(change);
 }
 
-/**
-Takes preferences that came from another phone, with the times they were changed there. They are not sent back.
-*/
 export function adoptPreferences(
 	change: Partial<Preferences>,
 	times: ChangedAt,
@@ -141,9 +119,6 @@ export function adoptPreferences(
 
 export const getChangedAt = (): ChangedAt => changedAt;
 
-/**
-Puts every preference back to its default. This phone's name, the column last saved to, and whether settings sync stay.
-*/
 export function resetPreferences(): void {
 	setPreferences({
 		...defaults,
@@ -154,9 +129,6 @@ export function resetPreferences(): void {
 	});
 }
 
-/**
-Every preference worth keeping in a backup: all but this phone's name and the column last saved to.
-*/
 export function backupPreferences(): Omit<
 	Preferences,
 	'deviceName' | 'lastColumnId'
@@ -165,9 +137,6 @@ export function backupPreferences(): Omit<
 	return rest;
 }
 
-/**
-Puts the preferences of a backup back, as one change. This phone's name and last column stay.
-*/
 export function restorePreferences(value: unknown): void {
 	if (typeof value !== 'object' || value === null) {
 		return;
@@ -183,9 +152,6 @@ export function restorePreferences(value: unknown): void {
 
 export const getPreferences = (): Preferences => current;
 
-/**
-Calls `listener` after every change to the preferences, from this phone, another one, or a restore.
-*/
 export function subscribePreferences(listener: () => void): () => void {
 	listeners.add(listener);
 	return () => {

@@ -24,7 +24,6 @@ test('digits, letters, spaces and symbols are all fine, and nothing is trimmed',
 });
 
 test('length counts characters, not UTF-16 units', () => {
-	// Four emoji are 8 UTF-16 units but 4 characters.
 	assert.equal(validateCredential('🔑'.repeat(4)), null);
 	assert.match(validateCredential('🔑'.repeat(3)) ?? '', /at least 4/);
 	assert.equal(validateCredential('🔑'.repeat(128)), null);
@@ -32,12 +31,10 @@ test('length counts characters, not UTF-16 units', () => {
 });
 
 test('length is judged after the normalization the key is derived with, so the same text is judged the same', () => {
-	// Four code points that normalize to two characters are too short, however they were typed.
 	assert.match(validateCredential('e\u0301e\u0301') ?? '', /at least 4/);
 	assert.match(validateCredential('éé') ?? '', /at least 4/);
 	assert.equal(validateCredential('e\u0301e\u0301e\u0301e\u0301'), null);
 	assert.equal(validateCredential('éééé'), null);
-	// A compatibility form (full width letters) counts as the plain letters it becomes.
 	assert.match(validateCredential('ａｂｃ') ?? '', /at least 4/);
 });
 
@@ -50,10 +47,8 @@ test('a short or number-only password gets a hint while it is typed, and a longe
 	assert.equal(weakPasswordHint('q'.repeat(8)), null);
 	assert.equal(weakPasswordHint('correct horse battery'), null);
 	assert.equal(weakPasswordHint('1234567a'), null);
-	// Characters, not UTF-16 units.
 	assert.match(weakPasswordHint('🔑'.repeat(7)) ?? '', /easy to guess/);
 	assert.equal(weakPasswordHint('🔑'.repeat(8)), null);
-	// Digits of any script are digits.
 	assert.match(weakPasswordHint('١٢٣٤٥٦٧٨') ?? '', /easy to guess/);
 	assert.match(weakPasswordHint('１２３４５６７８９０') ?? '', /easy to guess/);
 });

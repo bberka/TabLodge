@@ -16,10 +16,6 @@ import {sortKeysDeep} from './library-fixtures';
 
 type Raw = Record<string, unknown>;
 
-/**
-Storage in memory that can lose the Nth call. A lost `set` can also be torn, applying only some of its keys,
-because the browser does not promise that a multi-key write is atomic.
-*/
 class MemoryBackend implements KeyValueBackend {
 	data = new Map<string, unknown>();
 	calls = 0;
@@ -147,9 +143,6 @@ const library = (sessions = 7, bookmarks = 6): Raw => ({
 	updatedAt: 5000,
 });
 
-/**
-Stands in for the app's normalizeStore: drops entries that are not sessions and stamps the new schema.
-*/
 const normalize = (raw: Raw): Raw => ({
 	...raw,
 	schemaVersion: 10,
@@ -167,9 +160,6 @@ const stateOf = (backend: MemoryBackend) =>
 
 const newer = (state: Raw): Raw => ({...state, schemaVersion: 10});
 
-/**
-Every key the library may own: the index, its records, garbage not yet removed, and the recovery copy.
-*/
 function ownedKeys(backend: MemoryBackend) {
 	const index = stateOf(backend);
 	const owned = new Set<string>([STATE_KEY, PREMIGRATION_KEY]);
@@ -284,7 +274,6 @@ test('a reader whose index went stale reads again instead of failing', async () 
 
 		fired = true;
 		backend.onGet = undefined;
-		// Two commits remove the keys the reader's index pointed at.
 		await store.write({...first, groups, updatedAt: 6000});
 		await store.write({...first, groups, updatedAt: 7000});
 	};
@@ -357,7 +346,6 @@ test('a crash during a save leaves the previous library or the new one, never a 
 					canonicalJson(read) === canonicalJson(expectedNew),
 				`step ${step}${tear ? ' torn' : ''}: library is neither the old nor the new one`,
 			);
-			// A later save works and ends in the new library without losing it.
 			await createLibraryState(backend).write(edited);
 			assert.deepEqual(await createLibraryState(backend).read(), expectedNew);
 			assert.deepEqual(await createLibraryState(backend).verify(), []);
@@ -470,7 +458,6 @@ test('a migration crashed at any step resumes, loses nothing, and leaves no stra
 				label,
 			);
 			backend.failAt = undefined;
-			// Whatever happened, the app still reads the whole library.
 			const during = await createLibraryState(backend, options).read();
 			assert.deepEqual(
 				during,
@@ -485,7 +472,6 @@ test('a migration crashed at any step resumes, loses nothing, and leaves no stra
 				);
 			}
 
-			// A worker restart runs the migration again and finishes it.
 			await createLibraryState(backend, options).migrate(normalize);
 			assert.deepEqual(
 				await createLibraryState(backend, options).read(),
@@ -514,7 +500,6 @@ test('a library changed between attempts starts a fresh migration and cleans up 
 		/crash/,
 	);
 	backend.failAt = undefined;
-	// The app keeps working on the old layout, so the entry changes.
 	const edited = normalize(library(6, 3));
 	(edited.groups as Raw[]).splice(2, 1);
 	(edited.groups as Raw[]).push(session('late', 2));
@@ -705,9 +690,6 @@ test('a migration refuses records without a stable id before writing anything', 
 	}
 });
 
-/**
-Fills the reserved sync fields the way a future sync engine would, straight in storage.
-*/
 function stampLibrary(backend: MemoryBackend) {
 	const index = stateOf(backend)!;
 	const entries = index.sessions as Array<Raw & {id: string; rev: number}>;
@@ -764,7 +746,6 @@ test('saving keeps stamps, order keys, tombstones, and the device id, and drops 
 	const {tabs} = stampLibrary(backend);
 	const edited = structuredClone(base);
 	const groups = edited.groups as Raw[];
-	// Remove the second tab of the stamped session and one bookmark; keep the rest.
 	groups[2].tabs = (groups[2].tabs as Raw[]).filter(
 		(tab) => tab.id !== tabs[1].id,
 	);
@@ -834,7 +815,6 @@ test('a checkpoint keeps only the replaced records and puts the library back, ac
 	const checkpoint = await store.beginCheckpoint();
 	assert.ok(checkpoint);
 	const before = await store.fingerprint();
-	// One action, two commits: edit a session, then remove another and change a bookmark.
 	const first = structuredClone(base);
 	((first.groups as Raw[])[1].tabs as Raw[]).push({
 		id: 'x',

@@ -1,4 +1,4 @@
-# 17. Android app decisions that were code comments
+# 20. Android app decisions that were code comments
 
 Status: accepted, 2026-11-23. Issue #442.
 

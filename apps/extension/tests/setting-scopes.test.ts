@@ -1,9 +1,3 @@
-/*
-The guard on sync scopes (#397, #418). Every setting has a scope in src/shared/setting-scopes.ts, with a reason:
-`all` and `platform` sync, `device` never does, and docs/PRIVACY.md lists every `device` one. Without it, a new setting,
-or one cut out of sync on the way, would silently stay behind on one device, and a setting the phone reads could be
-scoped as if only browsers used it.
-*/
 import assert from 'node:assert/strict';
 import {readdirSync, readFileSync, statSync} from 'node:fs';
 import {join} from 'node:path';
@@ -31,7 +25,6 @@ const store = (settings: Record<string, unknown>): Store => ({
 	updatedAt: 0,
 });
 
-// Holds the settings of a newer version; it travels as them, never as itself.
 const HOLDER = 'heldSettings';
 const settingKeys = Object.keys(DEFAULT_SETTINGS).filter(
 	(key) => key !== HOLDER,
@@ -62,7 +55,6 @@ test('every setting has a scope and a reason, and every scope is for a setting',
 });
 
 test('a library setting reaches another device unless it is scoped to the device', () => {
-	// A value no device has, so only sync can put it there.
 	const probe = (key: string) => ({probe: key});
 	const sent = store({
 		...DEFAULT_SETTINGS,
@@ -110,11 +102,6 @@ test('every setting scoped to the device is named in docs/PRIVACY.md', () => {
 	}
 });
 
-/*
-Stored keys that hold data rather than settings: the library, recovery copies, caches, and sync bookkeeping. A new
-setting that takes a storage key of its own instead of a field in the library's settings does not sync, so it must be
-scoped in setting-scopes.ts; a new key for data goes here.
-*/
 const DATA_KEYS = new Set([
 	'tablodge.state',
 	'tablodge.state.premigration',
@@ -183,11 +170,6 @@ test('every storage key in the extension is data or a scoped setting', () => {
 	}
 });
 
-/*
-The phone reads a library setting as `settings.<key>`, `Settings['<key>']`, a quoted key in a `Pick<Settings>` such as
-`LinkSettings`, or a key it writes with `setSyncedSetting`. A key that is also the name of a phone preference counts
-only in the first two forms, since its quoted name may be the preference's.
-*/
 test('the phone reads exactly the library settings scoped to all devices', () => {
 	const text = sourceFiles(
 		join(import.meta.dirname, '..', '..', 'mobile', 'src'),

@@ -213,7 +213,6 @@ test('the device budget refuses a copy that would not fit, and a replacement cou
 	const full = await copies.keep(copyOf('https://c.example/', 'c'.repeat(400)));
 	assert.deepEqual(full, {ok: false, reason: 'full', error: COPY_ERRORS.full});
 	assert.match(COPY_ERRORS.full, /Copies are full/);
-	// Replacing a kept copy with one of the same size still fits.
 	assert.equal(
 		(await copies.keep(copyOf('https://a.example/', 'z'.repeat(400)))).ok,
 		true,
@@ -223,7 +222,6 @@ test('the device budget refuses a copy that would not fit, and a replacement cou
 		size: copySize(one) * 2,
 		budget,
 	});
-	// Deleting one makes room again.
 	assert.equal(await copies.remove('https://b.example/'), true);
 	assert.equal(
 		(await copies.keep(copyOf('https://c.example/', 'c'.repeat(400)))).ok,
@@ -274,7 +272,6 @@ test('a copy lives while its address is in the library or the trash, and the swe
 	assert.equal(await copies.read('https://deleted.example/'), undefined);
 	assert.equal((await copies.list()).length, 5);
 
-	// Emptying the trash takes the copies of what was in it.
 	const afterPurge = copyLinkUrls(
 		{
 			groups: [session(['https://saved-tab.example/'])],

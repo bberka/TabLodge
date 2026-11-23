@@ -260,14 +260,12 @@ test('our JSON backups are recognized by structure under any format id and passe
 		assert.equal(parsed.native?.bookmarks, true);
 		assert.deepEqual(bookmarkImportPayload(parsed), data);
 		assert.deepEqual(names(parsed, 'bookmarks'), ['Bookmarks', 'Dev', '']);
-		// Imported as sessions, columns become sessions and the payload is converted.
 		assert.deepEqual(names(parsed), ['Bookmarks', 'Dev', 'Bookmarks']);
 		assert.ok(
 			parsed.warnings.some((warning) => warning.includes('bookmarks only')),
 		);
 	}
 
-	// Bare shapes: a bare array of tabs and an object with `tabs`.
 	assert.deepEqual(
 		urls(
 			parseImportFile(
@@ -594,7 +592,6 @@ test('Session Buddy v4 and v3 exports', () => {
 		old.sessions[0].createdAt,
 		Date.parse('2019-05-01T10:00:00.000Z'),
 	);
-	// Pinned state from other tools is dropped, so the importer never filters those tabs out.
 	assert.equal(old.sessions[0].links[0].pinned, undefined);
 });
 
@@ -715,7 +712,6 @@ test('malformed and unsupported input fails with a readable message', () => {
 	);
 	rejects(JSON.stringify([]), 'x.json', /isn’t a format we recognize/);
 	rejects('x'.repeat(MAX_IMPORT_BYTES + 1), 'huge.txt', /larger than 45 MB/);
-	// Deeply nested or hostile JSON values never throw anything but ImportFormatError.
 	rejects(
 		JSON.stringify({
 			lists: [{cards: [null, 5, 'x', {url: {toString: 'https://x'}}]}],
@@ -723,7 +719,6 @@ test('malformed and unsupported input fails with a readable message', () => {
 		't.json',
 		/No web links/,
 	);
-	// Without a .json extension, invalid JSON falls back to text parsing.
 	assert.deepEqual(
 		urls(parseImportFile('[https://a.example/ link]', 'x.txt')),
 		['https://a.example/'],
@@ -786,7 +781,6 @@ test('preview counts duplicates against saved and repeated links, keeps pinned t
 		{groups: 1, links: 4, duplicates: 2, pinned: 0},
 	);
 	assert.equal(preview.sample.length, 2);
-	// Other formats still follow the setting.
 	const foreign = {...parsed, native: undefined};
 	assert.equal(
 		previewImport(foreign, 'sessions', {existingUrls: []}).pinnedSkipped,
@@ -973,11 +967,9 @@ test('an old session export with both description and notes imports as one descr
 	assert.equal(parsed.sessions[0].notes, undefined);
 	assert.equal(parsed.sessions[0].links[0].notes, 'tab note');
 	assert.equal(parsed.sessions[1].description, 'Equal');
-	// The backup goes to the service worker as is; it does the same merge there.
 	assert.equal(sessionImportPayload(parsed), parsed.native?.data);
 });
 
-// Synthetic files in the shape Raindrop.io writes (checked against a real export; none of its content is kept here).
 const RAINDROP_CSV = [
 	'id,title,note,excerpt,url,folder,tags,created,cover,highlights,favorite',
 	'101,"Loose link",,A short summary,https://loose.example/a,Unsorted,,2026-10-26T20:47:09.579Z,https://cover.example/a.png,,false',
@@ -1023,7 +1015,6 @@ for (const [name, source, filename, label] of [
 		const byName = Object.fromEntries(
 			parsed.bookmarks.map((entry) => [entry.name, entry.links.length]),
 		);
-		// Unsorted joins the default column (no name) instead of becoming a column that repeats it.
 		assert.deepEqual(byName, {'': 2, Dev: 2, Reading: 1});
 		assert.equal(parsed.bookmarks[0]?.name, '');
 		const dev = parsed.bookmarks.find((entry) => entry.name === 'Dev');
