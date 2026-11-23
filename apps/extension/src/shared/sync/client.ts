@@ -78,6 +78,7 @@ type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 2500;
 const LOCAL_CHANGE_MAX_WAIT_MS = 10_000;
+const PUSH_CHECKPOINT_MS = 3000;
 // Chrome keeps an extension service worker alive while its WebSocket exchanges messages within 30 seconds.
 const PING_MS = 20_000;
 const RECONNECT_MIN_MS = 5000;
@@ -452,6 +453,8 @@ function captureExcept(
 	};
 }
 
+type Snapshot = {state: SyncState; records: Records; epoch: number};
+
 export function createSyncClient(host: SyncHost) {
 	let config: SyncConfig | undefined;
 	let status = SYNC_OFF;
@@ -485,6 +488,7 @@ export function createSyncClient(host: SyncHost) {
 	let settingKindOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
+	let stateEpoch = 0;
 	// What the last /v1/status answer said, for the status the round ends with.
 	let serverInfo: ServerInfo | undefined;
 	const ready = load();
@@ -538,6 +542,18 @@ export function createSyncClient(host: SyncHost) {
 			parseState(await host.get(SYNC_STATE_KEY)) ??
 			newSyncState(host.randomId())
 		);
+	}
+
+	async function putState(state: SyncState) {
+		stateEpoch += 1;
+		const epoch = stateEpoch;
+		await host.set(SYNC_STATE_KEY, state);
+		return epoch;
+	}
+
+	async function dropState(extra: string[] = []) {
+		stateEpoch += 1;
+		await host.remove([...extra, SYNC_STATE_KEY]);
 	}
 
 	async function settingsOn() {
@@ -736,7 +752,7 @@ export function createSyncClient(host: SyncHost) {
 	/**
 	Reads the library, stamps local edits, runs `work`, and saves the state, all inside the mutation queue.
 	*/
-	function step<T>(
+	function stepWithSnapshot<T>(
 		work: (
 			state: SyncState,
 			records: Records,
@@ -760,12 +776,23 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			const done = await work(state, records, store);
-			if (done.state !== stored) {
-				await host.set(SYNC_STATE_KEY, done.state);
-			}
-
-			return done.result;
+			const epoch =
+				done.state === stored ? stateEpoch : await putState(done.state);
+			return {
+				result: done.result,
+				snapshot: {state: done.state, records, epoch},
+			};
 		});
+	}
+
+	async function step<T>(
+		work: (
+			state: SyncState,
+			records: Records,
+			store: Store,
+		) => Promise<{state: SyncState; result: T}>,
+	) {
+		return (await stepWithSnapshot(work)).result;
 	}
 
 	async function round(target: SyncConfig) {
@@ -861,7 +888,7 @@ export function createSyncClient(host: SyncHost) {
 			}
 		}
 
-		await step(async (state, records, store) => {
+		const pulledOnly = await stepWithSnapshot(async (state, records, store) => {
 			const restarted = serverReset ? restartAfterServerReset(state) : state;
 			const applied = receive(
 				resync ? resyncSupported(restarted) : restarted,
@@ -905,79 +932,119 @@ export function createSyncClient(host: SyncHost) {
 				kinds.every((kind) => joined.pulled?.includes(kind));
 			return {
 				state: same ? joined : {...joined, pulled: kinds},
-				result: undefined,
+				result: same && !applied.changed && !finished.changed,
 			};
 		});
 
 		let refused = 0;
 		const sentKeys = new Set<string>();
 		let appliedThisRound = 0;
-		for (;;) {
-			const {sent, pulledCursor} = await step(async (state, records) => ({
-				state,
-				result: {
-					sent: host.readOnly ? [] : queued(state, records),
-					pulledCursor: state.cursor,
-				},
-			}));
-			// A record that changed again while it was being sent goes out in the next round, so a value that keeps
-			// changing can never keep one round pushing.
-			if (
-				sent.length === 0 ||
-				sent.some((change) => sentKeys.has(recordKey(change)))
-			) {
-				break;
+		let held: Snapshot | undefined = pulledOnly.result
+			? pulledOnly.snapshot
+			: undefined;
+		let unsaved = false;
+		let savedAt = host.now();
+		const save = async () => {
+			const snapshot = held;
+			if (!snapshot || !unsaved || config !== target) {
+				return;
 			}
 
-			for (const change of sent) {
-				sentKeys.add(recordKey(change));
-			}
+			unsaved = false;
+			savedAt = host.now();
+			await host.mutate(async () => {
+				if (stateEpoch !== snapshot.epoch) {
+					held = undefined;
+					return;
+				}
 
-			const body = await request(target, '/v1/changes', {
-				method: 'POST',
-				body: JSON.stringify({
-					changes: codec
-						? await Promise.all(sent.map(async (change) => codec.seal(change)))
-						: sent,
-				}),
+				held = {...snapshot, epoch: await putState(snapshot.state)};
 			});
-			const results =
-				isRecord(body) && Array.isArray(body.results) ? body.results : [];
-			if (
-				results.length !== sent.length ||
-				results.some((result) => !PUSH_RESULTS.has(String(result)))
-			) {
-				throw new SyncError(
-					'server',
-					'The sync server sent an answer this version does not understand.',
-				);
-			}
+		};
 
-			const count = await step(async (state) => {
-				const settled = settle(state, sent, results as PushResult[]);
+		try {
+			for (;;) {
+				if (!held || held.epoch !== stateEpoch) {
+					held = (
+						await stepWithSnapshot(async (state) => ({
+							state,
+							result: undefined,
+						}))
+					).snapshot;
+					unsaved = false;
+				}
+
+				const {state: current, records: library} = held;
+				const sent = host.readOnly ? [] : queued(current, library);
+				// A record that changed again while it was being sent goes out in the next round, so a value that keeps
+				// changing can never keep one round pushing.
+				if (
+					sent.length === 0 ||
+					sent.some((change) => sentKeys.has(recordKey(change)))
+				) {
+					break;
+				}
+
+				for (const change of sent) {
+					sentKeys.add(recordKey(change));
+				}
+
+				const body = await request(target, '/v1/changes', {
+					method: 'POST',
+					body: JSON.stringify({
+						changes: codec
+							? await Promise.all(
+									sent.map(async (change) => codec.seal(change)),
+								)
+							: sent,
+					}),
+				});
+				const results =
+					isRecord(body) && Array.isArray(body.results) ? body.results : [];
+				if (
+					results.length !== sent.length ||
+					results.some((result) => !PUSH_RESULTS.has(String(result)))
+				) {
+					throw new SyncError(
+						'server',
+						'The sync server sent an answer this version does not understand.',
+					);
+				}
+
+				const pulledCursor = current.cursor;
+				const settled = settle(current, sent, results as PushResult[]);
 				const known =
 					isRecord(body) && Number.isSafeInteger(body.cursor)
 						? Math.max(settled.state.known ?? 0, body.cursor as number)
 						: settled.state.known;
-				return {state: {...settled.state, known}, result: settled.refused};
-			});
-			refused += count;
-			appliedThisRound += results.filter(
-				(result) => result === 'applied',
-			).length;
-			if (!isRecord(body) || !Number.isSafeInteger(body.cursor)) {
-				continue;
-			}
+				held = {...held, state: {...settled.state, known}};
+				unsaved = true;
+				refused += settled.refused;
+				appliedThisRound += results.filter(
+					(result) => result === 'applied',
+				).length;
+				if (host.now() - savedAt >= PUSH_CHECKPOINT_MS) {
+					await save();
+				}
 
-			seenCursor = Math.max(seenCursor, body.cursor as number);
-			// The server took more changes than this round applied since its pull: another device pushed in between,
-			// and its live notice may already have been dismissed as this device's own echo. Pull again.
-			if ((body.cursor as number) > pulledCursor + appliedThisRound) {
-				again = true;
+				if (!isRecord(body) || !Number.isSafeInteger(body.cursor)) {
+					continue;
+				}
+
+				seenCursor = Math.max(seenCursor, body.cursor as number);
+				// The server took more changes than this round applied since its pull: another device pushed in between,
+				// and its live notice may already have been dismissed as this device's own echo. Pull again.
+				if ((body.cursor as number) > pulledCursor + appliedThisRound) {
+					again = true;
+				}
 			}
+		} catch (error) {
+			await save().catch(() => undefined);
+			throw error;
 		}
 
-		const state = await loadState();
+		await save();
+		const state = held?.epoch === stateEpoch ? held.state : await loadState();
 		await setStatus({
 			phase: 'idle',
 			lastSyncAt: host.now(),
@@ -1168,7 +1235,7 @@ export function createSyncClient(host: SyncHost) {
 			closeSocket();
 			config = target;
 			serverInfo = server;
-			await host.remove([SYNC_STATE_KEY]);
+			await dropState();
 			await host.set(SYNC_CONFIG_KEY, target);
 			status = {
 				connected: true,
@@ -1206,7 +1273,7 @@ export function createSyncClient(host: SyncHost) {
 						entry.deleted ? entry : {...entry, hash: ''},
 					]),
 				);
-				await host.set(SYNC_STATE_KEY, {...state, shadow});
+				await putState({...state, shadow});
 			});
 			await syncNow();
 		},
@@ -1230,7 +1297,7 @@ export function createSyncClient(host: SyncHost) {
 			config = undefined;
 			closeSocket();
 			await running;
-			await host.remove([SYNC_CONFIG_KEY, SYNC_STATE_KEY, SYNC_STATUS_KEY]);
+			await dropState([SYNC_CONFIG_KEY, SYNC_STATUS_KEY]);
 			status = {
 				...status,
 				connected: false,
