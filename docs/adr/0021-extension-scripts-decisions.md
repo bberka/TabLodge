@@ -1,4 +1,4 @@
-# 20. Extension build, packaging, and check script decisions that were code comments
+# 21. Extension build, packaging, and check script decisions that were code comments
 
 Status: accepted, 2026-11-23. Issue #442.
 
@@ -57,7 +57,7 @@ No decisions were held by comments in this file beyond its usage notes, which ar
 * **Axe and keyboard checks do not judge reading order or screen reader announcements.** `run.ts` (module). The limit is in [Contributing](../CONTRIBUTING.md).
 * **Each area keeps its checks in its own module.** `run.ts` (module): the helpers they share are in `harness.ts`, `fixtures.ts`, `pages.ts`, and `evidence.ts`.
 * **Waits end as soon as their condition holds.** `run.ts:worker`: the longer limit only matters on a loaded machine.
-* **A check that never settles would hang the run.** `harness.ts:check`: a 3 minute limit fails that check before the CI job times out.
+* **A check that never settles would hang the run.** `harness.ts:check`: after 3 minutes it records a failure and returns, so the run moves on before the CI job times out. `Promise.race` does not cancel `run()`: a condition that resolves later can still resume `until` and the timed-out check.
 * **`until` polls the condition 150 times, 100 ms apart.** `harness.ts:until`: the pages redraw asynchronously after each action. It awaits each condition without its own timeout, so the 3 minute limit in `check` is what ends a stalled one; the polling count does not give a 15 second wall clock limit.
 * **`A11Y_ONLY` repeats one check.** `harness.ts:onlyChecks`: it runs only the checks whose name contains the text.
 * **`A11Y_SHARD` splits the run.** `harness.ts:shard`: `index/total` runs every total-th check, so CI can split it. Checks run in the same order in every shard, so the split is stable.
@@ -101,7 +101,7 @@ No decisions were held by comments in this file beyond its usage notes, which ar
 * **The add-on is temporary.** `firefox-driver.ts`: Firefox does not need to sign it.
 * **The add-on has a fixed UUID.** `firefox-driver.ts:UUID`: its pages have a known address, which `openExtensionPage` relies on.
 * **WebDriver cannot open `moz-extension://` pages.** `firefox-driver.ts:service`: chrome-scoped scripts can, which needs system access.
-* **The tab exists before its page loads.** `firefox-driver.ts:openExtensionPage`: it waits for the extension protocol and document readiness. `firefox-driver.ts:EVALUATE_WRAPPER` runs its body without waiting for navigation, so a caller that evaluates after a navigation must wait through `openExtensionPage` first.
+* **`openExtensionPage` opens and waits for its own page.** `firefox-driver.ts:openExtensionPage`: it adds a tab, selects it, and waits for the `moz-extension:` protocol and `readyState` `complete` there. It does not wait for navigation in an existing tab. Such a caller needs its own readiness wait before it evaluates. `firefox-driver.ts:EVALUATE_WRAPPER` runs its body without waiting for navigation, so the tab it runs in is the one it was given.
 * **Icons come from the site.** `firefox-smoke-check.ts:iconed`: the tabs showed the site's icon, so a link to a page of the same site that was never opened shows it too.
 * **Firefox has no side panel for the toolbar button.** `firefox-smoke-check.ts:popup`: the button keeps its popup.
 * **Help and the copy reader never read the library.** `page-startup-check.ts:content`: the startup check skips them when it reads the library.

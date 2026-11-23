@@ -1,8 +1,3 @@
-/*
-Restoring a backup replaces the library on screen, so what is there goes into a safety copy first, and the person can
-put it back. One copy is kept per library; the next restore replaces it. The extension does the same: its full
-backup restore takes a safety backup and offers Undo.
-*/
 import type {Store} from '../../../extension/src/shared/types';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
 import {isStore} from '../library/store-shape';
@@ -13,9 +8,6 @@ const keyOf = (library: LibraryName) => `tablodge.safety.${library}`;
 
 export type SafetyCopy = {at: number; store: Store; preferences?: unknown};
 
-/**
-The library with what a backup holds in place of its sessions, folders, columns, and bookmarks. Settings stay.
-*/
 export function replaceLibrary(
 	current: Store,
 	backup: Store,

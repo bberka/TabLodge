@@ -1,12 +1,5 @@
-/**
-What a Quick Settings tile asks the app to open.
-*/
 export type TileRoute = 'save' | 'search';
 
-/**
-Reads the address a tile opens the app with, `tablodge://save` or `tablodge://search`. Any other address, including
-one with a different scheme, is not a tile's and gives undefined.
-*/
 export function parseTileRoute(
 	url: string | null | undefined,
 ): TileRoute | undefined {
@@ -17,10 +10,6 @@ export function parseTileRoute(
 	return route === 'save' || route === 'search' ? route : undefined;
 }
 
-/**
-Reads the address the Bookmarks widget's header opens, `tablodge://column/<id>` with the id URI-encoded, and gives the
-column id. Any other address gives undefined.
-*/
 export function parseColumnRoute(
 	url: string | null | undefined,
 ): string | undefined {

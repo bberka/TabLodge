@@ -4,7 +4,7 @@ Status: accepted, 2026-11-23. Issue #442.
 
 ## Context
 
-`apps/mobile/src/settings` carried its non-obvious decisions as comments. Comments are banned ([Code comments](../agents/comments.md)), so each decision lives here with the symbol that carries it. What each preference does for a person is in [Android app](../android.md), and the type, default, and reader of each one are in `preference-schema.ts`. The sync rules for the library's `mobileApp` setting are in [ADR 10](0010-settings-sync.md) and [ADR 11](0011-setting-sync-scopes.md). The mobile area's first ADR is [ADR 17](0017-mobile-decisions.md).
+`apps/mobile/src/settings` carried its non-obvious decisions as comments. Comments are banned ([Code comments](../agents/comments.md)), so each decision lives here with the symbol that carries it. What each preference does for a person is in [Android app](../android.md), and the type, default, and reader of each one are in `preference-schema.ts`. The sync rules for the library's `mobileApp` setting are in [ADR 10](0010-settings-sync.md) and [ADR 11](0011-setting-sync-scopes.md). The mobile area's first ADR is [ADR 20](0020-mobile-decisions.md).
 
 ## Decisions
 

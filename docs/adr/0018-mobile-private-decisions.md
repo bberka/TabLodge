@@ -4,7 +4,7 @@ Status: accepted, 2026-11-23. Issue #442.
 
 ## Context
 
-`apps/mobile/src/private` carried its non-obvious decisions as comments. Comments are banned ([Code comments](../agents/comments.md)), so each decision lives here with the symbol that carries it. The private library's sync protocol is [ADR 2](0002-private-window-sync.md), and the envelope it uses is the extension's. The mobile area's first ADR is [ADR 17](0017-mobile-decisions.md). This file covers the private library folder only.
+`apps/mobile/src/private` carried its non-obvious decisions as comments. Comments are banned ([Code comments](../agents/comments.md)), so each decision lives here with the symbol that carries it. The private library's sync protocol is [ADR 2](0002-private-window-sync.md), and the envelope it uses is the extension's. The mobile area's first ADR is [ADR 20](0020-mobile-decisions.md). This file covers the private library folder only.
 
 ## Decisions
 
