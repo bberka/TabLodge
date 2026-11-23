@@ -37,7 +37,6 @@ export async function paletteWindowCheck(env: Env, theme: Theme) {
 			1,
 			'A new search announces how many results it found',
 		);
-		// With a single result the spare room is between the list and the shortcut bar, not below the bar.
 		const gap = await page.evaluate(() => {
 			const {document, innerHeight} = globalThis as typeof globalThis & {
 				document: {
@@ -54,7 +53,6 @@ export async function paletteWindowCheck(env: Env, theme: Theme) {
 		await page.screenshot({
 			path: `.dev/evidence/palette-keyboard-${theme}.png`,
 		});
-		// Escape closes the window, which ends the key press call itself.
 		const closed = page.waitForEvent('close', {timeout: 3000});
 		await page.keyboard.press('Escape').catch(() => {});
 		await closed;
@@ -64,7 +62,6 @@ export async function paletteWindowCheck(env: Env, theme: Theme) {
 export async function paletteOverlayCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
 	await check(`palette overlay frame keyboard use (${theme})`, async () => {
-		// The overlay is palette.html in a frame; a stand-in parent page receives its close request.
 		const page = await openPage(context, extensionId, 'help');
 		await setTheme(page, theme);
 		await page.evaluate((address) => {
@@ -98,7 +95,6 @@ export async function paletteOverlayCheck(env: Env, theme: Theme) {
 		const frame = page.frameLocator('iframe[title="Search TabLodge"]');
 		const input = frame.getByRole('combobox', {name: 'Search'});
 		await input.waitFor({timeout: 5000});
-		// The service worker's injected script hands focus to the frame; the search box takes it from there.
 		await input.focus();
 		await page.keyboard.press('Tab');
 		await page.keyboard.press('Shift+Tab');
@@ -255,7 +251,6 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 		);
 		await page.keyboard.press('ArrowRight');
 		await menu.waitFor({timeout: 1000});
-		// Escape goes up one level first, so the window is still there afterwards.
 		await page.keyboard.press('Escape');
 		await menu.waitFor({state: 'hidden', timeout: 1000});
 		const closed = page.waitForEvent('close', {timeout: 3000});
@@ -264,9 +259,6 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 	});
 }
 
-/**
-The keys bar under the results: every hint it shows sits on one line.
-*/
 async function footerLines(page: Page) {
 	return page.evaluate(() => {
 		const {document} = globalThis as typeof globalThis & {

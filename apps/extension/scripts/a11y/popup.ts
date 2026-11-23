@@ -11,8 +11,6 @@ import {
 } from './harness.ts';
 import {openPage, setTheme} from './pages.ts';
 
-// The popup is opened as a tab here, so its own tab would be the active one. The first read of the active tab
-// reports `activeUrl` as the page the popup was opened over.
 async function openPopupOver(
 	context: BrowserContext,
 	extensionId: string,
@@ -39,13 +37,8 @@ async function openPopupOver(
 	return page;
 }
 
-/**
-Types a note into a bookmark form's Notes field, which stays one row tall until it is focused or holds text.
-*/
 async function typeNote(field: Locator, note: string) {
 	assert.equal(await field.getAttribute('rows'), '1', 'Notes starts collapsed');
-	// A column select that just closed hands focus back to its trigger a moment later, which can take focus off
-	// Notes again. Focus it until it keeps focus and has opened.
 	const page = field.page();
 	await until(
 		async () => (await page.locator('[role="listbox"]').count()) === 0,

@@ -41,7 +41,6 @@ export async function writeDevStore(page: Page, store: DevStore) {
 	}, store);
 }
 
-// The checks were written for the Board view; the real default is Focus, which the Focus checks set up themselves.
 export function createDevFixture(base: DevStore): DevStore {
 	const fixture = createBaseFixture(base);
 	return {
@@ -60,7 +59,6 @@ export async function seed(page: Page) {
 	await writeDevStore(page, fixture);
 }
 
-// Tiny local pages, so the test window has web tabs that a replace or append can read.
 export async function startPageServer() {
 	const server = createServer((request, response) => {
 		response.setHeader('content-type', 'text/html');
@@ -80,7 +78,6 @@ export async function closeServer(server: Server) {
 		server.close(() => {
 			resolve();
 		});
-		// Chromium keeps connections open, and close() waits for them.
 		server.closeAllConnections();
 	});
 }

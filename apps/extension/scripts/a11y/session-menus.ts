@@ -432,7 +432,6 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 				await page.bringToFront();
 				const snapshot = await readDevStore(page);
 				const original = (await sessionUrls(page, 'dev-session-1'))!;
-				// Puts the seeded sessions back between the evidence captures.
 				const reset = async () => {
 					await writeDevStore(page, snapshot);
 					await page.reload();
@@ -524,12 +523,10 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 
 				const expand = page.getByRole('button', {
 					name: 'Show tabs in Home lab rebuild',
-					// Not the split session, "Home lab rebuild (split)", which another step may have made.
 					exact: true,
 				});
 				const collapse = page.getByRole('button', {
 					name: 'Hide tabs in Home lab rebuild',
-					// Not the split session, "Home lab rebuild (split)", which another step may have made.
 					exact: true,
 				});
 				const ensureExpanded = async () => {

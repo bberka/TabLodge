@@ -1,6 +1,3 @@
-// Package each verified, unpacked extension as a versioned ZIP and SHA256 checksum:
-// release/<name>-<version>.zip for Chromium and release/<name>-<version>-firefox.zip for Firefox.
-// Run `vp run build` first, then `vp run pack` (or `node scripts/package.ts --target firefox`).
 import {createHash} from 'node:crypto';
 import {readdir, readFile, mkdir, writeFile} from 'node:fs/promises';
 import {basename, dirname, relative, resolve, sep} from 'node:path';

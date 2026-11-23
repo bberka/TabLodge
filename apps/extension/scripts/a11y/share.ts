@@ -8,9 +8,6 @@ import {readDevStore, seed} from './fixtures.ts';
 import {check, type Env, type Theme} from './harness.ts';
 import {openMenuItemByKeyboard, openPage, setTheme} from './pages.ts';
 
-/**
-Opens a dropdown of the Share and export dialog with the keyboard and picks one option.
-*/
 async function pick(
 	page: Page,
 	dialog: Locator,
@@ -221,7 +218,6 @@ export async function sharePreviewCheck(env: Env) {
 		const dialog = page.getByRole('dialog');
 		await pick(page, dialog, 'Format', /^Markdown/);
 		const preview = dialog.locator('pre').first();
-		// One address with no break points, as a long tracking link has, used to stretch the whole dialog.
 		await preview.evaluate((element) => {
 			const target = element as unknown as {textContent: string};
 			target.textContent = `- [Long](https://example.com/${'a%20b%3D'.repeat(120)})`;
