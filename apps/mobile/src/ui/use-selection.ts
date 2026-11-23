@@ -1,8 +1,5 @@
 import {useState} from 'react';
 
-/**
-Multi-select state for a list: whether selecting is on, and which ids are picked.
-*/
 export function useSelection() {
 	const [state, setState] = useState<{
 		active: boolean;

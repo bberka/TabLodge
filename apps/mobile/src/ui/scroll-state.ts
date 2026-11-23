@@ -1,9 +1,7 @@
 import {useSyncExternalStore} from 'react';
 import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
-// How far a list has to move before the bar reacts, so a finger's jitter does not flip it.
 const STEP = 8;
-// Near the top the bar is always full.
 const TOP = 24;
 
 let scrolledDown = false;
@@ -21,9 +19,6 @@ function set(next: boolean): void {
 	}
 }
 
-/**
-Pass as a list's `onScroll`: scrolling down marks the page as scrolled, scrolling up or reaching the top clears it.
-*/
 export function trackScroll(
 	event: NativeSyntheticEvent<NativeScrollEvent>,
 ): void {
@@ -42,9 +37,6 @@ export function trackScroll(
 	}
 }
 
-/**
-Forgets the scroll position, for when another screen comes up.
-*/
 export function resetScroll(): void {
 	lastY = 0;
 	set(false);

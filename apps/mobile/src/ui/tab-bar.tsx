@@ -25,42 +25,26 @@ export type BarTab<T extends string> = {
 	active: IconName;
 };
 
-// The docked bar is the same in both looks: tall enough that the icon and its name sit clear of the bar's edges inside
-// the highlighted pill, which iOS's own 49 point bar was too short for.
 const DOCKED_HEIGHT = 76;
 const PILL_HEIGHT = 56;
-// The small bar keeps a touch target as big as the round search and add buttons (52), and its icons grow a little to
-// fill the room the labels leave.
 const COMPACT_HEIGHT = 56;
 const COMPACT_TAB_WIDTH = 68;
 const COMPACT_ICON_SCALE = 1.2;
 const BAR_PADDING = 6;
 
-/**
-How tall the bar is, including the space below it, so a screen can leave that much room at its bottom.
-*/
 export function useBarSpace(): number {
 	const insets = useSafeAreaInsets();
 	const {floatingBar, barSize} = usePreferences();
 	const {barGap} = useShape();
-	// Small while scrolling floats over the content without changing the room the screens leave, so lists do not jump.
 	const floating =
 		(barSize === 'compact' ? COMPACT_HEIGHT : BAR_HEIGHT) + barGap * 2;
 	return (floatingBar ? floating : DOCKED_HEIGHT) + insets.bottom;
 }
 
-/**
-The widest the round search button gets (the full bar's height); it sits in the floating bar's row, at the screen's right edge, and its distance
-from that edge and from the bar. The bar leaves this much room on its right.
-*/
 const SIDE_BUTTON = BAR_HEIGHT;
 const SIDE_MARGIN = 16;
 const SIDE_GAP = 12;
 
-/**
-How tall the floating bar is now: the full bar's height, or the small bar's while it is small. The round buttons beside it
-are as tall as the bar and follow it, so they stay level and the same size. A docked bar has no such row.
-*/
 export function useBarHeight(): number {
 	const {floatingBar, barSize} = usePreferences();
 	const scrolledDown = useScrolledDown();
@@ -70,11 +54,6 @@ export function useBarHeight(): number {
 	return small ? COMPACT_HEIGHT : BAR_HEIGHT;
 }
 
-/**
-The bottom tab bar, in one of three forms: a Material navigation bar, an iOS tab bar, or a rounded bar that floats
-above the content (either look). The selected tab animates, and the bar slides away while the keyboard is open or
-when `hidden` is set. A floating bar grows and shrinks between full width and a small icon pill with one animation.
-*/
 export function TabBar<T extends string>({
 	tabs,
 	selected,
@@ -97,26 +76,21 @@ export function TabBar<T extends string>({
 		floatingBar &&
 		(barSize === 'compact' || (barSize === 'scroll' && scrolledDown));
 	const ios = look === 'ios';
-	// Only the floating bar is glass; a docked one is an edge of the screen and stays solid.
 	const glass = useGlass() && floatingBar;
 	const count = tabs.length;
 	const index = Math.max(
 		0,
 		tabs.findIndex((tab) => tab.id === selected),
 	);
-	// The shared keyboard state is checked against the window, so a keyboard that closed unnoticed does not keep the bar away.
 	const keyboard = useKeyboardHeight() > 0;
 	const searchAction = useSearchAction();
-	// 0 is the full bar, 1 the small one. Width and height are layout, so this one runs on the JS thread.
 	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
-	// Per tab, 1 shows its name under the icon and 0 hides it. A small bar has no room for names.
 	const shown = (i: number) =>
 		!small &&
 		(barLabels === 'always' || (barLabels === 'active' && i === index));
 	const labels = useRef(
 		tabs.map((_, i) => new Animated.Value(shown(i) ? 1 : 0)),
 	).current;
-	// The highlight slides on the JS thread too, because its offset depends on the animated tab width.
 	const slide = useRef(new Animated.Value(index)).current;
 	const hide = useRef(new Animated.Value(0)).current;
 	const pops = useRef(
@@ -158,7 +132,6 @@ export function TabBar<T extends string>({
 		}
 	}, [index, slide, pops]);
 
-	// A floating bar steps aside while searching: the search bar takes its place.
 	const searching = useSearching() && floatingBar;
 	const away = keyboard || forceHidden || searching;
 	useEffect(() => {
@@ -173,12 +146,9 @@ export function TabBar<T extends string>({
 	const travel = floatingBar
 		? BAR_HEIGHT + barGap * 2 + insets.bottom
 		: dockedHeight;
-	// The floating bar leaves room on its right for the search button in its row.
 	const sideRoom = SIDE_MARGIN + SIDE_BUTTON + SIDE_GAP;
 	const fullWidth = screenWidth - barGap - sideRoom;
 	const smallWidth = COMPACT_TAB_WIDTH * count + BAR_PADDING * 2;
-	// The small bar sits in the middle of the screen; on a narrow one it moves left just enough to clear the search
-	// button. The full bar starts at the screen's left margin.
 	const smallLeft = Math.min(
 		(screenWidth - smallWidth) / 2,
 		screenWidth - SIDE_MARGIN - SIDE_BUTTON - 4 - smallWidth,
@@ -357,7 +327,6 @@ export function TabBar<T extends string>({
 					);
 				})}
 				{!floatingBar && searchAction && (
-					// Search sits at the bar's right end, with the tabs on its left.
 					<Pressable
 						accessibilityRole="button"
 						accessibilityLabel="Search"
@@ -412,7 +381,6 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 	},
 	label: {marginTop: 3},
-	// A pill behind the icon and its label, centered in the tab with room above and below.
 	indicator: {
 		position: 'absolute',
 		top: (DOCKED_HEIGHT - PILL_HEIGHT) / 2,

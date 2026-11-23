@@ -19,9 +19,6 @@ export type LeadingChoice = {
 	id: string;
 	label: string;
 	icon: IconName;
-	/**
-	The color it stands for, drawn as the swatch; without one the swatch is plain.
-	*/
 	hex?: string;
 };
 
@@ -35,7 +32,6 @@ const BAR_HEIGHT = 36;
 const THUMB = 28;
 const SEGMENTS = 64;
 const SATURATION = 0.7;
-// The shade bar runs from a deep to a pale version of the hue.
 const DARKEST = 0.25;
 const LIGHTEST = 0.82;
 const STEP = 0.05;
@@ -45,10 +41,6 @@ const shadeOf = (lightness: number) =>
 	Math.min(1, Math.max(0, (lightness - DARKEST) / (LIGHTEST - DARKEST)));
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 
-/**
-A bar of color you drag along or tap, with a thumb. A screen reader steps it with increase and decrease. The color is
-sent while dragging only as the bar's position; `onDone` fires when the finger lifts, so one drag is one change.
-*/
 function ColorBar({
 	label,
 	valueText,
@@ -120,11 +112,6 @@ function ColorBar({
 	);
 }
 
-/**
-The colors a bookmark column or session can have: the extension's accent palette, or any color made with the hue and
-shade bars (or typed as `#rrggbb`). Choosing the selected one again, or None, clears it. The value is a preset id or a
-lower case hex, the same text the extension stores.
-*/
 export function ColorPicker({
 	selected,
 	onSelect,
@@ -133,14 +120,7 @@ export function ColorPicker({
 }: {
 	selected: string;
 	onSelect: (color: string) => void;
-	/**
-	The choices before the palette. Colors of a column or session start with "No color"; the app's accent starts with the
-	phone's color and TabLodge's own.
-	*/
 	leading?: LeadingChoice[];
-	/**
-	Choosing the selected color again keeps it, instead of clearing it.
-	*/
 	keepSelected?: boolean;
 }) {
 	const colors = useColors();

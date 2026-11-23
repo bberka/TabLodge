@@ -15,9 +15,6 @@ import {TARGET, useColors, useShape} from './theme';
 
 export type DialogAction = {
 	label: string;
-	/**
-	`cancel` is also what the back button and a tap outside do. `destructive` is drawn in the danger color.
-	*/
 	kind?: 'default' | 'cancel' | 'destructive';
 	run?: () => void;
 };
@@ -39,10 +36,6 @@ const emit = () => {
 	}
 };
 
-/**
-Shows a centered dialog over the app, in place of the system alert. Every action closes it, then runs. Needs
-`DialogHost` mounted once.
-*/
 export function showDialog(
 	title: string,
 	message: string | undefined,
@@ -53,9 +46,6 @@ export function showDialog(
 	emit();
 }
 
-/**
-Asks a yes or no question: Cancel, and one action that runs `onConfirm`.
-*/
 export function confirm(
 	title: string,
 	message: string,
@@ -72,16 +62,10 @@ export function confirm(
 	]);
 }
 
-/**
-Tells the person something, with one OK.
-*/
 export function notify(title: string, message: string): void {
 	showDialog(title, message, [{label: 'OK'}]);
 }
 
-/**
-Draws the dialog `showDialog` asks for. Mount it once, near the root.
-*/
 export function DialogHost() {
 	const asked = useSyncExternalStore(
 		(listener) => {
@@ -92,7 +76,6 @@ export function DialogHost() {
 		},
 		() => current,
 	);
-	// Kept after it closes so it can fade out.
 	const [shown, setShown] = useState<Dialog>();
 	const [open, setOpen] = useState(false);
 	const progress = useRef(new Animated.Value(0)).current;
@@ -134,7 +117,6 @@ export function DialogHost() {
 
 	const keyboard = keyboardInset();
 
-	// While the keyboard is up the dialog centers in what is left above it, and a long message scrolls.
 	const close = (action?: DialogAction) => {
 		current = undefined;
 		setOpen(false);
