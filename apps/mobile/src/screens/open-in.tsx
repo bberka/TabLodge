@@ -57,12 +57,12 @@ export function OpenInHost() {
 			openIn(undefined);
 		}
 	}, [pending, current]);
+	const several = current?.several ?? false;
 	// Read when the drawer opens, so a browser installed meanwhile shows up.
 	const browsers = useMemo(
-		() => (current ? installedBrowsers() : []),
-		[current],
+		() => (current && several ? installedBrowsers() : []),
+		[current, several],
 	);
-	const several = current?.several ?? false;
 	const actions: SheetAction[] = current
 		? openChoices(browsers, {several}).map((choice) => ({
 				key: choice.key,
