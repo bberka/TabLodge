@@ -19,7 +19,7 @@ Rules for every change to extension pages (`apps/extension/src`). Read the whole
 An action that deletes, removes, resets, disconnects, or replaces something:
 
 - **Settings asks first**, including the dialogs it opens: a `ConfirmationDialog` that names what is lost, where Cancel changes nothing. Keep any Undo toast after it.
-- **Library views act at once** (dashboard, board, new tab, side panel, popup, palette, the page copy reader) and offer **Undo** (`offerTrashUndo`, `offerUndo`, or a `showStatus` action). No confirmation; the shared Snapshots and Trash dialogs ask only with `confirmDestructive`, which Settings sets.
+- **Library views act at once** (dashboard, board, new tab, side panel, popup, palette) and offer **Undo** (`offerTrashUndo`, `offerUndo`, or a `showStatus` action). No confirmation; the shared Snapshots and Trash dialogs ask only with `confirmDestructive`, which Settings sets.
 - **Exempt:** resetting one setting, editing a list picker, a switch that turns back on the same way, a password form, and a dialog whose review step already names the mode (Import).
 
 ## Accessibility
