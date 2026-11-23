@@ -1,26 +1,9 @@
-// Turns the source manifest (shell/manifest.json, written for Chromium) into the manifest of a target browser.
-//
-// Firefox runs the same pages and the same background script, but its manifest differs:
-//   - the background script is an event page ("scripts"), since Firefox has no extension service workers
-//   - the Side Panel API does not exist; the same page is registered as the sidebar instead
-//   - the "favicon" and "sidePanel" permissions do not exist
-//   - private windows cannot get a separate extension context ("split"), so the extension stays out of them
-//   - add-on metadata lives under browser_specific_settings.gecko
 import type {Target} from './vite-shared.ts';
 
 type Json = Record<string, unknown>;
 
-/**
-The add-on id Firefox keys storage and permissions to. It is permanent once an add-on is signed.
-*/
 export const GECKO_ID = 'tablodge@bbay.dev';
-/**
-Needed for tab groups and tabs.group (139) and for the data collection permissions key (140).
-*/
 export const FIREFOX_MIN_VERSION = '140.0';
-/**
-Permissions the Firefox build must not request: Firefox rejects names it does not know.
-*/
 export const CHROMIUM_ONLY_PERMISSIONS = ['favicon', 'sidePanel'] as const;
 
 function firefoxManifest(source: Json): Json {
@@ -67,7 +50,6 @@ function firefoxManifest(source: Json): Json {
 			gecko: {
 				id: GECKO_ID,
 				strict_min_version: FIREFOX_MIN_VERSION,
-				// TabLodge sends nothing anywhere, so Firefox's install prompt can say so.
 				data_collection_permissions: {required: ['none']},
 			},
 		},

@@ -26,11 +26,8 @@ export function watchConsole(target: Page | Worker, source: string) {
 	});
 }
 
-// A11Y_ONLY=text runs only the checks whose name contains the text, to repeat one check.
 const onlyChecks = process.env.A11Y_ONLY;
 
-// A11Y_SHARD=index/total (for example 2/4) runs every total-th check, starting at index, so CI can split the run
-// across jobs. Checks run in the same order in every shard, so the split is stable.
 const shard = /^(\d+)\/(\d+)$/.exec(process.env.A11Y_SHARD ?? '');
 const shardIndex = shard ? Number(shard[1]) - 1 : 0;
 const shardTotal = shard ? Number(shard[2]) : 1;
@@ -49,7 +46,6 @@ export async function check(name: string, run: () => Promise<void>) {
 	let timer: NodeJS.Timeout | undefined;
 	const started = Date.now();
 	try {
-		// A check that never settles would otherwise hang the whole run until the CI job times out.
 		await Promise.race([
 			run(),
 			new Promise<never>((_resolve, reject) => {
@@ -72,7 +68,6 @@ export async function check(name: string, run: () => Promise<void>) {
 	}
 }
 
-// Polls until the condition holds, for up to 15 seconds. The pages redraw asynchronously after each action.
 export async function until(condition: () => Promise<boolean>, what: string) {
 	for (let attempt = 0; attempt < 150; attempt += 1) {
 		if (await condition()) {
@@ -96,7 +91,6 @@ export type Env = {
 	worker: Worker;
 };
 
-// Runs each check for the light theme, then each for the dark one.
 export async function eachTheme(
 	env: Env,
 	checks: Array<(env: Env, theme: Theme) => Promise<void>>,

@@ -12,10 +12,6 @@ import {
 	writeManifest,
 } from './scripts/vite-shared.ts';
 
-// Extension pages. The service worker and theme-boot script are separate
-// script builds in scripts/build.ts.
-
-// The source HTML shells only carry an empty themed #root; the React entry is injected at build time.
 const appEntries: Record<string, string> = {
 	'newtab.html': '../src/app/newtab.tsx',
 	'popup.html': '../src/app/popup.tsx',
@@ -48,7 +44,6 @@ const sourceEntryPlugin: Plugin = {
 	},
 };
 
-// The target comes from TABLODGE_TARGET, which scripts/build.ts sets.
 const target = targetFromEnv();
 const outDir = outDirFor(target);
 

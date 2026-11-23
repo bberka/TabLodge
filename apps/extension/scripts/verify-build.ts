@@ -1,11 +1,3 @@
-// Checks that each built package (dist/tablodge for Chromium, dist/tablodge-firefox for Firefox) is a
-// loadable MV3 extension: every manifest-referenced file exists, built HTML only loads local bundles,
-// classic scripts really are classic scripts, the manifest metadata matches package.json, and each
-// manifest holds only what its browser understands.
-//
-//   node scripts/verify-build.ts                      verify every target
-//   node scripts/verify-build.ts --target firefox     verify one target
-//   node scripts/verify-build.ts --dir path           verify the Chromium package at another path
 import {readFile, readdir, stat} from 'node:fs/promises';
 import {basename, dirname, isAbsolute, relative, resolve, sep} from 'node:path';
 import process from 'node:process';
@@ -116,8 +108,6 @@ async function walk(directory: string): Promise<string[]> {
 	return files;
 }
 
-// Content scripts, non-module workers, and plain <script> tags run as classic scripts: an
-// import/export statement is a syntax error there, and there is no `process` global.
 async function verifyClassicScript(file: string, label: string) {
 	const code = await readFile(file, 'utf8');
 	try {
@@ -135,9 +125,6 @@ async function verifyClassicScript(file: string, label: string) {
 	}
 }
 
-/**
-Checks that a manifest holds what its target browser needs and nothing the other browser's package carries.
-*/
 function verifyTargetManifest(
 	manifest: Manifest,
 	target: Target,
@@ -191,7 +178,6 @@ function verifyTargetManifest(
 		);
 	}
 
-	// The dashboard shares one storage area, so the add-on stays out of private windows (Firefox has no "split").
 	if (manifest.incognito !== 'not_allowed') {
 		errors.push(
 			`${name}: the Firefox manifest must set incognito to not_allowed`,
@@ -251,7 +237,6 @@ async function verifyExtension(root: string, target: Target) {
 		...(manifest.declarative_net_request?.rule_resources || []).map(
 			(entry) => entry.path,
 		),
-		// Registered at runtime by the worker (Settings › Sources), so the manifest does not name it.
 		'site-source.js',
 	].filter((entry): entry is string => Boolean(entry));
 
@@ -291,7 +276,6 @@ async function verifyExtension(root: string, target: Target) {
 		errors.push(`${name}: missing newtab.html in the loadable package`);
 	}
 
-	// Help links to it, and the licences of the bundled packages require it.
 	const notices = await readFile(
 		resolve(root, 'THIRD_PARTY_NOTICES.txt'),
 		'utf8',
@@ -302,7 +286,6 @@ async function verifyExtension(root: string, target: Target) {
 		}
 	}
 
-	// Package.json is the source of the repository URL.
 	const pkg = readPackageJson();
 
 	if (!manifest.homepage_url || manifest.homepage_url !== pkg.homepage) {
@@ -369,7 +352,6 @@ async function verifyExtension(root: string, target: Target) {
 			);
 		}
 
-		// Every page applies the saved theme before first paint with a classic script in <head>.
 		const head = html.split(/<\/head>/i, 1)[0];
 		const bootTag =
 			/<script\b[^>]*\bsrc=["']\.\/theme-boot\.js["'][^>]*>/i.exec(head)?.[0];

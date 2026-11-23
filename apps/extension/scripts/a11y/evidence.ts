@@ -94,7 +94,6 @@ export async function withMobileEmulation(
 	}
 }
 
-// Screenshots of the current page state at the four evidence profiles; the phone profile uses device emulation.
 export async function captureViewports(
 	page: Page,
 	name: string,
@@ -105,7 +104,6 @@ export async function captureViewports(
 		await page.setViewportSize({width, height});
 		if (width === 440) {
 			await withMobileEmulation(page, {width, height}, async (device) => {
-				// The toast fades in; let it settle so the capture shows it opaque.
 				await page.waitForTimeout(600);
 				const {data} = await device.send('Page.captureScreenshot', {
 					format: 'png',

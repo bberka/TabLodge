@@ -75,9 +75,6 @@ async function writeCache(cache: FaviconCache): Promise<void> {
 	await rename(temporaryPath, cachePath);
 }
 
-/**
-Downloads missing fixture icons once to a machine wide cache shared by all worktrees.
-*/
 export async function loadDevFavicons(
 	page: Page,
 	urls: string[],

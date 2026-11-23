@@ -1,9 +1,3 @@
-// The Firefox counterpart of scripts/browser/dev-browser.ts: opens the Firefox build in a dedicated profile with the
-// extension loaded, optionally with the sample data fixture and without a desktop window.
-//
-// Headless mode prints the geckodriver address and session id. A Selenium client can attach to that session to
-// drive the extension pages (see "Browser access" in docs/agents/validation.md). End the session, or stop this
-// process, to close Firefox and the build watchers.
 import {mkdir} from 'node:fs/promises';
 import process from 'node:process';
 import {createDevFixture, type DevStore} from '../../src/shared/dev-fixture.ts';
@@ -47,9 +41,6 @@ async function seedDevStore({driver}: FirefoxSession) {
 	}
 }
 
-/**
-Resolves once the browser session is gone: the window was closed, or the session was ended.
-*/
 async function sessionEnded({driver}: FirefoxSession) {
 	for (;;) {
 		await new Promise((resolve) => {

@@ -188,7 +188,6 @@ export async function sessionCardQuickActionsCheck(env: Env, theme: Theme) {
 				name: 'Delete session Home lab rebuild',
 			});
 			await sessionDeleteButton.hover();
-			// The computed value is serialized in oklab, so compare it as the color it paints over white.
 			const deleteHoverBackground = async () =>
 				sessionDeleteButton.evaluate(
 					(button: {

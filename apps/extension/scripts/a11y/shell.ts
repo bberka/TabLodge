@@ -251,7 +251,6 @@ export async function dialogFocusReturnCheck(env: Env) {
 			async () => (await focusedLabel(page)) === 'Add bookmark',
 			'focus to return to the Add bookmark button',
 		);
-		// A dialog opened from a menu item returns to the menu's button.
 		const trigger = page
 			.locator('[data-bookmark-id] [data-move-focus]')
 			.first();

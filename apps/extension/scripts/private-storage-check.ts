@@ -229,9 +229,6 @@ const LOCK_ACTIVE_KEY = 'tablodge.privatelock.active';
 const LOCK_WINDOWS_KEY = 'tablodge.privatelock.windows';
 const LOCK_PASSWORD = 'correct horse battery';
 
-/**
-The ids of the private windows, as a private page sees them.
-*/
 async function privateWindowIds(privatePage: Page): Promise<number[]> {
 	const ids = await privatePage.evaluate(async () => {
 		const windows = await (
@@ -244,9 +241,6 @@ async function privateWindowIds(privatePage: Page): Promise<number[]> {
 	return ids.toSorted((a, b) => a - b);
 }
 
-/**
-What the private lock keeps in session storage: the key, the last use, and the private windows it tracks.
-*/
 async function lockSession(normal: Page) {
 	const saved = await normal.evaluate(
 		async (keys) =>
@@ -356,10 +350,6 @@ async function unlockWith(page: Page, value: string) {
 	await page.keyboard.press('Enter');
 }
 
-/**
-A stand-in sync server that already holds a private library: it answers the status and key calls the set-a-password screen
-makes, with the CORS headers the extension's fetch needs.
-*/
 async function startStubSyncServer(hasKey = true) {
 	const wrapped = Buffer.from('not a real envelope').toString('base64');
 	const server = createServer((request, response) => {
@@ -392,9 +382,6 @@ async function startStubSyncServer(hasKey = true) {
 	};
 }
 
-/**
-Sets the first password on the screen that replaces a saved private library until it has one.
-*/
 async function setFirstLock(page: Page) {
 	await page.getByRole('heading', {name: 'Set a password'}).waitFor();
 	await page
@@ -407,9 +394,6 @@ async function setFirstLock(page: Page) {
 	await page.getByRole('button', {name: 'Set and open'}).click();
 }
 
-/**
-The password lock of the saved separate private library, in a real browser (issue #142).
-*/
 async function runLockChecks(
 	context: BrowserContext,
 	id: string,
@@ -426,7 +410,6 @@ async function runLockChecks(
 	);
 
 	if (phase === 'afterBrowserRestart') {
-		// The browser closed with the library unlocked, so the key is gone and the library opens locked.
 		const page = await openPrivatePage(
 			normal,
 			`chrome-extension://${id}/newtab.html`,
@@ -454,7 +437,6 @@ async function runLockChecks(
 		console.log(
 			'ok a browser restart locks the library and the password opens it',
 		);
-		// Removing the lock leaves the original plain data.
 		const removed = await sendRaw(page, {
 			type: 'REMOVE_PRIVATE_LOCK',
 			credential: LOCK_PASSWORD,
@@ -484,12 +466,10 @@ async function runLockChecks(
 	privatePage.on('pageerror', (error) => {
 		errors.push(error.message);
 	});
-	// The saved library does not open until a password is set.
 	const lockHeading = privatePage.getByRole('heading', {
 		name: 'Set a password',
 	});
 	await lockHeading.waitFor();
-	// A regular window shows the status but cannot change the lock.
 	await normal.reload();
 	await normal
 		.getByText(
@@ -504,7 +484,6 @@ async function runLockChecks(
 		0,
 	);
 
-	// Set the first password on the screen that replaces the library, in both themes, at every viewport.
 	for (const theme of ['light', 'dark'] as const) {
 		await setPrivatePageTheme(normal, privatePage, theme);
 		await captureEvidence(
@@ -517,7 +496,6 @@ async function runLockChecks(
 
 	const submit = privatePage.getByRole('button', {name: 'Set and open'});
 	assert.equal(await submit.isDisabled(), true);
-	// A short or number-only password is allowed; the field says it is easy to guess while it is typed.
 	await privatePage
 		.getByRole('textbox', {name: 'Password', exact: true})
 		.fill('1234');
@@ -571,7 +549,6 @@ async function runLockChecks(
 		'ok turning the lock on encrypts every private library value at rest',
 	);
 
-	// The mode cannot change while the lock is on, from a regular window or by message.
 	await normal.reload();
 	const modeRadios = normal
 		.getByRole('radiogroup', {name: 'Choose a library for private windows'})
@@ -603,7 +580,6 @@ async function runLockChecks(
 	);
 	console.log('ok the storage mode cannot change while the library is locked');
 
-	// Lock now, from the header by keyboard.
 	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
 	await privatePage.getByText('Saved private', {exact: true}).waitFor();
 	const lockNow = privatePage.getByRole('button', {
@@ -628,7 +604,6 @@ async function runLockChecks(
 		assert.deepEqual(await axeViolations(privatePage, axeSource), []);
 	}
 
-	// Locked: the worker refuses reads, writes, and backups.
 	for (const message of [
 		{type: 'GET_STATE'},
 		{type: 'GET_FULL_BACKUP'},
@@ -665,7 +640,6 @@ async function runLockChecks(
 		privatePage.locator('body'),
 		'lock-screen-wrong-credential',
 	);
-	// A forgotten password has a way out: erase the private library and start again. Cancelling keeps everything.
 	await privatePage
 		.getByRole('button', {name: 'Forgot it? Erase private data'})
 		.click();
@@ -697,12 +671,10 @@ async function runLockChecks(
 		'ok the lock screen blocks the page, rejects a wrong password, and opens with the right one',
 	);
 
-	// A restarted worker keeps the library open while the browser keeps running.
 	await stopWorkers(context, id);
 	assert.deepEqual(await bookmarkTitles(privatePage), ['Saved private']);
 	console.log('ok a restarted private worker keeps the library unlocked');
 
-	// The idle timeout locks the page by itself.
 	assert.equal(
 		(await sendRaw(privatePage, {type: 'SET_PRIVATE_LOCK_IDLE', minutes: 1}))
 			.ok,
@@ -722,7 +694,6 @@ async function runLockChecks(
 	await unlockWith(privatePage, LOCK_PASSWORD);
 	await privatePage.getByText('Saved private', {exact: true}).waitFor();
 
-	// Change the credential from Settings by keyboard.
 	await privatePage.goto(
 		`chrome-extension://${id}/options.html#settings-private-windows`,
 	);
@@ -759,10 +730,6 @@ async function runLockChecks(
 	await normal.close();
 }
 
-/**
-Closing the last private window locks the library; closing one of several, or restarting the worker, does not.
-The private worker is not woken when a private window closes, so the lock is judged on the next wake.
-*/
 async function runWindowLockChecks(
 	context: BrowserContext,
 	normal: Page,
@@ -777,7 +744,6 @@ async function runWindowLockChecks(
 		});
 	};
 
-	// Unlocking recorded the private window that was open.
 	const [firstId] = await privateWindowIds(first);
 	assert.equal((await privateWindowIds(first)).length, 1);
 	await waitFor(
@@ -786,7 +752,6 @@ async function runWindowLockChecks(
 		'the unlocked library to track the open private window',
 	);
 
-	// A second private window opens unlocked, because the first is still open.
 	const second = await openPrivatePage(normal, newtab);
 	watch(second);
 	await second.getByText('Saved private', {exact: true}).waitFor();
@@ -798,7 +763,6 @@ async function runWindowLockChecks(
 		'both private windows to be tracked',
 	);
 
-	// Closing one of two keeps it unlocked, and so does a worker restart with a window still open.
 	await first.close();
 	await stopWorkers(context, id);
 	assert.deepEqual(await bookmarkTitles(second), ['Saved private']);
@@ -810,7 +774,6 @@ async function runWindowLockChecks(
 		'ok closing one of two private windows, and restarting the worker, keep the library unlocked',
 	);
 
-	// Close the only private window while the worker is stopped: nothing runs, so the key stays in memory.
 	await stopWorkers(context, id);
 	await second.close();
 	await new Promise((resolve) => {
@@ -821,7 +784,6 @@ async function runWindowLockChecks(
 		`   after the last close with the worker stopped: key ${afterClose.hasKey ? 'still in session memory' : 'already gone'}`,
 	);
 
-	// The next private window shows the lock screen and the key is gone before it can read anything.
 	const third = await openPrivatePage(normal, newtab);
 	watch(third);
 	await lockedHeading(third).waitFor();
@@ -848,7 +810,6 @@ async function runWindowLockChecks(
 		'ok after the last private window closed, the next one shows the lock screen and no key remains in session storage',
 	);
 
-	// Unlocking again tracks the new window. This time the worker is awake when the last window closes.
 	await unlockWith(third, LOCK_PASSWORD);
 	await third.getByText('Saved private', {exact: true}).waitFor();
 	await waitFor(
@@ -874,7 +835,6 @@ async function runWindowLockChecks(
 		'ok the next window after an awake close shows the lock screen too',
 	);
 
-	// Leave the library unlocked with a window open, as the browser restart check expects.
 	await unlockWith(fourth, LOCK_PASSWORD);
 	await fourth.getByText('Saved private', {exact: true}).waitFor();
 }
@@ -1158,7 +1118,6 @@ try {
 	);
 	await privatePage.keyboard.press('Enter');
 	await privatePage.getByRole('dialog').waitFor({state: 'hidden'});
-	// With a sync server that already holds a private library, the screen offers its password first.
 	const stub = await startStubSyncServer();
 	await normal.evaluate(async (url) => {
 		await (
@@ -1213,7 +1172,6 @@ try {
 		).chrome.storage.local.remove('tablodge.sync.config');
 	});
 	await stub.close();
-	// A server with no private library yet: the screen asks whether to sync, on by default.
 	const emptyStub = await startStubSyncServer(false);
 	const setSyncConfig = async (url: string | undefined) =>
 		normal.evaluate(async (target) => {
@@ -1264,7 +1222,6 @@ try {
 	await privatePage.reload();
 	await setFirstLock(privatePage);
 	await privatePage.getByRole('main').waitFor();
-	// Settings › Sync says plainly whether private windows sync: here they stay on this device.
 	const settingsStub = await startStubSyncServer(false);
 	await setSyncConfig(settingsStub.url);
 	const syncPage = await openPrivatePage(
@@ -1301,7 +1258,6 @@ try {
 			.textContent()) ?? '',
 		/You’re in a private window[\s\S]*Separate library saved on this device/,
 	);
-	// The set-a-password screen came and went in between, so focus must not be lost to the page body.
 	for (
 		let attempt = 0;
 		attempt < 50 && (await focused(privatePage)).tag === 'BODY';
@@ -1331,7 +1287,6 @@ try {
 			'name-session.html',
 		]) {
 			await privatePage.goto(`chrome-extension://${id}/${page}`);
-			// The popup and side panel show a compact badge in their header instead of the banner frame.
 			await privatePage
 				.locator(
 					page === 'popup.html' || page === 'sidepanel.html'
@@ -1413,7 +1368,6 @@ try {
 		}
 	}
 
-	// Private pages get their own accent by default, live, and regular windows keep theirs.
 	const accentVariable =
 		"document.documentElement.style.getPropertyValue('--brand-primary-light')";
 	await privatePage.goto(`chrome-extension://${id}/options.html`);
@@ -1458,7 +1412,6 @@ try {
 	console.log(
 		'ok saved private library starts empty and does not expose the normal library',
 	);
-	// A locked saved library cannot be left, so the lock comes off first.
 	assert.equal(
 		(
 			await send(privatePage, {

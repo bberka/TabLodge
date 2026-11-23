@@ -1,9 +1,3 @@
-// Shared Selenium plumbing for the scripts that run the Firefox build in a real Firefox
-// (scripts/browser/firefox-smoke-check.ts and the dev launcher in scripts/browser/dev-firefox.ts).
-//
-// Needs Firefox (FIREFOX_BIN overrides the one Selenium finds) and a matching geckodriver, which Selenium
-// downloads when none is on the PATH. The add-on is installed as a temporary add-on, so Firefox does not
-// need to sign it. It is pinned to a fixed internal UUID so its pages have a known address.
 import assert from 'node:assert/strict';
 import process from 'node:process';
 import firefoxModule from 'selenium-webdriver/firefox.js';
@@ -17,16 +11,10 @@ const EXTENSION_BASE = `moz-extension://${UUID}/`;
 
 export type FirefoxSession = {
 	driver: Firefox.Driver;
-	/**
-	The geckodriver address; a WebDriver client can attach to the session through it.
-	*/
 	serverUrl: string;
 	sessionId: string;
 };
 
-/**
-Starts Firefox on `profile` (a directory that persists between launches) with dist/tablodge-firefox installed.
-*/
 export async function launchFirefox(
 	profile: string,
 	headless: boolean,
@@ -42,7 +30,6 @@ export async function launchFirefox(
 		options.setBinary(process.env.FIREFOX_BIN);
 	}
 
-	// WebDriver cannot open moz-extension:// pages; chrome-scoped scripts can, which needs system access.
 	const service = new firefox.ServiceBuilder()
 		.addArguments('--allow-system-access')
 		.build();
@@ -60,9 +47,6 @@ export async function launchFirefox(
 	}
 }
 
-/**
-Opens an extension page in a new tab and switches to it.
-*/
 export async function openExtensionPage(driver: Firefox.Driver, page: string) {
 	const before = await driver.getAllWindowHandles();
 	await driver.setContext(firefox.Context.CHROME);
@@ -81,7 +65,6 @@ export async function openExtensionPage(driver: Firefox.Driver, page: string) {
 	);
 	assert.ok(added);
 	await driver.switchTo().window(added);
-	// The tab exists before its page has loaded; scripts run on whatever document is there.
 	await driver.wait(
 		async () =>
 			driver.executeScript<boolean>(
@@ -100,9 +83,6 @@ const EVALUATE_WRAPPER = [
 	');',
 ].join('\n');
 
-/**
-Runs an async function body in the current extension page, where `chrome.*` is the add-on's own API.
-*/
 export async function evaluateInPage<T>(
 	driver: Firefox.Driver,
 	body: string,

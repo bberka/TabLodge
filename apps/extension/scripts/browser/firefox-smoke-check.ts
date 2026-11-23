@@ -1,10 +1,3 @@
-// Loads dist/tablodge-firefox in a headless Firefox and exercises the core workflows through the extension's own
-// message protocol: every page opens, a window is saved as a session and restored (order, pinned tab, tab group),
-// a bookmark is added, a full backup is exported, and sessions and bookmarks survive a browser restart.
-//
-//   vp run build && vp run check:firefox
-//
-// Needs Firefox; see scripts/browser/firefox-driver.ts for how it is found and how the add-on is installed.
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
 import {createServer} from 'node:http';
@@ -112,7 +105,6 @@ try {
 
 	pass(`all ${PAGES.length} extension pages render and reach the worker`);
 
-	// A window with a pinned tab and a two-tab group, saved and restored.
 	await openPage('options.html');
 	await evaluate(`
 		const win = await chrome.windows.create({url: '${origin}/one', focused: true});
@@ -173,7 +165,6 @@ try {
 	assert.equal(added.ok, true, added.error);
 	pass('added a bookmark');
 
-	// The tabs above showed this site's icon, so a link to a page of the site that was never opened shows it too.
 	const iconed = await send('ADD_BOOKMARK', {
 		bookmark: {
 			title: 'Never opened',
@@ -201,7 +192,6 @@ try {
 	assert.equal(backup.ok, true, backup.error);
 	pass('imported the browser bookmarks and exported a full backup');
 
-	// Firefox cannot open the toolbar button's side panel, so the button keeps its popup.
 	await send('UPDATE_SETTINGS', {settings: {actionMode: 'sidepanel'}});
 	const popup = await evaluate<string>(
 		'return await chrome.action.getPopup({});',

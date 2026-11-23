@@ -49,7 +49,6 @@ export async function settingsSearchCheck(env: Env) {
 	);
 }
 
-// A section reset or a row reset once wrapped onto its own line on a phone, and the Archive row's days field stacked under its select.
 export async function settingsNarrowLayoutCheck(env: Env) {
 	const {context, extensionId} = env;
 	await check(
@@ -104,7 +103,6 @@ export async function settingsNarrowLayoutCheck(env: Env) {
 						`section reset wrapped below the title at ${width}px`,
 					);
 					const row = card.locator('[data-setting-row="autoArchiveDays"]');
-					// The page may still be scrolling to the section, so read all three lines until they agree.
 					let lines = {resetY: 0, selectY: 0, daysY: 0};
 					await until(
 						async () => {
@@ -334,7 +332,6 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 				assert.equal(await active(), 'Reddit saved');
 				await page.keyboard.press('End');
 				assert.equal(await active(), 'Substack saved');
-				// The list scrolls; the highlighted site is scrolled into view.
 				const last = await page
 					.getByRole('option', {name: /Substack saved/})
 					.boundingBox();
@@ -374,7 +371,6 @@ async function animationsDone(page: Page) {
 			document: {getAnimations(): Array<{finished: Promise<unknown>}>};
 		};
 		await Promise.all(
-			// A cancelled animation rejects; it is done either way.
 			document
 				.getAnimations()
 				.map(async (animation) => animation.finished.catch(() => undefined)),
@@ -399,13 +395,11 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 			const page = await openPage(context, extensionId, 'options');
 			try {
 				await setTheme(page, theme);
-				// A site the browser took access from stays listed with Remove, without a permission prompt to answer.
 				await writeSources(page, {
 					github: {enabled: false, notice: 'revoked'},
 					reddit: {enabled: false, notice: 'revoked'},
 				});
 				const row = page.locator('[data-site-source="github"]');
-				// Each site is one collapsed row; Enter on it opens its options, and only one row is open at a time.
 				const toggle = row.getByRole('button', {name: /^GitHub stars/});
 				const other = page
 					.locator('[data-site-source="reddit"]')
@@ -427,7 +421,6 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 				await confirm
 					.getByText(/gives back its access to github\.com/)
 					.waitFor();
-				// The dialog fades in; mid fade its button fails contrast.
 				await animationsDone(page);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
@@ -450,7 +443,6 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 					1,
 					'only the removed site goes',
 				);
-				// The removed row held focus, so it lands on Add a site, not the page body.
 				await until(
 					async () =>
 						(await page.locator(':focus').textContent()) === 'Add a site',
@@ -488,7 +480,6 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 					.getByRole('list', {name: 'Backups'})
 					.getByRole('listitem');
 				await rows.first().waitFor();
-				// Deleting a backup asks first, then offers Undo inside the dialog and moves focus to it.
 				const before = await rows.count();
 				await dialog
 					.getByRole('button', {name: /^Delete the backup from/})
@@ -511,14 +502,12 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 					async () => (await rows.count()) === before - 1,
 					'the backup is gone',
 				);
-				// Ctrl+Z runs it too, as it does for the page toast.
 				await page.keyboard.press('Control+z');
 				await dialog.getByText(/^Undone:/).waitFor();
 				await until(
 					async () => (await rows.count()) === before,
 					'the backup is back',
 				);
-				// A confirmation opened inside the dialog hands focus back inside it, not to the page behind.
 				await dialog.getByRole('button', {name: 'Clear snapshots'}).focus();
 				await page.keyboard.press('Enter');
 				const confirm = page.getByRole('alertdialog', {
@@ -540,7 +529,6 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 				await animationsDone(page);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
-				// Escape closes the help first and leaves the Backups dialog open.
 				await page.keyboard.press('Escape');
 				await page
 					.getByRole('dialog', {name: 'About backups'})
@@ -561,10 +549,6 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 	);
 }
 
-/**
-Every section the Settings page shows has a finder entry, every entry leads to a section that is there, and choosing
-one from the palette opens Settings at it. Fails when a new Settings section is not added to settings-sections.ts.
-*/
 export async function settingsFinderCheck(env: Env) {
 	const {context, extensionId} = env;
 	await check('every Settings section is in the finder', async () => {

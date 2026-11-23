@@ -48,17 +48,14 @@ export async function selectQuickActions(
 	}
 }
 
-// The pages follow the system theme by default, so emulating the color scheme switches them.
 export async function setTheme(page: Page, theme: (typeof THEMES)[number]) {
 	await page.emulateMedia({colorScheme: theme});
-	// Colors transition between themes; measure contrast after they settle.
 	await page.evaluate(async () => {
 		const {document, requestAnimationFrame} =
 			globalThis as typeof globalThis & {
 				document: {getAnimations(): Array<{finished: Promise<unknown>}>};
 				requestAnimationFrame(callback: () => void): number;
 			};
-		// The style change applies on the next frame, which is when its transitions start.
 		await new Promise<void>((resolve) => {
 			requestAnimationFrame(() => {
 				requestAnimationFrame(() => {
@@ -72,9 +69,6 @@ export async function setTheme(page: Page, theme: (typeof THEMES)[number]) {
 	});
 }
 
-// Opens a menu from its trigger by keyboard. A card can redraw right after the page settles and drop
-// focus, so the key press is repeated until a menu is open. An open menu hides the trigger from the
-// accessibility tree, so the menu itself is checked rather than the trigger.
 export async function openMenuByKeyboard(page: Page, trigger: Locator) {
 	const menu = page.getByRole('menu');
 	await until(async () => {
@@ -120,7 +114,6 @@ export async function axeViolationLines(
 	source: string,
 	runOnly: AxeOptions['runOnly'] = {type: 'tag', values: AXE_TAGS},
 ) {
-	// Evaluated through the protocol because the extension CSP blocks inline scripts.
 	await page.evaluate(source);
 	const results = await page.evaluate(
 		async (options: AxeOptions['runOnly']) =>
@@ -146,6 +139,5 @@ export const attributes = (page: Page, selector: string, name: string) =>
 			name,
 		);
 
-// The control holding keyboard focus, by its accessible name.
 export const focusedLabel = (page: Page) =>
 	page.locator(':focus').getAttribute('aria-label');

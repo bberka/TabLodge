@@ -1,17 +1,3 @@
-// Builds the loadable MV3 packages: dist/tablodge for Chromium and dist/tablodge-firefox for Firefox
-// (outDirFor in scripts/vite-shared.ts).
-//
-//   node scripts/build.ts                     build every target once
-//   node scripts/build.ts --target firefox    build one target (chrome or firefox)
-//   node scripts/build.ts --watch             build Chromium, then rebuild on source changes
-//   vp run dev:chrome                         watch sources and open Chrome with the extension loaded
-//   vp run dev:firefox                        watch sources and open Firefox with the add-on loaded
-//
-// The package is several Vite+ builds writing into one folder: the HTML pages
-// (vite.pages.config.ts, which also writes manifest.json and copies icons) plus self-contained
-// scripts referenced by the manifest or HTML (service worker, boot script).
-//
-// Each package also gets THIRD_PARTY_NOTICES.txt: the licence of every npm package the bundles include, linked from Help.
 import {rm, writeFile} from 'node:fs/promises';
 import {relative, resolve} from 'node:path';
 import process from 'node:process';
@@ -31,9 +17,6 @@ import {
 	type Target,
 } from './vite-shared.ts';
 
-/**
-Records every file a build step bundles, so THIRD_PARTY_NOTICES.txt can list the packages they come from.
-*/
 function recordBundledFiles(files: Set<string>): Plugin {
 	return {
 		name: 'record-bundled-files',
@@ -58,7 +41,6 @@ function stepsFor(target: Target): BuildStep[] {
 	const outDir = outDirFor(target);
 	return [
 		{label: 'pages', config: {configFile: fromRoot('vite.pages.config.ts')}},
-		// Classic (non-module) background script: a service worker for Chromium, an event page for Firefox.
 		{
 			label: 'service-worker.js',
 			config: scriptConfig({
@@ -68,7 +50,6 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
-		// Loaded synchronously by every page's <head> before first paint, so it must be a classic script.
 		{
 			label: 'theme-boot.js',
 			config: scriptConfig({
@@ -78,7 +59,6 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
-		// Starts the new-tab state read while the React page bundle is loading.
 		{
 			label: 'newtab-preload.js',
 			config: scriptConfig({
@@ -88,7 +68,6 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
-		// Injected into the open tab by "Keep a copy" to read it (chrome.scripting.executeScript).
 		{
 			label: 'page-copy-capture.js',
 			config: scriptConfig({
@@ -96,12 +75,10 @@ function stepsFor(target: Target): BuildStep[] {
 				outDir,
 				fileName: 'page-copy-capture.js',
 				target,
-				// Readability is Apache-2.0, whose notice has to travel with it; the minifier drops source comments.
 				banner:
 					'/* Includes @mozilla/readability, Copyright (c) 2010 Arc90 Inc, licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0 */',
 			}),
 		},
-		// The Settings › Sources content script, registered at runtime for a site the user switched on.
 		{
 			label: 'site-source.js',
 			config: scriptConfig({
@@ -111,7 +88,6 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
-		// Starts the add-bookmark window's read while the React page bundle is loading.
 		{
 			label: 'add-bookmark-preload.js',
 			config: scriptConfig({
@@ -139,7 +115,6 @@ const {
 	'seed-data': seedData,
 	headless,
 } = values;
-// Watching and the dev browser serve one package, so they take a single target (Chromium by default).
 const targets: readonly Target[] =
 	values.target === 'all' || (values.target === undefined && !watch)
 		? TARGETS
@@ -157,7 +132,6 @@ const bundledFiles = new Map<string, Set<string>>();
 for (const target of targets) {
 	const outDir = outDirFor(target);
 	await rm(outDir, {recursive: true, force: true});
-	// Vite.pages.config.ts is loaded by Vite for each build and reads the target from here.
 	process.env.TABLODGE_TARGET = target;
 	const files = new Set<string>();
 	bundledFiles.set(outDir, files);
@@ -208,7 +182,6 @@ for (const target of targets) {
 	);
 }
 
-// Every package the bundles include, with its licence text. A package without one fails the build.
 await Promise.all(initialBuilds);
 for (const [outDir, files] of bundledFiles) {
 	await writeFile(
