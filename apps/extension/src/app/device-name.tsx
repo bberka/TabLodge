@@ -8,9 +8,6 @@ import {
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 
-/**
-What the browser calls itself: its user agent brands, plus Brave, which only says so through its own API.
-*/
 async function browserBrands(): Promise<string[]> {
 	const {userAgentData, brave} = navigator as Navigator & {
 		userAgentData?: {brands?: Array<{brand: string}>};
@@ -24,10 +21,6 @@ async function browserBrands(): Promise<string[]> {
 	return brands;
 }
 
-/**
-The name this browser puts on the sessions it saves, so a session list shared between devices says where each one
-came from. It stays on this browser, starts filled in with the browser and system, and clearing the field goes back to that.
-*/
 export function DeviceNameField() {
 	const id = useId();
 	const helpId = `${id}-help`;
@@ -58,7 +51,6 @@ export function DeviceNameField() {
 
 	const commit = () => {
 		const typed = cleanDeviceName(draft);
-		// The detected name is not stored, so it keeps following the browser; only a different name is saved.
 		const name = typed === fallback ? '' : typed;
 		setDraft(name || fallback);
 		if (name === saved) {

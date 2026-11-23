@@ -7,19 +7,11 @@ const MIN_WIDTH_REM: Record<BookmarkColumnWidth, number> = {
 	'extra-wide': 32,
 };
 
-/**
-Space between board columns in rem, matching the grid gap class for each density.
-*/
 const BOOKMARK_GAP_REM: Record<BookmarkDensity, number> = {
 	comfortable: 1,
 	compact: 0.5,
 };
 
-/**
-The Board grid's column template for the width and columns-per-row settings, or undefined when both are
-at their defaults and the Dashboard width grid applies. Columns per row is a cap: a narrow container still
-fits fewer columns than the cap, so none shrink below the minimum width.
-*/
 export function bookmarkGridTemplate(
 	width: BookmarkColumnWidth,
 	perRow: number,

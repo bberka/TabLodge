@@ -1,12 +1,3 @@
-// The backup (export), import and share dialogs, shared by the dashboard and Settings › Data.
-// File formats live in the pure modules export-formats.ts, import-formats.ts and share-formats.ts.
-//
-// Share dialog API (used by the session manager and the bookmark board):
-//   <ShareDialog open onOpenChange title="Shared sessions" groups={sessions} showStatus={showStatus} />
-//     `groups` is any {name, tabs: {title, url}[]}[] (a Session[] fits as is). Optionally pass
-//     `sources` ([{id, label, description?, groups}]) to let the user choose what to share.
-//   Pages open it through useShareDialog in lazy-dialogs.tsx. The dialog offers: HTML page
-//     (download), Markdown / plain links / rich text (copy to clipboard).
 import {
 	useEffect,
 	useMemo,
@@ -143,9 +134,6 @@ import {cn} from '@/lib/utils';
 const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
 
-/**
-What a full backup ZIP holds, listed on the Everything choice instead of a format list (it has only one format).
-*/
 const FULL_BACKUP_CONTENTS = [
 	'Sessions and folders',
 	'Bookmarks and columns',
@@ -180,21 +168,9 @@ type ShareSource = {
 	label: string;
 	description?: string;
 	groups: ShareGroup[];
-	/**
-	The same thing as data, which also lets it be saved as a file (JSON, CSV, a bookmarks file) from the same dialog.
-	*/
 	data?: ExportData;
-	/**
-	Title of the shared page when this source holds several groups; defaults to the title of the whole share.
-	*/
 	pageTitle?: string;
-	/**
-	The one column or session this source is (`sharedPageSource`), so the dialog lists the links made from it.
-	*/
 	pageSource?: string;
-	/**
-	The full backup ZIP of everything: no links to list or preview, only the backup options.
-	*/
 	backup?: boolean;
 };
 export type SharePayload = {
@@ -202,19 +178,10 @@ export type SharePayload = {
 	groups?: readonly ShareGroup[];
 	sources?: ShareSource[];
 	data?: ExportData;
-	/**
-	Adds "Everything", the full backup ZIP, to what can be shared.
-	*/
 	backup?: boolean;
-	/**
-	Opens on this source (`everything` for the backup) instead of the first one.
-	*/
 	initialSource?: string;
 };
 
-/**
-How much of a file the preview shows.
-*/
 const FILE_PREVIEW_CHARS = 4000;
 const FILE_PREVIEW_CUT = '\n…';
 
@@ -234,13 +201,7 @@ type ShareChoice = {
 	title: string;
 	icon: typeof FileJson;
 	description: string;
-	/**
-	Can also be copied to the clipboard (a page copies as rich text, the others as plain text).
-	*/
 	copy?: boolean;
-	/**
-	Saved as a file with the export formats, so it needs the data, not just the links.
-	*/
 	file?: boolean;
 };
 
@@ -312,9 +273,6 @@ function sourceDescription(source: ShareSource) {
 		.join(' · ');
 }
 
-/**
-One option of a dropdown: a name with its one line explanation under it.
-*/
 function ChoiceText({
 	icon: Icon,
 	title,
@@ -351,9 +309,6 @@ type ChoiceOption = {
 	icon?: typeof FileJson;
 };
 
-/**
-A labelled dropdown whose options have a name and a one line explanation, the same in the share, export and import dialogs.
-*/
 function ChoiceSelect({
 	id,
 	label,
@@ -484,9 +439,6 @@ type SharePreviewPanelProps = {
 	pageTitle: string;
 	counts: ReturnType<typeof shareCounts>;
 	formatLabel: string;
-	/**
-	The start of the file for formats that are saved as a file, shown as is.
-	*/
 	fileText?: string;
 };
 
@@ -497,7 +449,6 @@ function SharePreviewPanel({
 	formatLabel,
 	fileText,
 }: SharePreviewPanelProps) {
-	// A file preview shows the file itself, so link and group counts of the link preview do not apply to it.
 	const notShown = [
 		...(fileText === undefined && preview.omittedLinks > 0
 			? [plural(preview.omittedLinks, 'more link')]
@@ -689,9 +640,6 @@ function SourcePages({
 	);
 }
 
-/**
-Unified share dialog: choose what to share (when several sources are offered) and how.
-*/
 export function ShareDialog({
 	open,
 	onOpenChange,
@@ -716,7 +664,6 @@ export function ShareDialog({
 	}, [sources, groups, title, data, backup]);
 	const [sourceId, setSourceId] = useState(all[0].id);
 	const [method, setMethod] = useState<ShareWay>('html');
-	// A backup-only dialog has nothing to upload, so it never asks the sync server about shared pages.
 	const backupOnly = all.length === 1 && all[0].backup === true;
 	const shared = useSharedPages(open && !backupOnly, true);
 	const server = shared.server ?? 'none';
@@ -726,16 +673,13 @@ export function ShareDialog({
 	const [shareModePicked, setShareModePicked] = useState(false);
 	const [shareProtect, setShareProtect] = useState(false);
 	const [sharePassword, setSharePassword] = useState('');
-	// Optional password protection of the full backup ZIP; the secret lives only in this state.
 	const [protect, setProtect] = useState(false);
 	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
 	const [saving, setSaving] = useState(false);
-	// Changes whenever the dialog opens or closes, so a backup that outlives its dialog can tell and stays quiet.
 	const dialogRunRef = useRef(0);
 	useEffect(() => {
 		dialogRunRef.current++;
 		if (!open) {
-			// Drop the typed secret as soon as the dialog closes.
 			setPasscode((current) => ({...current, value: '', confirm: ''}));
 			setSharePassword('');
 			return;
@@ -752,7 +696,6 @@ export function ShareDialog({
 		setProtect(false);
 		setSaving(false);
 		setPasscode(EMPTY_PASSCODE_DRAFT);
-		// Reset each time the dialog opens only.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
 	useEffect(() => {
@@ -1279,19 +1222,10 @@ type BookmarkTarget = 'folders' | 'column';
 type ImportDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	/**
-	The kind selected when the dialog opens; the user can switch to the other kind.
-	*/
 	initialKind: ImportKind;
-	/**
-	Open on Everything (restore a full backup ZIP) instead of Bookmarks or Sessions; Settings does this.
-	*/
 	initialScope?: 'everything';
 	state: TabLodgeState | null;
 	showStatus: ShowStatus;
-	/**
-	Called after a successful import (the pages also reload on storage changes).
-	*/
 	onImported?: () => void | Promise<void>;
 	initialLink?: string;
 };
@@ -1319,10 +1253,6 @@ function importSummary(
 	return `${parts.join(' · ')}.`;
 }
 
-/**
- Import flow: 1) choose a source (a file, or for bookmarks this browser's bookmarks), 2) preview what
- was detected and choose how duplicates, titles, and columns are handled, 3) import, toast, close.
- */
 export function ImportDialog({
 	open,
 	onOpenChange,
@@ -1334,14 +1264,11 @@ export function ImportDialog({
 	initialLink,
 }: ImportDialogProps) {
 	const [kind, setKind] = useState<ImportKind>(initialKind);
-	// "Everything" only takes a full backup ZIP, which replaces or adds to all data and settings.
 	const [everything, setEverything] = useState(initialScope === 'everything');
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
 	const [full, setFull] = useState<FullBackupContents | null>(null);
-	// A full backup is added to the library by default; Replace swaps everything, settings included.
 	const [fullMode, setFullMode] = useState<'merge' | 'replace'>('merge');
-	// An encrypted backup waiting for its password; nothing is read from it until it opens.
 	const [locked, setLocked] = useState<{
 		name: string;
 		bytes: Uint8Array;
@@ -1367,7 +1294,6 @@ export function ImportDialog({
 	const readGenerationRef = useRef(0);
 	const linkReadRef = useRef<AbortController | undefined>(undefined);
 	const columns = state?.bookmarkColumns ?? [];
-	// Addresses in the trash, which the import skips like saved links.
 	const [trashed, setTrashed] = useState({
 		sessions: [] as string[],
 		bookmarks: [] as string[],
@@ -1388,7 +1314,6 @@ export function ImportDialog({
 		};
 	}, [open]);
 
-	// Reset on open (never on close) so the closing animation keeps the last content.
 	useEffect(() => {
 		readGenerationRef.current += 1;
 		if (!open) {
@@ -1420,7 +1345,6 @@ export function ImportDialog({
 			void readLink(initialLink);
 		}
 
-		// Resets the form each time the dialog opens; later changes to the state or props must not wipe it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
 
@@ -1447,13 +1371,11 @@ export function ImportDialog({
 			})
 		: null;
 	const step = (parsed || full) && source ? 'preview' : 'source';
-	// The source step's focused button unmounts when the preview appears; move focus to the Import action.
 	useEffect(() => {
 		if (open && step === 'preview') {
 			requestAnimationFrame(() => importButtonRef.current?.focus());
 		}
 	}, [open, step]);
-	// The source step's button unmounts when the credential field appears; put focus in the field.
 	useEffect(() => {
 		if (open && locked) {
 			requestAnimationFrame(() => credentialRef.current?.focus());
@@ -1467,7 +1389,6 @@ export function ImportDialog({
 		titlePolicy === 'existing',
 	);
 	const itemNoun = kind === 'sessions' ? 'tab' : 'bookmark';
-	// What the Import button promises: links that will be added (duplicates are skipped unless allowed).
 	const newLinks = preview
 		? duplicateMode === 'skip'
 			? Math.max(0, preview.links - preview.duplicates)
@@ -1712,8 +1633,6 @@ export function ImportDialog({
 		setBusy(true);
 		try {
 			if (fullMode === 'merge') {
-				// The same merge as importing a JSON backup: new sessions, bookmarks and columns are added, links
-				// already saved are skipped, and settings, snapshots, and trash stay as they are.
 				const merged = await send('IMPORT_GROUPS', {
 					data: full.state,
 					importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
@@ -1872,7 +1791,6 @@ export function ImportDialog({
 					? 'Nothing is saved until you choose Import.'
 					: `Pick a file or paste a shared page link. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
 	const kindSwitch =
-		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
 		!full && source?.type !== 'browser' ? (
 			<ChoiceSelect
 				id="import-what"
