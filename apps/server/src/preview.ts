@@ -1,18 +1,8 @@
-/*
-Site icons and link previews, fetched on behalf of a device that asks. The sync server is the one place that can
-read a page without handing the page's owner the phone's or the browser's address, and without any third party
-learning which links are saved. The token holder is the only caller, but the server still refuses to be pointed at
-its own network.
-*/
-
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_REDIRECTS = 3;
 const MAX_HTML_BYTES = 256 * 1024;
 export const MAX_ICON_BYTES = 128 * 1024;
 export const MAX_IMAGE_BYTES = 512 * 1024;
-/**
-A whole page for a readable copy (/v1/page-source). The device extracts the text; the server keeps nothing.
-*/
 export const MAX_PAGE_BYTES = 3_000_000;
 const IMAGE_TYPES = new Set([
 	'image/png',
@@ -27,25 +17,14 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; TabLodge link preview)';
 export type Preview = {
 	title?: string;
 	description?: string;
-	/**
-	The page's share image as a `data:` URL, when it is small enough.
-	*/
 	image?: string;
 };
 
 export type PreviewDeps = {
 	fetch?: typeof fetch;
-	/**
-	Every address a host name points at. The Docker server passes DNS; the Cloudflare runtime cannot reach private
-	networks at all, so it passes nothing.
-	*/
 	resolve?: (host: string) => Promise<string[]>;
 };
 
-/**
-True for an address that is not on the public internet: loopback, private, link local (cloud metadata), shared
-address space, and their IPv6 counterparts.
-*/
 export function isPrivateAddress(address: string): boolean {
 	const text = address.toLowerCase().replaceAll(/^\[|\]$/g, '');
 	const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(text);
@@ -81,9 +60,6 @@ function isIpLiteral(host: string) {
 	return /^\[.*\]$/.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host);
 }
 
-/**
-The URL when it is a plain web address this server may fetch, otherwise undefined.
-*/
 export async function allowedUrl(
 	text: string,
 	deps: PreviewDeps = {},
@@ -135,9 +111,6 @@ export async function allowedUrl(
 	return url;
 }
 
-/**
-Fetches with a time limit, following a few redirects and checking every hop against the same rules.
-*/
 async function guardedFetch(
 	start: URL,
 	deps: PreviewDeps,
@@ -215,9 +188,6 @@ async function readLimited(
 	return bytes;
 }
 
-/**
-Reads up to the first part of a page, enough to reach its head, and no more.
-*/
 async function readHtml(response: Response): Promise<string | undefined> {
 	const reader = response.body?.getReader();
 	if (!reader) {
@@ -274,10 +244,6 @@ export type PageMeta = {
 	icon?: string;
 };
 
-/**
-What a page's head says about itself: its Open Graph or Twitter card, then the plain title and description, and the
-icon it links. Addresses are made absolute against the page.
-*/
 export function readPageMeta(html: string, base: URL): PageMeta {
 	const head = html.split(/<\/head>/i, 1)[0] ?? html;
 	const meta = new Map<string, string>();
@@ -369,9 +335,6 @@ function dataUrl(image: {bytes: Uint8Array; type: string}) {
 	return `data:${image.type};base64,${btoa(binary)}`;
 }
 
-/**
-The title, description, and share image of a page.
-*/
 export async function fetchPreview(
 	text: string,
 	deps: PreviewDeps = {},
@@ -409,11 +372,6 @@ export async function fetchPreview(
 	};
 }
 
-/**
-A whole page, for a device that keeps a readable copy of it: the address it ended at after redirects and its HTML.
-Nothing when the page is not HTML, is larger than MAX_PAGE_BYTES, or cannot be reached under the same rules as a
-preview.
-*/
 export async function fetchPage(
 	text: string,
 	deps: PreviewDeps = {},
@@ -441,9 +399,6 @@ export async function fetchPage(
 		: undefined;
 }
 
-/**
-The icon of a site: the one its home page links, or /favicon.ico.
-*/
 export async function fetchIcon(
 	host: string,
 	deps: PreviewDeps = {},

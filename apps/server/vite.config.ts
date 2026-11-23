@@ -1,4 +1,3 @@
-// Bundles the Docker server into one file, dist/node.js, so the image needs no node_modules.
 import {defineConfig} from 'vite-plus';
 
 export default defineConfig({

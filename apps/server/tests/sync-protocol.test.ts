@@ -31,17 +31,11 @@ import {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/**
-Every server log runs the same tests: the in memory reference and the SQLite one the servers use.
-*/
 const LOGS: Array<[string, () => SyncLog]> = [
 	['memory', () => new ChangeLog()],
 	['sqlite', () => new SqlChangeLog(sqlite(':memory:'))],
 ];
 
-/**
-Everything a device starting from cursor 0 receives.
-*/
 function pullAll(log: SyncLog): SyncChange[] {
 	const changes: SyncChange[] = [];
 	let cursor = 0;
@@ -58,9 +52,6 @@ function pullAll(log: SyncLog): SyncChange[] {
 
 const T0 = Date.UTC(2026, 10, 1);
 
-/**
-A seeded linear congruential generator, so a failing simulation can be replayed from its seed.
-*/
 function random(seed: number) {
 	let state = seed;
 	return () => {
@@ -348,9 +339,6 @@ function receive(device: Device, changes: SyncChange[], now: number) {
 	mergeInto(device.records, changes);
 }
 
-/**
-Syncs one device and adds each push result, and `resync` when it had to resync, to `outcomes`.
-*/
 function sync(
 	device: Device,
 	log: SyncLog,
@@ -361,7 +349,6 @@ function sync(
 	device.outbox.clear();
 	for (const [index, result] of log.push(pending, now).entries()) {
 		outcomes.add(result);
-		// The app would report a refused change; dropping it keeps the copy in line with the server.
 		if (result === 'stale' || result === 'clock') {
 			device.records.delete(recordKey(pending[index]));
 		}
@@ -418,7 +405,6 @@ for (const [name, makeLog] of LOGS) {
 				} else if (roll < 0.6) {
 					write(device, deviceNow, {kind: 'session', id, deleted: true});
 				} else if (roll < 0.95) {
-					// Device c is mostly offline, so it misses purged deletes and pushes old edits.
 					if (device.id !== 'c' || next() < 0.1) {
 						sync(device, log, now, outcomes);
 					}

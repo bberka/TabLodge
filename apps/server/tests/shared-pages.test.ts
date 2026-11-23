@@ -35,9 +35,6 @@ const PAGE = shareHtmlPage(
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
-/**
-The Docker server's API with the main library's page store, on a clock the test moves.
-*/
 function nodeServer(limits?: Partial<Limits>, {pages = true} = {}) {
 	const clock = {now: T0};
 	const sql = sqlite(':memory:');
@@ -132,7 +129,6 @@ test('the list needs the token, and a deleted page answers like one that never e
 		assert.equal(response.headers.get('cache-control'), 'no-store');
 	}
 
-	// Deleting it again is not an error.
 	await deleteSharedPage(fetch, target, older.id);
 });
 
@@ -147,7 +143,6 @@ test('page views have their own allowance, so visitors cannot slow down sync', a
 		[await view(), await view(), await view(), await view()],
 		[200, 200, 200, 429],
 	);
-	// Unknown ids count too, so guessing does not get around it.
 	assert.equal((await fetch(`${BASE}/p/AAAAAAAAAAAAAAAAAAAAAA`)).status, 429);
 	assert.ok(
 		Number(
@@ -168,7 +163,6 @@ test('a page over the size cap and pages over the budget are refused', async () 
 		maxPages: 3,
 		maxPageStorageBytes: 5000,
 	});
-	// Each "é" is two bytes, so the cap counts bytes, not characters.
 	const large = `<p>${'é'.repeat(1000)}</p>`;
 	await assert.rejects(
 		uploadSharedPage(fetch, target, 'Large', large),
@@ -186,13 +180,11 @@ test('a page over the size cap and pages over the budget are refused', async () 
 	const page = `<p>${'a'.repeat(1990)}</p>`;
 	await uploadSharedPage(fetch, target, 'One', page);
 	await uploadSharedPage(fetch, target, 'Two', page);
-	// A third page of this size would take the total over 5000 bytes.
 	await assert.rejects(
 		uploadSharedPage(fetch, target, 'Three', page),
 		/as many shared pages/,
 	);
 	await uploadSharedPage(fetch, target, 'Small', '<p>a</p>');
-	// The fourth page is over the count.
 	await assert.rejects(
 		uploadSharedPage(fetch, target, 'Tiny', '<p>b</p>'),
 		/as many shared pages/,
@@ -492,8 +484,6 @@ test('password-protected pages hash the password, prompt without links, unlock o
 	assert.ok(statuses.includes(429));
 });
 
-// The Cloudflare target: the real Worker and Durable Object in workerd, which is where a page is routed before the
-// token check and kept out of the private library.
 let worker: Unstable_DevWorker;
 let state: string;
 
@@ -561,7 +551,6 @@ test('on Cloudflare a page is public, strict, deletable, and absent from the pri
 		(await workerFetch(`${BASE}/private${pathOf(page.url)}`)).status,
 		401,
 	);
-	// A request cannot pass itself off as the private library to hide pages, or the other way round.
 	const spoofed = await workerFetch(`${BASE}/v1/pages`, {
 		headers: {Authorization: `Bearer ${TOKEN}`, 'TabLodge-Library': 'private'},
 	});
@@ -619,7 +608,6 @@ test('on Cloudflare the size cap and the page budget hold', async () => {
 
 test('on Cloudflare page views have their own allowance, and sync keeps answering', async () => {
 	const [page] = await listSharedPages(workerFetch, target);
-	// Earlier tests used part of this minute's allowance, so it runs out within one allowance.
 	const statuses: number[] = [];
 	while (
 		statuses.at(-1) !== 429 &&
@@ -632,7 +620,6 @@ test('on Cloudflare page views have their own allowance, and sync keeps answerin
 	assert.ok(statuses.slice(0, -1).every((status) => status === 200));
 	const status = await workerFetch(`${BASE}/v1/status`, authorized());
 	assert.equal(status.status, 200);
-	// The same version the Docker server reports, from the same package.json.
 	assert.equal(
 		((await status.json()) as {version?: unknown}).version,
 		serverPackage.version,

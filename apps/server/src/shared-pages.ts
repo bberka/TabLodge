@@ -1,8 +1,3 @@
-/*
-Shared pages over SQLite, in a table next to the change log of the main library. A page is kept as the bytes the
-device sent: the server never parses it or the library's records (ADR 1). The headers below, not the page, decide
-what a browser may do with it, so even a hand made upload cannot run script on the server's address.
-*/
 import {escapeHtml} from '../../extension/src/shared/escape-html';
 import {
 	isSharedPageMode,
@@ -15,15 +10,11 @@ import type {Sql} from './sql-change-log';
 
 export const PAGE_HEADERS = {
 	'Content-Type': 'text/html; charset=utf-8',
-	// `sandbox` gives the page an opaque origin and no scripts; popups are allowed so its links open in a new tab,
-	// outside the sandbox.
 	'Content-Security-Policy':
 		"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; sandbox allow-popups allow-popups-to-escape-sandbox",
 	'X-Content-Type-Options': 'nosniff',
-	// Otherwise every site a visitor opens from the page learns its address.
 	'Referrer-Policy': 'no-referrer',
 	'X-Robots-Tag': 'noindex, nofollow',
-	// A deleted page must stop showing at once.
 	'Cache-Control': 'no-store',
 };
 
@@ -134,9 +125,6 @@ export function passwordPromptHtml(id: string, wrongPassword: boolean): string {
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Password required</title><style>${PROMPT_STYLE}</style><body><main><h1>Password required</h1><p>Enter the password to view this shared page.</p>${error}<form method="post" action="${escapeHtml(action)}"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Unlock</button></form></main></body></html>`;
 }
 
-/**
-The one answer for an id that is malformed, unknown, or deleted, so none can be told apart.
-*/
 export const pageNotFound = () =>
 	new Response('Not found', {
 		status: 404,
@@ -211,10 +199,6 @@ export class SqlPageStore {
 		}
 	}
 
-	/**
-	Adds the page unless its id is taken, the server already holds `maxPages` pages, or the page would take the total
-	over `maxBytes`.
-	*/
 	add(
 		page: StoredPage & {html: string; passwordHash?: string},
 		budget: {maxPages: number; maxBytes: number},
