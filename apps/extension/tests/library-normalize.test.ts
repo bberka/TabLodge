@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	ARCHIVED_FOLDER_NAME,
+	DEFAULT_SETTINGS,
 	HELD_SETTINGS_MAX,
 	normalizeBookmark,
 	normalizeSettings,
@@ -116,6 +117,18 @@ test('a bookmark keeps cleaned tags and removed kinds, drops malformed ones, and
 		'updatedAt',
 		'url',
 	]);
+});
+
+test('a new install and one saved before the catch-up setting existed both add saved page items automatically', () => {
+	assert.equal(normalizeSettings().sourceCatchUp, 'add');
+	const older = {...DEFAULT_SETTINGS} as Record<string, unknown>;
+	delete older.sourceCatchUp;
+	assert.equal(normalizeSettings(older).sourceCatchUp, 'add');
+	assert.equal(normalizeSettings({sourceCatchUp: 'ask'}).sourceCatchUp, 'ask');
+	assert.equal(
+		normalizeSettings({sourceCatchUp: 'sometimes'}).sourceCatchUp,
+		'add',
+	);
 });
 
 describe('settings from a newer version', () => {

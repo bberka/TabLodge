@@ -1691,6 +1691,16 @@ function Options() {
 							<SiteSourcesSettings
 								controller={siteSources}
 								columns={state?.bookmarkColumns ?? []}
+								settings={settings}
+								onCatchUpChange={(mode) => {
+									void updateSetting(
+										'sourceCatchUp',
+										mode,
+										mode === 'ask'
+											? 'Saved page catch-up asks first.'
+											: 'Saved page catch-up adds the missing items.',
+									);
+								}}
 							/>
 						</SectionCard>
 					)}

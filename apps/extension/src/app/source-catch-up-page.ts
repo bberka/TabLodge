@@ -1,7 +1,7 @@
 // The content script's half of the saved page catch-up (#377). On the site's saved page it reads the items listed
-// there and asks the worker how many TabLodge lacks; when the worker says to ask, a toast offers to add them. It
-// watches the page, because sites load their saved page in place and add items as the user scrolls, but it only
-// reads: it clicks nothing, changes nothing on the site, and sends no request.
+// there and asks the worker how many TabLodge lacks; the worker adds them or says to ask, and a toast reports it. It
+// watches the page because sites load their saved page in place, but it only reads: it clicks nothing, changes
+// nothing on the site, and sends no request. One page load shows at most one catch-up message.
 import type {ActionResult} from '../shared/types';
 import {
 	CATCH_UP_MAX_LINKS,
@@ -36,14 +36,16 @@ export function watchSavedPage({
 	let lastAsked = '';
 	// Answers can come back out of order; only the newest request's answer is shown.
 	let latestRequest = 0;
+	let shown = false;
 	let failures = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
-	const add = async (links: SourceLink[]) => {
+	const add = async (links: SourceLink[], automatic = false) => {
 		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>>({
 			type: 'SITE_SOURCE_CATCH_UP_ADD',
 			source: source.id,
 			links,
+			...(automatic && {automatic: true}),
 		});
 		if (!result) {
 			return `${appName} could not add them.`;
@@ -54,6 +56,10 @@ export function watchSavedPage({
 		}
 
 		const {added, column, undoId} = result;
+		if (automatic && added === 0) {
+			return undefined;
+		}
+
 		const text =
 			added === 0
 				? `Nothing to add: they're in ${appName} already.`
@@ -88,10 +94,14 @@ export function watchSavedPage({
 			// that is gone, and coming back asks again.
 			latestRequest++;
 			lastAsked = '';
+			shown = false;
 			return;
 		}
 
-		const key = JSON.stringify(links.map((link) => link.url));
+		const key = links
+			.map((link) => link.url)
+			.toSorted()
+			.join('\n');
 		if (key === lastAsked) {
 			return;
 		}
@@ -117,7 +127,21 @@ export function watchSavedPage({
 		}
 
 		failures = 0;
-		if (!result.ask) {
+		if (!result.ask || shown) {
+			return;
+		}
+
+		shown = true;
+		if (result.mode === 'add') {
+			const next = await add(links, true);
+			if (!next) {
+				return;
+			}
+
+			const step = typeof next === 'string' ? {text: next} : next;
+			showSourceToast(step.text, {
+				actions: 'action' in step ? [step.action] : [],
+			});
 			return;
 		}
 
@@ -154,6 +178,7 @@ export function watchSavedPage({
 		refresh() {
 			lastAsked = '';
 			latestRequest++;
+			shown = false;
 			settle();
 		},
 	};
