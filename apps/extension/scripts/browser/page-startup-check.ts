@@ -170,7 +170,6 @@ try {
 			}
 		}
 
-		// Help and the copy reader never read the library.
 		if (pageName !== 'help' && pageName !== 'reader') {
 			await page
 				.locator('html[data-startup-pending="0"]')

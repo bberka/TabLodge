@@ -244,7 +244,6 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 				[],
 				'the protect form should pass axe',
 			);
-			// A short or number-only password is allowed, and the field says it is easy to guess while it is typed.
 			await password.fill('1234');
 			await confirm.fill('1234');
 			assert.match(
@@ -704,8 +703,6 @@ export async function browserBookmarksImportCheck(env: Env, theme: Theme) {
 					name: 'One column',
 					exact: true,
 				});
-				// The dialog moves focus to Import on the next frame after the review appears; a key
-				// pressed before that lands on Import and would run the import.
 				await until(
 					async () =>
 						dialog

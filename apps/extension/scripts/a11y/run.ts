@@ -1,15 +1,3 @@
-// Accessibility checks against the built extension (run `vp run build` first, then `vp run check:a11y`).
-//
-// Loads dist/tablodge in a headless Chromium with the development data fixture, then:
-//   1. runs axe-core (WCAG 2.2 A and AA rules) on each extension page in both themes, and
-//   2. exercises the keyboard workflows that automated rules cannot judge: the skip link, the
-//      Appearance radio group, bookmark quick actions, moving sessions, columns and bookmarks
-//      without dragging, and archiving a session from its menu. Page and service worker console
-//      errors fail the run.
-// Axe and keyboard checks do not judge reading order or screen reader announcements; see docs/CONTRIBUTING.md.
-//
-// This file runs the checks in a fixed order and reports; each area of the extension keeps its checks in its own module
-// beside it, and the helpers they share are in harness.ts, fixtures.ts, pages.ts and evidence.ts.
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -127,7 +115,6 @@ async function main() {
 			`--load-extension=${OUT_DIR}`,
 		],
 	});
-	// Waits end as soon as their condition holds; the longer limit only matters on a loaded machine.
 	context.setDefaultTimeout(60_000);
 	context.setDefaultNavigationTimeout(60_000);
 	try {

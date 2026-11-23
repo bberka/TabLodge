@@ -1,4 +1,3 @@
-// Shared pieces of the extension build configs (vite.*.config.ts and scripts/build.ts).
 import {readFileSync} from 'node:fs';
 import process from 'node:process';
 import {cp, mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
@@ -7,23 +6,14 @@ import {fileURLToPath} from 'node:url';
 import type {InlineConfig, Plugin} from 'vite-plus';
 import {manifestForTarget} from './manifest-targets.ts';
 
-/**
-The extension package folder (apps/extension): its sources, `dist`, `release`, and `.dev` live here.
-*/
 export const projectRoot = resolve(
 	dirname(fileURLToPath(import.meta.url)),
 	'..',
 );
-/**
-The repository root, which holds the version in package.json.
-*/
 export const repoRoot = resolve(projectRoot, '..', '..');
 export const fromRoot = (...segments: string[]) =>
 	resolve(projectRoot, ...segments);
 
-/**
-Extension source: manifest, icons, HTML shells, and the scripts the manifest loads directly.
-*/
 export const SOURCE_DIR = fromRoot('shell');
 export const TARGETS = ['chrome', 'firefox'] as const;
 export type Target = (typeof TARGETS)[number];
@@ -43,21 +33,10 @@ export function parseTarget(value: string | undefined): Target {
 	return target;
 }
 
-/**
-The target the current build step builds. scripts/build.ts sets it per target before it starts Vite,
-and the Vite config files read it, since they are loaded fresh for every build.
-*/
 export const targetFromEnv = () => parseTarget(process.env.TABLODGE_TARGET);
 
-/**
-The loadable unpacked extension of a target (it holds the built manifest.json). Chromium keeps the
-original folder name so existing dev and test tooling is unaffected.
-*/
 export const outDirFor = (target: Target) =>
 	fromRoot('dist', target === 'chrome' ? 'tablodge' : 'tablodge-firefox');
-/**
-The Chromium package folder, which the Playwright-based dev and check scripts load.
-*/
 export const OUT_DIR = outDirFor('chrome');
 
 type PackageJson = {
@@ -74,28 +53,15 @@ export const readPackageJson = () =>
 	readJson<PackageJson>(resolve(repoRoot, 'package.json'));
 const readSourceManifest = () =>
 	readJson<SourceManifest>(resolve(SOURCE_DIR, 'manifest.json'));
-/**
-The display name: the manifest's short_name. HTML shells use `%APP_NAME%`; pages read it at runtime.
-*/
 export const appName = () => {
 	const manifest = readSourceManifest();
 	return manifest.short_name ?? manifest.name;
 };
 
-/**
-Matches `minimum_chrome_version` in the Chromium manifest and `strict_min_version` in the Firefox one
-(scripts/manifest-targets.ts).
-*/
 const BUILD_TARGETS = {chrome: 'chrome116', firefox: 'firefox140'} as const;
 
 export const alias = {'@': fromRoot('src')};
 
-/**
- Build options shared by every bundle. Several builds write into the same extension folder,
- so Vite never empties it; scripts/build.ts clears the package folder once before building.
- CSS is minified with esbuild because lightningcss (the Vite 8 default) rewrites the
- `color-scheme` theme rules.
- */
 export const sharedBuild = (target: Target) =>
 	({
 		target: BUILD_TARGETS[target],
@@ -117,10 +83,6 @@ async function listFiles(path: string): Promise<string[]> {
 	return nested.flat();
 }
 
-/**
- Copies static package files (icons) next to the bundle after each write and adds
- them to the watch list, so `vp run dev:chrome` picks up icon edits too.
- */
 export function copyStatic(
 	sourceDir: string,
 	outDir: string,
@@ -149,11 +111,6 @@ export function copyStatic(
 	};
 }
 
-/**
- Writes manifest.json into the package with `homepage_url` taken from package.json "homepage",
- so the repository URL has one source of truth, adapted to the target browser
- (scripts/manifest-targets.ts). Watched, so `vp run dev:chrome` picks up edits too.
- */
 export function writeManifest(
 	sourceDir: string,
 	outDir: string,
@@ -189,30 +146,13 @@ export function writeManifest(
 }
 
 type ScriptBuildOptions = {
-	/**
-	Source entry file.
-	*/
 	entry: string;
-	/**
-	Output directory (the extension package root).
-	*/
 	outDir: string;
-	/**
-	Output file name, as referenced by the manifest or HTML.
-	*/
 	fileName: string;
 	target: Target;
-	/**
-	A comment put at the top of the bundle after minifying, such as a license notice the bundle must carry.
-	*/
 	banner?: string;
 };
 
-/**
- A self-contained classic script bundle (service worker, boot script). Dependencies are
- inlined into a single file and `process.env.NODE_ENV` is replaced, since library mode does not
- do that and extension scripts have no `process` global.
- */
 export function scriptConfig({
 	entry,
 	outDir,

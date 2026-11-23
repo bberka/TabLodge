@@ -564,7 +564,6 @@ export async function focusViewCheck(env: Env, theme: Theme) {
 				1,
 				'the rail column opens the same column menu on right click',
 			);
-			// The rail is a vertical list, so a column moves up or down, not left or right.
 			assert.equal(
 				await railMenu
 					.getByRole('menuitem', {name: /^Move (up|down)$/})
@@ -627,7 +626,6 @@ export async function boardLayoutCheck(env: Env, theme: Theme) {
 					async () => (await readDevStore(page)).settings[key] === value,
 					`${label} to save`,
 				);
-				// The menu hands focus back after its close animation, so wait for it.
 				await until(
 					async () =>
 						(await page.locator(':focus').getAttribute('aria-label')) === label,

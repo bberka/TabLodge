@@ -449,13 +449,11 @@ export async function moveSelectedToNewColumnCheck(env: Env, theme: Theme) {
 			);
 			assert.deepEqual(optionNames, ['Daily', 'Dev', 'Reading']);
 			assert.ok(!optionNames.includes('Unfiled'));
-			// A name that matches nothing offers to create the column.
 			const columnName = `Bulk move ${theme}`;
 			await page.keyboard.type(columnName);
 			await options.filter({hasText: `New column “${columnName}”`}).waitFor();
 			await page.keyboard.press('Enter');
 			await dialog.waitFor({state: 'hidden'});
-			// The dialog closes first; the column is created and the bookmarks move after.
 			const moved = async () => {
 				const store = await readDevStore(page);
 				const column = store.bookmarkColumns.find(
@@ -628,8 +626,6 @@ export async function dragSelectedLinksCheck(env: Env, theme: Theme) {
 export async function selectionModeRangesCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
 	await check(`bookmark selection mode and ranges (${theme})`, async () => {
-		// Ctrl+click opens the real sites of the sample bookmarks, and Playwright reports the tab only once its first
-		// navigation commits, which took over 2 s against the live site on a busy machine. Serve them locally.
 		const web = /^https?:\/\//;
 		const stub = async (route: Route) =>
 			route.fulfill({
@@ -782,7 +778,6 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 			await page.locator('[role="dialog"]').waitFor({state: 'detached'});
 			const destination = page.locator('section[data-column-id]').last();
 			const columnId = await destination.getAttribute('data-column-id');
-			// The move lands after the dialog closes, so poll instead of reading once.
 			await until(
 				async () =>
 					JSON.stringify(
@@ -914,7 +909,6 @@ export async function dragSelectedBookmarksCheck(env: Env, theme: Theme) {
 			.getByRole('group', {name: 'Selected bookmarks'})
 			.waitFor({state: 'hidden'});
 		const movedCard = page.locator(`[data-bookmark-id="${ids[0]}"] article`);
-		// Moving ends the selection, so pick the pair again before each drag.
 		const selectPair = async () => {
 			for (const id of ids) {
 				await page
