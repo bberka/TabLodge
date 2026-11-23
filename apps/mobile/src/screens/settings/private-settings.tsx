@@ -15,9 +15,6 @@ import {SettingsCard} from './settings-card';
 import {Toggle} from './behaviour-settings';
 import {ROWS, SECTIONS} from './settings-index';
 
-/**
-The private library on this phone: setting it up, its lock, and what it does with the server.
-*/
 export function PrivateCard() {
 	const colors = useColors();
 	const state = usePrivateState();

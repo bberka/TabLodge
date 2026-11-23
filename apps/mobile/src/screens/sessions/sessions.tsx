@@ -70,10 +70,6 @@ import {saveSessionDetails, selectionOf} from './session-changes';
 import {SessionSelectionBar} from './session-selection-bar';
 import {SessionsEmpty} from './sessions-empty';
 
-/**
-Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
-own tabs, so there is no capture here.
-*/
 export function SessionsScreen({
 	onConnect,
 	onOpenSettings,
@@ -83,9 +79,6 @@ export function SessionsScreen({
 	onConnect: () => void;
 	onOpenSettings: () => void;
 	onAdd: () => void;
-	/**
-	Told when selecting starts or stops, so the tab bar can step aside for the action bar.
-	*/
 	onSelecting: (selecting: boolean) => void;
 }) {
 	const colors = useColors();
@@ -100,7 +93,6 @@ export function SessionsScreen({
 	const {connected} = useSyncStatus();
 	const {refreshing, refresh} = useRefresh();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
-	// In the list view, whether a folder is open, as opposed to the list of every folder.
 	const [inside, setInside] = useState(false);
 	const isListView = usePreferences().sessionView === 'list';
 	const search = useSearch();
@@ -114,8 +106,6 @@ export function SessionsScreen({
 	useEffect(() => {
 		onSelecting(selection.active);
 	}, [selection.active, onSelecting]);
-	// The sessions whose state was flipped from the default: opened when the default is collapsed, closed when it is
-	// expanded.
 	const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
 	const isExpandAll = links.expandSessionsByDefault;
 	const [renamingId, setRenamingId] = useState<string>();
@@ -123,7 +113,6 @@ export function SessionsScreen({
 	const [movingId, setMovingId] = useState<string>();
 	const moving = store.groups.find((session) => session.id === movingId);
 	const [menuId, setMenuId] = useState<string>();
-	// A link of a session, for its menu from holding it down, and the drawers that menu and the session menu open.
 	const [tabMenu, setTabMenu] = useState<{sessionId: string; tabId: string}>();
 	const [editingTab, setEditingTab] = useState<{
 		session: Session;
@@ -131,11 +120,8 @@ export function SessionsScreen({
 	}>();
 	const [addingToId, setAddingToId] = useState<string>();
 	const [bookmarking, setBookmarking] = useState<BookmarkLinks>();
-	// The folder whose menu is open, from holding down its chip, and the one being renamed.
 	const [folderMenuId, setFolderMenuId] = useState<string>();
-	// The folder whose edit drawer is open, or `{}` for a new one.
 	const [editingFolder, setEditingFolder] = useState<{id?: string}>();
-	// The 3 dot menu in the header, for the folder on screen.
 	const [moreOpen, setMoreOpen] = useState(false);
 	const menuFor = store.groups.find((session) => session.id === menuId);
 
@@ -165,7 +151,6 @@ export function SessionsScreen({
 		? picked
 		: ALL_SESSIONS_ID;
 	const needle = query.trim().toLocaleLowerCase();
-	// The list view starts on the list of folders; a search looks through every session instead.
 	const atList = isListView && !inside && needle === '';
 	const fade = useCrossfade(atList);
 	const scopeId = isListView && !inside ? ALL_SESSIONS_ID : folderId;
@@ -208,7 +193,6 @@ export function SessionsScreen({
 	];
 	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
 	const look = useFolderLook();
-	// The name and color of each session's folder, worked out once per library change, not per card per render.
 	const folderInfo = useMemo(
 		() =>
 			new Map(
@@ -295,7 +279,6 @@ export function SessionsScreen({
 		});
 	}, []);
 
-	// A result of the search on Bookmarks that points at a session: show its folder, open it, and scroll to it.
 	const pending = usePendingJump();
 	useEffect(() => {
 		const jump = takeJump('sessions');
@@ -317,8 +300,7 @@ export function SessionsScreen({
 			return next;
 		});
 		setRevealId(jump.sessionId);
-		// `search` is a fresh object each render; only the jump matters.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- the effect reacts to the jump or the request only, not to the new search object each render
 	}, [pending, isExpandAll]);
 	useEffect(() => {
 		if (revealId === undefined) {
@@ -385,7 +367,6 @@ export function SessionsScreen({
 							},
 						]}
 						keyboardShouldPersistTaps="handled"
-						// Long libraries draw only what is on screen, and a little around it.
 						initialNumToRender={6}
 						windowSize={7}
 						maxToRenderPerBatch={6}
@@ -685,7 +666,6 @@ const styles = StyleSheet.create({
 	list: {paddingBottom: 24, gap: 8},
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
-	// Same spacing under the header as the Bookmarks screen, so the chips sit at the same height on both.
 	head: {gap: 8},
 	folders: {paddingHorizontal: 16, paddingBottom: 8},
 	fill: {flex: 1},

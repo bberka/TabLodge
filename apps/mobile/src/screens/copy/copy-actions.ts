@@ -5,10 +5,6 @@ import {showSnack} from '../../ui/snackbar';
 import {keepCopy} from '../../library/page-copies';
 import {openReader} from './reader';
 
-/**
-Keep a copy, and Open copy once one exists, for a link's menu. The private library gets neither: copies are never
-kept for it.
-*/
 export function copyActions(
 	url: string,
 	{
@@ -57,9 +53,6 @@ export function copyActions(
 		: [keep];
 }
 
-/**
-A link menu with the copy actions added just above its first destructive action.
-*/
 export function withCopyActions(
 	actions: SheetAction[],
 	extra: SheetAction[],

@@ -64,10 +64,6 @@ function PageRow({page, onDelete}: {page: SharedPage; onDelete: () => void}) {
 	);
 }
 
-/**
-The pages on the server, read when `visible` turns true, with Delete, which asks first because the server cannot
-bring a page back.
-*/
 export function useSharedPageList(visible: boolean) {
 	const server = useSharedPagesServer();
 	const [pages, setPages] = useState<SharedPage[]>();
@@ -81,7 +77,6 @@ export function useSharedPageList(visible: boolean) {
 		}
 	}, []);
 	useEffect(() => {
-		// Asked also while the server's features are unknown, so an unreachable server ends in an error, not a wait.
 		if (visible && server !== 'old' && server !== 'none') {
 			void load();
 		}
@@ -225,9 +220,6 @@ export function useSharedPagesAction(): SheetAction[] {
 			];
 }
 
-/**
-The way into Shared pages, in Settings › Sync while a server is connected.
-*/
 export function SharedPagesButton() {
 	return (
 		<Button

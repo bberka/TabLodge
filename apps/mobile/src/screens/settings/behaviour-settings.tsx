@@ -29,9 +29,6 @@ const VIEW_CHOICES: Array<{id: ListView; name: string; icon: IconName}> = [
 	{id: 'list', name: 'List', icon: 'list-outline'},
 ];
 
-/**
-The swipe choices, each with the icon and color it has when it appears under a row.
-*/
 function useActionChoices() {
 	const colors = useColors();
 	return ROW_ACTIONS.map((id) => {
@@ -119,9 +116,6 @@ export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 	);
 }
 
-/**
-What tapping and swiping a bookmark do, and how links are cleaned when saved.
-*/
 export function BookmarkBehaviourCard() {
 	const prefs = usePreferences();
 	const settings = useLinkSettings(true);
@@ -294,10 +288,6 @@ function NameTemplateField({template}: {template: string}) {
 	);
 }
 
-/**
-How session cards look. The tab icons and expanded-by-default switches are the extension's own settings, so they
-change there too; the other two are this app's and sync with its look.
-*/
 export function SessionSettingsCard() {
 	const prefs = usePreferences();
 	const settings = useLinkSettings(true);
@@ -451,9 +441,6 @@ export function SessionSettingsCard() {
 	);
 }
 
-/**
-The extension settings that follow you between devices, so changing one here changes it in the browser too.
-*/
 export function SyncedSettingsCard() {
 	const settings = useLinkSettings(true);
 	return (

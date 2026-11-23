@@ -1,5 +1,3 @@
-// What the phone shows of bookmark tags (#344): the chips on a row, the tag filter, and the Tags field of the edit
-// sheet. The rules are the extension's, in apps/extension/src/shared/bookmark-tags.ts.
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {
 	MAX_TAGS,
@@ -20,17 +18,11 @@ import {Field, Icon, IconButton} from '../../ui/widgets';
 type Tagged = Pick<Bookmark, 'url' | 'tags' | 'hiddenKinds'>;
 export type TagEdit = Pick<Bookmark, 'tags' | 'hiddenKinds'>;
 
-/**
-How a row's tags are read out at the end of its accessibility label, or nothing without tags.
-*/
 export function spokenTags(bookmark: Tagged) {
 	const tags = shownTags(bookmark);
 	return tags.length > 0 ? `, tags: ${tags.join(', ')}` : '';
 }
 
-/**
-A row's tags as small labels. The row's accessibility label says them (spokenTags), so these are hidden from TalkBack.
-*/
 export function RowTags({bookmark}: {bookmark: Tagged}) {
 	const colors = useColors();
 	const tags = shownTags(bookmark);
@@ -59,10 +51,6 @@ export function RowTags({bookmark}: {bookmark: Tagged}) {
 	);
 }
 
-/**
-Every tag in the library with how many bookmarks show it. Tapping one adds `tag:` to the search, or takes it out
-again, so the search field always says what is filtered.
-*/
 export function TagFilterSheet({
 	visible,
 	bookmarks,
@@ -125,11 +113,6 @@ export function TagFilterSheet({
 	);
 }
 
-/**
-The Tags field of the edit sheet. The automatic kind shows with a remove button, which keeps it removed for this
-link; a removed kind can be put back. Typed tags are added with the keyboard's enter key or a comma. The text not yet
-added belongs to the parent (`draft`), so a tap on Save, which may not blur the field first, still saves it.
-*/
 export function TagsField({
 	url,
 	value,
@@ -151,7 +134,6 @@ export function TagsField({
 	const kindHidden = automatic !== undefined && hidden.includes(automatic);
 	const full = own.length >= MAX_TAGS;
 
-	// Removing the kind also takes away a typed tag of the same name, so the chip does not come straight back.
 	const setKindHidden = (next: boolean) => {
 		const others = hidden.filter((entry) => entry !== automatic);
 		onChange({

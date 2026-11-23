@@ -19,10 +19,6 @@ const HOW_CHOICES: Array<{id: OpenWith; name: string; hint: string}> = [
 	{id: 'app', name: 'A specific browser', hint: 'Pick one of your browsers'},
 ];
 
-/**
-Where links open: for the regular library, and separately for the private one, which can point at another browser.
-Chrome ignores a request for a private tab from another app, so private links get a browser of their own to choose.
-*/
 export function OpenLinksCard() {
 	const prefs = usePreferences();
 	const browsers = useMemo(() => installedBrowsers(), []);
@@ -31,7 +27,6 @@ export function OpenLinksCard() {
 		name,
 		image: icon,
 	}));
-	// A browser is picked as soon as the choice is made, so the row never reads blank.
 	const first = browsers[0]?.id;
 	const privateChoices: Array<{
 		id: OpenWith | 'same';

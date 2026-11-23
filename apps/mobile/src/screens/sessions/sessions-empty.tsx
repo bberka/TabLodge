@@ -5,10 +5,6 @@ import {PrivateSwitch} from '../../private/private-switch';
 import {FloatingActions} from '../../ui/floating-actions';
 import {Button, Empty, Header} from '../../ui/widgets';
 
-/**
-The Sessions screen with nothing in it: why it is empty for this library, and the button that fixes it when there is one
-(Sync now once connected, Connect to your server before).
-*/
 export function SessionsEmpty({
 	connected,
 	isPrivate,

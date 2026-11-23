@@ -1,6 +1,3 @@
-/*
-The reader for a kept copy, over the whole app. Blocks are text, drawn as Text, so nothing from the page can run.
-*/
 import {useEffect, useState, useSyncExternalStore, type ReactNode} from 'react';
 import {
 	Modal,
@@ -156,7 +153,6 @@ function Reader({url, onClose}: {url: string; onClose: () => void}) {
 				</View>
 				<View style={[styles.rule, {backgroundColor: colors.border}]} />
 				{copy.blocks.map((block, index) => (
-					// A kept copy never changes, so its position is a stable key.
 					<Block key={index} block={block} colors={colors} />
 				))}
 			</ScrollView>
@@ -191,9 +187,6 @@ function Reader({url, onClose}: {url: string; onClose: () => void}) {
 	);
 }
 
-/**
-Draws the reader `openReader` asks for. Mount it once, near the root.
-*/
 export function ReaderHost() {
 	const url = useSyncExternalStore(
 		(listener) => {

@@ -52,12 +52,8 @@ import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
 import {Button, Chips, Field, Icon, Segmented} from '../../ui/widgets';
 
-// The session selector's first entry; choosing it makes a new session.
 const NEW_SESSION = '__new-session__';
 
-/**
-The body of the save drawer. Opened by Add link, or by the Android share sheet with the shared text filled in.
-*/
 export function SaveLinkForm({
 	initialText,
 	initialTitle,
@@ -68,34 +64,20 @@ export function SaveLinkForm({
 }: {
 	initialText: string;
 	initialTitle: string;
-	/**
-	A bookmark to change instead of saving a new one. The initial text and title are then its own.
-	*/
 	editing?: Bookmark;
-	/**
-	Opens the drawer for several links, with the text so far; given when a new link is being added.
-	*/
 	onMany?: (text: string) => void;
-	/**
-	Opens Save quote with the shared words; given when text came with the share.
-	*/
 	onQuote?: () => void;
-	/**
-	Called when the drawer should close; `saved` is the message to show when a link was saved (`save-feedback.ts`).
-	*/
 	onDone: (saved?: string) => void;
 }) {
 	const colors = useColors();
 	const settings = useLinkSettings();
 	const view = useView();
-	// Where it is saved: the library on screen to begin with, and a link being edited stays in it.
 	const [library, setLibrary] = useState<LibraryName>(
 		view === 'private' ? 'private' : 'regular',
 	);
 	const choice = useColumnChoice(editing?.columnId, library);
 	const store = useLibraryOf(library);
 	const sessions = sessionsIn(store, ALL_SESSIONS_ID, settings.sessionSort);
-	// Where the link goes, as in the extension's Add bookmark dialog: a bookmark column or a session.
 	const [destination, setDestination] = useState<'bookmark' | 'session'>(
 		'bookmark',
 	);
@@ -109,24 +91,20 @@ export function SaveLinkForm({
 		() => extractUrl(initialText) ?? initialText,
 	);
 	const [title, setTitle] = useState(initialTitle);
-	// Once the person types a title, the page's own never replaces it.
 	const [titleEdited, setTitleEdited] = useState(initialTitle !== '');
 	const [notes, setNotes] = useState(editing?.notes ?? '');
 	const [tagged, setTagged] = useState<TagEdit>({
 		tags: editing?.tags,
 		hiddenKinds: editing?.hiddenKinds,
 	});
-	// Only a change made here is saved, so tags that sync brought in while the sheet was open are kept.
 	const [tagsTouched, setTagsTouched] = useState(false);
 	const [tagDraft, setTagDraft] = useState('');
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
-	// A skipped duplicate is a plain notice, not an error.
 	const [notice, setNotice] = useState('');
 
 	const url = extractUrl(text);
 	const excludedSites = useRegularLibrary().settings.excludedOrigins ?? [];
-	// A site in the excluded list is not saved, as in the extension; changing a link already saved is still allowed.
 	const isExcluded =
 		!editing && url !== undefined && hostIsExcluded(hostOf(url), excludedSites);
 	const {savePreview} = usePreferences();
@@ -137,7 +115,6 @@ export function SaveLinkForm({
 		}
 	}, [preview?.title, titleEdited]);
 
-	// A save that stored nothing (a skipped duplicate) is not success: the drawer stays open and says why.
 	const finish = (outcome: SaveOutcome) => {
 		if (outcome.kind === 'saved') {
 			onDone(saveMessage(outcome));
@@ -199,7 +176,6 @@ export function SaveLinkForm({
 			}
 
 			const {id: target, name} = await choice.resolve();
-			// Empty lists clear what the link had. Text typed but not yet added as a tag is added now.
 			const tags = {
 				tags: [...(tagged.tags ?? []), ...parseTagInput(tagDraft)],
 				hiddenKinds: tagged.hiddenKinds ?? [],
@@ -238,7 +214,6 @@ export function SaveLinkForm({
 			setPreferences({lastColumnId: target});
 			const removed = editing && tagsTouched && removedByEdit(editing, tags);
 			if (editing && removed) {
-				// Taking a tag away is done at once, with Undo, as every removal in the library is.
 				showSnack(
 					removed.length === 1
 						? `Removed tag ${removed[0]}`
@@ -254,7 +229,6 @@ export function SaveLinkForm({
 				);
 			}
 		} catch {
-			// A full disk or a storage fault: say so, and let the person try again instead of a button that spins.
 			setProblem('Could not save. Try again.');
 		} finally {
 			setSaving(false);
@@ -321,7 +295,6 @@ export function SaveLinkForm({
 								: undefined
 					}
 					onChangeText={(next) => {
-						// Several links pasted at once go to the drawer made for them.
 						if (onMany && extractUrls(next).length > 1) {
 							onMany(next);
 						} else {
@@ -458,7 +431,6 @@ export function SaveLinkForm({
 }
 
 const styles = StyleSheet.create({
-	// Sized to its content: the sheet only grows as far as its own maximum height, then the body scrolls.
 	screen: {flexShrink: 1},
 	scroll: {flexGrow: 0},
 	sessionChoice: {gap: 8},

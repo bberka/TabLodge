@@ -14,10 +14,6 @@ const LINKS = [
 	{label: 'Help', href: WEBSITE},
 ];
 
-/**
-The end of Settings: what the app keeps and where, its version, and where to read the code, report a problem, or get
-help.
-*/
 export function SettingsFooter() {
 	const colors = useColors();
 	const version = Constants.expoConfig?.version ?? '';

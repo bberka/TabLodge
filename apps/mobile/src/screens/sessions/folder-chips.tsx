@@ -20,10 +20,6 @@ import {openShare} from '../transfer/transfer-sheets';
 
 const NEW_FOLDER_CHIP = 'new-folder';
 
-/**
-How a session folder is drawn as a chip or a card tag: All and Archived have their own look, the rest follow the
-folder's icon and color.
-*/
 export function useFolderLook() {
 	const colors = useColors();
 	const chipLook = useChipLook();
@@ -45,9 +41,6 @@ export function useFolderLook() {
 	);
 }
 
-/**
-The row of folder chips above the sessions, ending in a New folder chip. Holding a folder chip asks for its menu.
-*/
 export function FolderChips({
 	folders,
 	selected,
@@ -99,10 +92,6 @@ const styles = StyleSheet.create({
 	pad: {paddingHorizontal: 16, gap: 12, paddingBottom: 8},
 });
 
-/**
-The menu for one folder chip: sharing its links, and for a folder that can change, renaming and deleting it. Sessions of
-a deleted folder move to Unfiled.
-*/
 export function folderMenuFor(
 	id: string,
 	store: Store,

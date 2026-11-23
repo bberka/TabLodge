@@ -3,10 +3,6 @@ import {SEARCH_TIPS} from '../../../extension/src/shared/search-query';
 import {BottomSheet, SheetHeader} from '../ui/bottom-sheet';
 import {useColors} from '../ui/theme';
 
-/**
-The search operators in a drawer, opened from the search bar's help button. The phone has no open tabs, so `in:open`
-is left out.
-*/
 export function SearchTipsSheet({
 	visible,
 	onClose,

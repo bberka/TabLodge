@@ -19,10 +19,6 @@ export type ColumnRow = {
 	count: number;
 };
 
-/**
-Every column in one list, so they can be opened, put in order, and changed without scrolling the chips. Tapping a row
-shows that column; the arrows move it one place; the pencil opens its form.
-*/
 export function ColumnsSheet({
 	visible,
 	columns,
@@ -63,7 +59,6 @@ export function ColumnsSheet({
 					const position = store.bookmarkColumns.findIndex(
 						(entry) => entry.id === column.id,
 					);
-					// A source column is filled by Sources in the browser; the phone only says where from.
 					const site = sourceColumnSite(column.id);
 					const count = `${column.count} ${column.count === 1 ? 'bookmark' : 'bookmarks'}`;
 					const detail = site

@@ -11,10 +11,6 @@ import {Field} from '../../ui/widgets';
 import {useRowVisible} from './settings-card';
 import {ROWS} from './settings-index';
 
-/**
-The name this phone puts on the sessions it saves, so a session list shared between devices says where each one
-came from. An empty field goes back to the phone's make and model.
-*/
 export function DeviceNameField() {
 	const colors = useColors();
 	const {deviceName} = usePreferences();

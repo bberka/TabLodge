@@ -1,16 +1,7 @@
-/*
-What each setting goes back to, and whether it is there now. The reset drawer names the default, and a row shows a
-marker while its value differs from it. The values are passed in, so this file needs no storage.
-*/
 import type {LinkSettings} from '../../library/links';
 import type {Preferences} from '../../settings/preferences';
 import {ROWS, type Row} from './settings-index';
 
-/**
-What puts a setting back to its default: the keys of this phone's own preferences, and of the extension settings that
-travel with the library. `on` says whether a stored value reads as a switch being on, for a switch that is stored as
-something else.
-*/
 export type Reset = {
 	prefs?: Array<keyof Preferences>;
 	synced?: Array<keyof LinkSettings>;
@@ -68,16 +59,10 @@ export const RESETS = new Map<Row, Reset>([
 	[ROWS.showPrivateButton, {prefs: ['showPrivateButton']}],
 ]);
 
-/**
-The Spacing switch is on for compact spacing, which is how the library stores it.
-*/
 export function isCompact(value: unknown): boolean {
 	return value === 'compact';
 }
 
-/**
-The two sets of values a setting can live in: this phone's preferences and the library's extension settings.
-*/
 export type SettingValues = {prefs: Preferences; synced: LinkSettings};
 
 function valuesOf(reset: Reset, values: SettingValues): unknown[] {
@@ -87,9 +72,6 @@ function valuesOf(reset: Reset, values: SettingValues): unknown[] {
 	];
 }
 
-/**
-Whether a setting's current value differs from its default. A setting that cannot be reset is never changed.
-*/
 export function isChanged(
 	row: Row,
 	current: SettingValues,
@@ -105,11 +87,6 @@ export function isChanged(
 	return now.some((value, index) => value !== wanted[index]);
 }
 
-/**
-What the drawer's action says: the default by name when the row's choices have it, "On" or "Off" for a switch, and
-otherwise just "default". The name comes from the same choices the row lets you pick from, so it cannot drift from
-what the row shows.
-*/
 export function resetLabel(
 	row: Row,
 	defaults: SettingValues,

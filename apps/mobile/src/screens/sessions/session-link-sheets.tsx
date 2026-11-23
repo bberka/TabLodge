@@ -29,9 +29,6 @@ function Title({children}: {children: string}) {
 	);
 }
 
-/**
-The drawer for adding links to a session: pasted addresses, one or several.
-*/
 export function AddLinksSheet({
 	session,
 	onClose,
@@ -93,9 +90,6 @@ export function AddLinksSheet({
 	);
 }
 
-/**
-Some links of a session, to keep as bookmarks: the column is chosen (or made) here.
-*/
 export type BookmarkLinks = {
 	title: string;
 	links: Array<{title: string; url: string}>;
@@ -173,9 +167,6 @@ export function SaveAsBookmarksSheet({
 	);
 }
 
-/**
-The drawer for changing a saved tab's address, title, and notes.
-*/
 export function EditLinkSheet({
 	target,
 	onClose,

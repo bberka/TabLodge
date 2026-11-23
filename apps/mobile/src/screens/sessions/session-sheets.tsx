@@ -7,10 +7,6 @@ import {columnGlyph, columnTint} from '../../ui/column-icons';
 import {TARGET, useColors} from '../../ui/theme';
 import {Button, Chips, Field, Icon} from '../../ui/widgets';
 
-/**
-The drawer for renaming a session, or another named thing such as a folder when `title` and `label` say so. `check`
-returns what is wrong with a name, if anything, on top of it being empty.
-*/
 export function RenameSheet({
 	session,
 	title = 'Rename session',
@@ -26,17 +22,8 @@ export function RenameSheet({
 	session: {id: string; name: string} | undefined;
 	title?: string;
 	label?: string;
-	/**
-	When given, a description field is shown too, starting with this text, and `onSave` receives it.
-	*/
 	description?: string;
-	/**
-	When given, a color picker is shown too, starting with this color (empty for none), and `onSave` receives the choice.
-	*/
 	color?: string;
-	/**
-	When given with `folderId`, the folders to choose from, and `onSave` receives the chosen one.
-	*/
 	folders?: Folder[];
 	folderId?: string;
 	check?: (name: string) => string | undefined;
@@ -137,9 +124,6 @@ export function RenameSheet({
 	);
 }
 
-/**
-The drawer for picking the folder a session goes to.
-*/
 export function FolderSheet({
 	session,
 	folders,
@@ -197,9 +181,6 @@ export function FolderSheet({
 	);
 }
 
-/**
-The drawer for choosing the folder several selected sessions move to.
-*/
 export function MoveSessionsSheet({
 	visible,
 	count,

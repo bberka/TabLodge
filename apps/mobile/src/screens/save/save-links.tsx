@@ -34,13 +34,8 @@ import {Button, Chips, Field, Segmented} from '../../ui/widgets';
 
 type Mode = 'bookmarks' | 'session';
 
-// The session selector's first entry; choosing it makes a new session.
 const NEW_SESSION = '__new-session__';
 
-/**
-The drawer for a share that carries several links, such as a browser's "share tabs": save them as bookmarks, as a
-new session, or into a session that exists (the session selector's first entry is a new one).
-*/
 export function SaveLinksForm({
 	urls: shared,
 	entry = false,
@@ -48,14 +43,8 @@ export function SaveLinksForm({
 	onDone,
 }: {
 	urls: string[];
-	/**
-	The person types or pastes the links here, one or several, instead of them coming from a share.
-	*/
 	entry?: boolean;
 	initialText?: string;
-	/**
-	Called when the drawer should close; `saved` says where the links went.
-	*/
 	onDone: (saved?: string) => void;
 }) {
 	const colors = useColors();
@@ -80,7 +69,6 @@ export function SaveLinksForm({
 		? target
 		: undefined;
 	const excludedSites = useRegularLibrary().settings.excludedOrigins ?? [];
-	// Links to excluded websites are left out, as in the extension.
 	const allowed = urls.filter(
 		(url) => !hostIsExcluded(hostOf(url), excludedSites),
 	);
@@ -96,7 +84,6 @@ export function SaveLinksForm({
 		(mode === 'bookmarks' && choice.incomplete) ||
 		(mode === 'session' && !creating && !sessionId);
 
-	// A save that stored nothing (a skipped duplicate) is not success: the drawer stays open and says why.
 	const finish = (outcome: SaveOutcome) => {
 		if (outcome.kind === 'saved') {
 			onDone(saveMessage(outcome));
@@ -160,7 +147,6 @@ export function SaveLinksForm({
 		try {
 			await saveLinks();
 		} catch {
-			// A full disk or a storage fault: say so, and let the person try again instead of a button that spins.
 			setProblem('Could not save. Try again.');
 		} finally {
 			setSaving(false);

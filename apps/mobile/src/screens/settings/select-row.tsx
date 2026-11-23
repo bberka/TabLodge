@@ -17,25 +17,12 @@ import type {Row} from './settings-index';
 export type Choice<T extends string> = {
 	id: T;
 	name: string;
-	/**
-	A short line under the name, for a choice that needs one.
-	*/
 	hint?: string;
 	icon?: IconName;
-	/**
-	A picture drawn in place of the icon, such as an app's own icon, as an image address.
-	*/
 	image?: string;
-	/**
-	The color of the icon, for choices that have one of their own.
-	*/
 	color?: string;
 };
 
-/**
-One setting on one line: its name on the left and the current choice on the right. Tapping it opens the list of
-choices, with a check beside the current one. It takes the place of a row of chips, which needs two or more lines.
-*/
 export function SelectRow<T extends string>({
 	row,
 	choices,
@@ -84,9 +71,6 @@ export function SelectRow<T extends string>({
 	);
 }
 
-/**
-A row with a value on the right that opens something when pressed.
-*/
 export function ValueRow({
 	row,
 	value,
@@ -99,22 +83,10 @@ export function ValueRow({
 }: {
 	row: Row;
 	value: string;
-	/**
-	An icon drawn before the value, in `tint` when there is one.
-	*/
 	icon?: IconName;
-	/**
-	An image drawn before the value, instead of the icon.
-	*/
 	image?: string;
 	tint?: string;
-	/**
-	A color dot drawn before the value.
-	*/
 	swatch?: string;
-	/**
-	The choices the row picks from, so the reset drawer can name the default.
-	*/
 	choices?: ReadonlyArray<{id: string; name: string}>;
 	onPress: () => void;
 }) {
@@ -167,11 +139,6 @@ export function ValueRow({
 	);
 }
 
-/**
-A setting's name. While the setting differs from its default, a small accent dot sits in the gutter left of it, in the
-same place on every row: the cue that holding the row offers to reset it. The dot is not read out; TalkBack users get
-the reset as the row's own action, which names the default.
-*/
 export function RowLabel({
 	label,
 	changed,
@@ -196,9 +163,6 @@ export function RowLabel({
 	);
 }
 
-/**
-The list of choices in a drawer.
-*/
 export function ChoiceList<T extends string>({
 	title,
 	choices,
@@ -286,13 +250,11 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 8,
 		marginVertical: -4,
-		// The pressed highlight reaches past the text on both sides; the negative margin keeps the text where it was.
 		paddingHorizontal: 12,
 		marginHorizontal: -12,
 	},
 	labelBox: {flex: 1},
 	label: {fontSize: 16},
-	// Centered on the label's first line (16 size, about 24 tall), 14 left of the text.
 	changed: {
 		position: 'absolute',
 		left: -14,

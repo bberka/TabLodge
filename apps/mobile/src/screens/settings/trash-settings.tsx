@@ -74,10 +74,6 @@ function TrashRow({
 	);
 }
 
-/**
-What was deleted from the library on screen, with a way back. The private library's trash shows only while that
-library is open.
-*/
 function TrashSheet({
 	visible,
 	onClose,
@@ -205,9 +201,6 @@ function TrashSheet({
 	);
 }
 
-/**
-The way into the trash of the library on screen.
-*/
 export function TrashCard() {
 	const [open, setOpen] = useState(false);
 	const name = useView();

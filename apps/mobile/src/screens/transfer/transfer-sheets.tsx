@@ -61,9 +61,6 @@ function exportData(store: Store, kind: ExportKind): ExportData {
 		: {kind, columns: store.bookmarkColumns, bookmarks: store.bookmarks};
 }
 
-/**
-One thing to share instead of the whole library: a session, a folder, a column, or some bookmarks.
-*/
 export type ShareScope = {
 	title: string;
 	data: ExportData;
@@ -73,9 +70,6 @@ export type ShareScope = {
 let openScope: ShareScope | undefined;
 const scopeListeners = new Set<() => void>();
 
-/**
-Opens the share drawer for one thing. `ShareHost`, mounted once near the root, draws it.
-*/
 export function openShare(scope: ShareScope | undefined): void {
 	openScope = scope;
 	for (const listener of scopeListeners) {
@@ -115,9 +109,6 @@ const WAYS: Array<{id: Way; name: string}> = [
 	{id: 'html', name: 'Browser bookmarks (HTML)'},
 ];
 
-/**
-What a share or export holds, as the named lists of links the text formats take: a session each, or a column each.
-*/
 function groupsOf(data: ExportData): ShareGroup[] {
 	if (data.kind !== 'bookmarks') {
 		return shareGroupsOf(data.groups ?? []);
@@ -141,11 +132,6 @@ function groupsOf(data: ExportData): ShareGroup[] {
 
 type What = ExportKind | 'backup';
 
-/**
-Shares or saves the library, or one part of it. Links and Markdown go through Android's share sheet as text, a web
-page, JSON, CSV and a bookmarks file as a file; in Settings, Everything makes a backup ZIP the extension can restore,
-with an optional password.
-*/
 export function ShareSheet({
 	visible,
 	scope,
@@ -167,7 +153,6 @@ export function ShareSheet({
 	const [pagePassword, setPagePassword] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [uploading, setUploading] = useState(false);
-	// The private library is never uploaded.
 	const capabilities = useSharedPagesCapabilities();
 	const canUpload = capabilities.server === 'ready' && view === 'regular';
 	useEffect(() => {
@@ -221,7 +206,6 @@ export function ShareSheet({
 		setBusy(true);
 		try {
 			if (isBackup) {
-				// Lets the busy state draw before the ZIP is made, which holds the phone's one JavaScript thread for a while.
 				await new Promise((resolve) => {
 					setTimeout(resolve, 50);
 				});

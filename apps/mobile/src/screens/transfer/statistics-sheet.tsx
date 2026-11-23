@@ -37,10 +37,6 @@ function Tile({
 	);
 }
 
-/**
-What is saved, at a glance: counts in tiles, the sites that hold the most links with a bar each, and the largest
-session. The phone cannot list a browser's open tabs, so this is only what is saved.
-*/
 export function StatisticsSheet({
 	visible,
 	onClose,

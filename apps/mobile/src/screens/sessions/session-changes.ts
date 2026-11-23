@@ -13,7 +13,6 @@ import {
 
 type Clock = () => number;
 
-// Runs one library change per item, in order, on the store it was given.
 function applyAll<T>(
 	store: Store,
 	items: readonly T[],
@@ -27,10 +26,6 @@ function applyAll<T>(
 	return next;
 }
 
-/**
-The sessions of the list that are ticked, and what that selection means for the buttons: whether it is all of the list,
-and whether every ticked session is archived already, which turns Archive into Unarchive.
-*/
 export function selectionOf(
 	shown: readonly Session[],
 	ids: ReadonlySet<string>,
@@ -67,9 +62,6 @@ export function restoreSessions(
 	);
 }
 
-/**
-Moves the sessions into the Archived folder, or out of it with `archive` off.
-*/
 export function archiveSessions(
 	store: Store,
 	sessions: readonly Session[],
@@ -83,9 +75,6 @@ export function archiveSessions(
 	);
 }
 
-/**
-Puts each session back in the folder it has now, the undo of archiving it from the state it was captured in.
-*/
 export function returnSessions(
 	store: Store,
 	sessions: readonly Session[],
@@ -107,9 +96,6 @@ export function moveSessions(
 	);
 }
 
-/**
-The undo of `moveSessions`: each session returns to the folder in `was`, or to `target` when it has none.
-*/
 export function moveSessionsBack(
 	store: Store,
 	ids: readonly string[],
@@ -122,9 +108,6 @@ export function moveSessionsBack(
 	);
 }
 
-/**
-Saves the Edit details sheet: the name, description, folder and color of one session in one change.
-*/
 export function saveSessionDetails(
 	store: Store,
 	session: Session,
@@ -142,7 +125,6 @@ export function saveSessionDetails(
 		details.description ?? '',
 		now(),
 	);
-	// Moved first, so a color chosen in the same save wins over the folder's.
 	const moved =
 		details.folderId && details.folderId !== session.folderId
 			? moveSession(renamed, session.id, details.folderId, now())

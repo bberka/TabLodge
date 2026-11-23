@@ -27,10 +27,6 @@ import {
 import {sharedPageSource} from '../../../../extension/src/shared/sync/shared-pages-client';
 import {type BookmarkLinks} from './session-link-sheets';
 
-/**
-Runs one action on a session: the library changes, the Undo offers, and the share and open handoffs. The two that only
-open a drawer, Edit details and Move, hand the session to `rename` and `move`.
-*/
 export function runSessionAction(
 	action: SessionAction,
 	session: Session,
@@ -113,9 +109,6 @@ export function runSessionAction(
 	}
 }
 
-/**
-Takes one link out of a session and offers Undo. A session keeps at least one tab, so the last link stays.
-*/
 export function removeTab(session: Session, tabId: string) {
 	if (
 		session.tabs.every((candidate) => candidate.id !== tabId) ||
@@ -155,9 +148,6 @@ export function removeTab(session: Session, tabId: string) {
 	});
 }
 
-/**
-Runs one action on a link inside a session. Edit and Bookmark open drawers, which `edit` and `bookmark` start.
-*/
 export function runTabAction(
 	action: LinkAction,
 	session: Session,
@@ -177,6 +167,7 @@ export function runTabAction(
 		return;
 	}
 
+	// eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- 'none' does nothing, so the switch has no case or default for it
 	switch (action) {
 		case 'open': {
 			openLink(linkToOpen(tab.url, links));
@@ -204,13 +195,9 @@ export function runTabAction(
 
 			break;
 		}
-		// No default
 	}
 }
 
-/**
-The session's menu, from its More button: the swipe actions with their look, and the ones only the menu has.
-*/
 export function sessionMenuActions(
 	session: Session,
 	{
@@ -303,9 +290,6 @@ export function sessionMenuActions(
 	];
 }
 
-/**
-What holding a link of a session offers: nothing that removes it unless asked for by name.
-*/
 export function tabMenuActions(
 	session: Session,
 	tab: Session['tabs'][number],

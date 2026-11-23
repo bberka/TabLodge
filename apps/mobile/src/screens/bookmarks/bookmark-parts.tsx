@@ -22,10 +22,6 @@ import {
 } from '../../../../extension/src/shared/note-links';
 import {RowTags, spokenTags} from './tags';
 
-/**
-One bookmark: tap to open, swipe right to delete or left to edit, long press to select. Screen reader users get
-the same actions from the actions menu.
-*/
 function BookmarkRowView({
 	bookmark,
 	selecting,
@@ -245,9 +241,6 @@ function ActionButton({
 	);
 }
 
-/**
-The bar shown while selecting: a row of buttons along the bottom of the screen.
-*/
 export function ActionBar({
 	actions,
 }: {
@@ -279,9 +272,6 @@ export function ActionBar({
 	);
 }
 
-/**
-The bar shown while selecting bookmarks: open, edit, share, move, or delete what is picked.
-*/
 export function SelectionBar({
 	count,
 	canMove,
@@ -352,9 +342,6 @@ export function SelectionBar({
 	);
 }
 
-/**
-A drawer to pick the column the selected bookmarks go to.
-*/
 export function MoveSheet({
 	visible,
 	count,
@@ -425,9 +412,6 @@ const styles = StyleSheet.create({
 	moveTitle: {fontSize: 20, fontWeight: '700'},
 });
 
-/**
-The drawer for changing a bookmark's link, title, or column. It is open while a bookmark is given.
-*/
 export function EditSheet({
 	bookmark,
 	onClose,

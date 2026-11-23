@@ -27,10 +27,6 @@ async function editExcluded(change: (list: string[]) => string[]) {
 	}));
 }
 
-/**
-The websites that are not saved from this phone. The list is the extension's own setting, so a site added here is
-excluded in the browser too, and the other way round. An entry covers the site and all its subdomains.
-*/
 export function ExcludedCard() {
 	const colors = useColors();
 	const entries = useRegularLibrary().settings.excludedOrigins ?? [];
@@ -96,7 +92,6 @@ export function ExcludedCard() {
 									`Pages on ${entry} and its subdomains are saved from this phone and the browser again.`,
 									{label: 'Stop excluding', destructive: true},
 									() => {
-										// Edits the list as it is now, so a site added meanwhile (by sync) stays.
 										void editExcluded((list) =>
 											list.filter((other) => other !== entry),
 										);

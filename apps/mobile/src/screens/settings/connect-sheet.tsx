@@ -10,10 +10,6 @@ import {
 import {useColors} from '../../ui/theme';
 import {Button, Field} from '../../ui/widgets';
 
-/**
-The drawer for entering the server address and token. It is a drawer so the keyboard lifts it: on Android the
-screen no longer resizes for the keyboard, and fields low in a scrolling list ended up hidden behind it.
-*/
 export function ConnectSheet({
 	visible,
 	onClose,

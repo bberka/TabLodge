@@ -9,10 +9,6 @@ import {
 import {openLink} from '../../platform/open-links';
 import {useColors} from '../../ui/theme';
 
-/**
-The server's version and what does not work with it: the update a stopped sync needs (its message is in the status
-line above), or the features this server lacks.
-*/
 export function ServerReport({status}: {status: SyncStatus}) {
 	const colors = useColors();
 	const {server, incompatible, missing} = readCompat(status);
