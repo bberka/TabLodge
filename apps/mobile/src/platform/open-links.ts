@@ -13,13 +13,6 @@ const pause = async (ms: number) =>
 		setTimeout(resolve, ms);
 	});
 
-/**
-Opens every link the way `opener` says, or the settings when it is missing. The native call hands them all to Android
-at once, which is the only way to keep going after the first one puts the browser in front. When the chosen way fails
-(the browser was removed, or no in-app tab is available), the default browser takes them. Builds without native
-support open them one at a time, and that needs the app to stay in front, so only the first is reliable. Resolves to
-whether any link opened.
-*/
 async function openLinks(urls: string[], opener?: Opener): Promise<boolean> {
 	const {how, app} =
 		opener ?? settingsOpener(getPreferences(), isPrivateView());
@@ -39,26 +32,16 @@ async function openLinks(urls: string[], opener?: Opener): Promise<boolean> {
 		try {
 			await Linking.openURL(url);
 			opened = true;
-		} catch {
-			// A link no app can open is skipped.
-		}
+		} catch {}
 	}
 
 	return opened;
 }
 
-/**
-Opens one link the way the settings ask, or the way `opener` says for this once.
-*/
 export function openLink(url: string, opener?: Opener): void {
 	void openLinks([url], opener);
 }
 
-/**
-Opens several links, asking first when there are more than a few, since each one leaves this app. `opener` overrides
-the settings for this once, and `onOpen` runs once any of them opened, never after Cancel. A question asked in the
-private library opens nothing once that library has locked.
-*/
 export function openAll(
 	urls: string[],
 	from: string,

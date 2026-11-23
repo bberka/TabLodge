@@ -1,7 +1,3 @@
-// Starts or stops the Android emulator for proof screenshots. `pnpm run mobile:emulator` starts the first AVD
-// (or the one named by --avd) with a visible window and software GPU, waits until Android has booted, and prints
-// the adb serial. `--headless` starts it without a window. `pnpm run mobile:emulator --stop` shuts it down. An
-// emulator that is already running is reused.
 import {execFileSync, spawn} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import {homedir} from 'node:os';
