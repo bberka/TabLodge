@@ -128,9 +128,13 @@ import {
 	columnColorVars,
 } from './column-color';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
-import {removeSiteSource} from './site-source-access';
+import {
+	removeSiteSource,
+	type StoppedSiteSource,
+	undoStoppedSource,
+} from './site-source-access';
 import {useSourcesElsewherePointer} from './site-source-pointer';
-import {type SiteSource, sourceSavingInto} from './site-sources';
+import {sourceSavingInto} from './site-sources';
 import {
 	AppHeader,
 	EmptyState,
@@ -428,13 +432,13 @@ function NewTab() {
 		name: '',
 	});
 	// Deleting a column with bookmarks: move them to another column, or delete them too. Deleting the column a site
-	// saves into on this device also asks whether to stop those saves (`source`, answered by `stopSource`).
+	// saves into on this device also asks whether to stop those saves (`stop`, answered by `stopSource`).
 	const [columnDelete, setColumnDelete] = useState<{
 		column: BookmarkColumnData;
 		count: number;
 		mode: 'move' | 'delete';
 		targetColumnId: string;
-		source?: SiteSource;
+		stop?: StoppedSiteSource;
 		stopSource: boolean;
 		/**
 		A site save filled the column while the dialog was open; the dialog says so from inside, where a screen reader hears it.
@@ -1136,9 +1140,11 @@ function NewTab() {
 			sourceColumnSite(column.id) && !chrome.extension?.inIncognitoContext
 				? await send('GET_SITE_SOURCES').catch(() => undefined)
 				: undefined;
-		const source = sources?.ok
-			? sourceSavingInto(column.id, columns, sources.sources)
+		const statuses = sources?.ok ? sources.sources : undefined;
+		const source = statuses
+			? sourceSavingInto(column.id, columns, statuses)
 			: undefined;
+		const saved = statuses?.find((item) => item.id === source?.id);
 		if (count === 0 && !source) {
 			void deleteColumn(column, null);
 			return;
@@ -1152,7 +1158,11 @@ function NewTab() {
 			count,
 			mode: neighbour ? 'move' : 'delete',
 			targetColumnId: neighbour?.id ?? '',
-			source,
+			stop: source && {
+				source,
+				columnId: saved?.columnId,
+				keepOffSite: saved?.keepOffSite,
+			},
 			stopSource: true,
 		});
 		setDialog('delete-column');
@@ -1164,7 +1174,7 @@ function NewTab() {
 	async function deleteColumn(
 		column: BookmarkColumnData,
 		targetColumnId: string | null,
-		stop?: SiteSource,
+		stop?: StoppedSiteSource,
 	) {
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === column.id,
@@ -1179,7 +1189,7 @@ function NewTab() {
 			return;
 		}
 
-		const stopped = stop && (await removeSiteSource(stop)).ok;
+		const stopped = stop && (await removeSiteSource(stop.source)).ok;
 		await reload();
 		const target = columns.find((item) => item.id === targetColumnId);
 		const deleted =
@@ -1190,13 +1200,17 @@ function NewTab() {
 					: `Column “${column.name}” and ${plural(count, 'bookmark')} deleted.`;
 		offerTrashUndo(
 			stopped
-				? `${deleted} ${stop.label} is removed from Sources.`
+				? `${deleted} ${stop.source.label} is removed from Sources.`
 				: stop
-					? `${deleted} Could not switch ${stop.label} off; remove it in Settings › Sources.`
+					? `${deleted} Could not switch ${stop.source.label} off; remove it in Settings › Sources.`
 					: deleted,
 			result.trashId,
 			showStatus,
 			reload,
+			stop && stopped
+				? async () =>
+						undoStoppedSource(result.trashId, stop, showStatus, reload)
+				: undefined,
 		);
 	}
 
@@ -1221,7 +1235,7 @@ function NewTab() {
 			columnDelete.count > 0 && columnDelete.mode === 'move'
 				? columnDelete.targetColumnId
 				: null,
-			columnDelete.stopSource ? columnDelete.source : undefined,
+			columnDelete.stopSource ? columnDelete.stop : undefined,
 		);
 	}
 
@@ -3735,7 +3749,7 @@ function NewTab() {
 										it and go to the trash bin.
 									</p>
 								) : null}
-								{columnDelete?.source ? (
+								{columnDelete?.stop ? (
 									<div className="flex items-start gap-3 rounded-md border border-border p-3">
 										<Checkbox
 											id="delete-column-stop-source"
@@ -3751,7 +3765,8 @@ function NewTab() {
 										/>
 										<div className="space-y-1">
 											<Label htmlFor="delete-column-stop-source">
-												Stop saving from {columnDelete.source.column.name} too
+												Stop saving from {columnDelete.stop.source.column.name}{' '}
+												too
 											</Label>
 											<p
 												id="delete-column-stop-source-note"
@@ -3759,7 +3774,8 @@ function NewTab() {
 											>
 												This removes the site from Sources, also in your other
 												synced browsers. Otherwise your next save on{' '}
-												{columnDelete.source.hosts[0]} makes this column again.
+												{columnDelete.stop.source.hosts[0]} makes this column
+												again.
 											</p>
 										</div>
 									</div>
