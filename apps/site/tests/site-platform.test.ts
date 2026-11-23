@@ -93,7 +93,6 @@ describe('detectPlatform', () => {
 			assert.match(result.note ?? '', /no iPhone or iPad app/);
 		}
 
-		// An iPad that asks for the desktop site reports a Mac, but has a touch screen.
 		const ipad = detectPlatform(UA.safariMac, {touchPoints: 5});
 		assert.equal(ipad.id, 'ios');
 	});

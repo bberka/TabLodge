@@ -1,8 +1,3 @@
-/*
-Works out which TabLodge download suits the visitor's device, so the landing page can put it first. Pure, so every
-case is tested without a browser. The page runs it in the visitor's browser, and without scripts it simply shows all
-the options in a fixed order.
-*/
 export type Store = 'chrome' | 'firefox' | 'android';
 
 export type PlatformId =
@@ -15,31 +10,17 @@ export type PlatformId =
 
 export type Platform = {
 	id: PlatformId;
-	/**
-	The download to highlight, or none when this device has no matching one.
-	*/
 	primary: Store | undefined;
-	/**
-	All downloads, best first.
-	*/
 	order: Store[];
-	/**
-	A line to show under the buttons when the match is partial or missing.
-	*/
 	note: string | undefined;
 };
 
-/**
-What a browser's `navigator` offers that the user agent text does not: `userAgentData` (mobile and platform) where it
-exists, and the touch point count that tells an iPad, which reports itself as a Mac, from a Mac.
-*/
 export type Hints = {
 	mobile?: boolean;
 	platform?: string;
 	touchPoints?: number;
 };
 
-// Chrome 116 is the oldest the extension supports; Firefox 140 is the first with the tab group support it needs.
 export const MIN_CHROMIUM = 116;
 export const MIN_FIREFOX = 140;
 
@@ -67,12 +48,8 @@ const version = (ua: string, pattern: RegExp): number | undefined => {
 	return found === undefined ? undefined : Number.parseInt(found, 10);
 };
 
-/**
-The best download for this device. Pass the user agent string and, when the browser has them, the hints.
-*/
 export function detectPlatform(ua: string, hints: Hints = {}): Platform {
 	const agent = ua || '';
-	// An iPad asks for the desktop site, so its user agent names a Mac. It is a Mac with a touch screen.
 	const iPadAsMac =
 		/Macintosh/.test(agent) && (hints.touchPoints ?? 0) > 1;
 	if (/iPhone|iPad|iPod/.test(agent) || iPadAsMac) {
@@ -88,7 +65,6 @@ export function detectPlatform(ua: string, hints: Hints = {}): Platform {
 		};
 	}
 
-	// Any other phone or tablet cannot run an extension and has no app to install.
 	if (hints.mobile === true) {
 		return {id: 'other', primary: undefined, order: DEFAULT_ORDER, note: NOTES.other};
 	}
@@ -103,7 +79,6 @@ export function detectPlatform(ua: string, hints: Hints = {}): Platform {
 		};
 	}
 
-	// Every Chromium browser, reduced user agent or not, still says Chrome/<major> in its user agent string.
 	const chromium = version(agent, /(?:Chrome|Chromium|Edg|OPR)\/(\d+)/);
 	if (chromium !== undefined) {
 		return {
@@ -121,9 +96,6 @@ export function detectPlatform(ua: string, hints: Hints = {}): Platform {
 	return {id: 'other', primary: undefined, order: DEFAULT_ORDER, note: NOTES.other};
 }
 
-/**
-Reads the hints this browser offers. Only for the page; the tests pass their own.
-*/
 export function readHints(nav: Navigator): Hints {
 	const data = (nav as Navigator & {
 		userAgentData?: {mobile?: boolean; platform?: string};
