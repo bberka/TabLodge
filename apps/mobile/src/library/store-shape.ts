@@ -1,7 +1,3 @@
-/*
-What the phone's copy of the library is: the `Store` check and the empty store, the links in shared text, and the
-statistics of a library. Edits are in `board-edits.ts` and `session-edits.ts`.
-*/
 import type {Settings, Store} from '../../../extension/src/shared/types';
 import {LAYOUT_VERSION} from '../../../extension/src/shared/library-index';
 
@@ -20,16 +16,11 @@ export function emptyStore(now: number): Store {
 		folders: [],
 		bookmarkColumns: [],
 		bookmarks: [],
-		// Portable preferences arrive from the server; this app reads none of them.
 		settings: {} as Settings,
 		updatedAt: now,
 	};
 }
 
-/**
-The first web address in a piece of shared text, or undefined when there is none. Share sheets often send
-"Title https://example.com" rather than a bare link.
-*/
 export function extractUrl(text: string): string | undefined {
 	for (const match of text.matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
 		const candidate = match[0].replace(/[!),.:;?\]]+$/, '');
@@ -38,17 +29,12 @@ export function extractUrl(text: string): string | undefined {
 			if (url.protocol === 'http:' || url.protocol === 'https:') {
 				return url.href;
 			}
-		} catch {
-			// Try the next match.
-		}
+		} catch {}
 	}
 
 	return undefined;
 }
 
-/**
-Every web link in some text, in order and without repeats. Browsers share a list of tabs this way.
-*/
 export function extractUrls(text: string): string[] {
 	const urls = new Set<string>();
 	for (const match of text.matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
@@ -71,29 +57,17 @@ export function hostOf(url: string): string {
 
 export type LibraryStats = {
 	sessions: number;
-	/**
-	Saved tabs, across every session.
-	*/
 	tabs: number;
 	folders: number;
 	bookmarks: number;
 	columns: number;
-	/**
-	The sites that hold the most saved links (bookmarks and saved tabs), most first.
-	*/
 	topSites: Array<{host: string; count: number}>;
 	largestSession?: {name: string; tabs: number};
-	/**
-	When the oldest session or bookmark was saved, if any has a date.
-	*/
 	since?: number;
 };
 
 const TOP_SITES = 5;
 
-/**
-What the library holds, for the Statistics sheet.
-*/
 export function libraryStats(store: Store): LibraryStats {
 	const counts = new Map<string, number>();
 	const count = (url: string) => {
@@ -147,10 +121,6 @@ export function libraryStats(store: Store): LibraryStats {
 	};
 }
 
-/**
-Splits text shared from another app into its link and a title. Browsers share "Page title https://example.com",
-so the words around the link become the title.
-*/
 export function splitShared(text: string): {url?: string; title: string} {
 	const url = extractUrl(text);
 	if (!url) {

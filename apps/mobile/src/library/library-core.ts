@@ -2,10 +2,6 @@ import type {Store} from '../../../extension/src/shared/types';
 import {writeJson} from '../platform/storage';
 import {emptyStore} from './store-shape';
 
-/**
-One library held in memory and saved to SQLite: reads and writes run one after another, the way the extension's
-service worker does, and screens subscribe to changes. The regular and the private library each have one.
-*/
 export function createLibraryCore(libraryKey: string) {
 	let store = emptyStore(Date.now());
 	let queue: Promise<unknown> = Promise.resolve();
@@ -21,9 +17,6 @@ export function createLibraryCore(libraryKey: string) {
 		get store(): Store {
 			return store;
 		},
-		/**
-		Takes a library that was just read from storage.
-		*/
 		load(saved: Store) {
 			store = saved;
 			notify();
@@ -41,7 +34,6 @@ export function createLibraryCore(libraryKey: string) {
 			return run;
 		},
 		async write(next: Store): Promise<void> {
-			// Screens redraw at once; saving the whole library to SQLite follows and holds the next edit, not the screen.
 			store = next;
 			notify();
 			await writeJson(libraryKey, next);

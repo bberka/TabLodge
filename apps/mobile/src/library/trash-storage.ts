@@ -1,8 +1,3 @@
-/*
-The trash on disk. The regular library and the private library each have their own list, and the private one is
-only offered while the private library is open. Reads and writes go one after another, so two deletes made together
-both land, and so does what sync brings in. This file imports nothing from the library, so the sync clients can use it.
-*/
 import type {SyncHost} from '../../../extension/src/shared/sync/client';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
 import {
@@ -50,9 +45,6 @@ export async function changeTrash(
 	}
 }
 
-/**
-Waits for the trash changes already queued, so a caller that is about to delete the trash is not overtaken by one.
-*/
 export async function settleTrash(): Promise<void> {
 	await queue;
 }
@@ -69,10 +61,6 @@ export async function readTrash(
 	);
 }
 
-/**
-The trash as a sync client sees it. What a round brings in is added and removed in one step of the queue, so a delete
-made on the phone meanwhile stays. `retention` is read each time, because the setting itself syncs.
-*/
 export const syncedTrash = (
 	name: TrashName,
 	retention: () => number,

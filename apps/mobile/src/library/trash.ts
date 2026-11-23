@@ -1,8 +1,3 @@
-/*
-The phone's trash: what was deleted, with enough to put it back. Entries have the shape the extension and the sync
-server use (`shared/trash.ts`), so a deletion made on any device can be restored on this phone and the other way round.
-The functions here are pure; the storage is in `trash-storage.ts`.
-*/
 import {isRecord} from '../../../extension/src/shared/library-values';
 import {
 	normalizeBookmark,
@@ -29,19 +24,10 @@ import {restoreFolder, restoreSession} from './session-edits';
 export const TRASH_KEY = 'tablodge.trash';
 export const PRIVATE_TRASH_KEY = 'tablodge.private.trash';
 
-/**
-The extension's default retention, used until the library says otherwise.
-*/
 export const DEFAULT_RETENTION_DAYS = 30;
-/**
-The most entries kept, as in the extension.
-*/
 export const TRASH_MAX_ITEMS = 500;
 const DAY = 86_400_000;
 
-/**
-What a delete on this phone hands over. `addToTrash` turns it into an entry in the shared shape.
-*/
 type Details =
 	| {kind: 'session'; session: Session}
 	| {
@@ -143,9 +129,6 @@ const entryFor = (
 	}
 };
 
-/**
-An entry this app stored before it used the shared shape: the details sat beside the id.
-*/
 function fromEarlier(value: unknown): TrashEntry | undefined {
 	if (
 		!isRecord(value) ||
@@ -222,9 +205,6 @@ function fromEarlier(value: unknown): TrashEntry | undefined {
 	return details && entryFor(details, value.id, value.deletedAt);
 }
 
-/**
-Reads the stored list, keeping what was stored in the app's earlier shape and dropping anything that is not an entry.
-*/
 export function parseTrash(value: unknown): TrashEntry[] {
 	if (!Array.isArray(value)) {
 		return [];
@@ -236,9 +216,6 @@ export function parseTrash(value: unknown): TrashEntry[] {
 	});
 }
 
-/**
-Puts new entries at the front, newest first.
-*/
 export function addToTrash(
 	items: readonly TrashEntry[],
 	added: readonly NewTrash[],
@@ -251,10 +228,6 @@ export function addToTrash(
 	];
 }
 
-/**
-Drops what has been in the trash longer than the retention, and what is past the most entries kept. A retention that
-is not a positive number keeps the default.
-*/
 export function purgeExpired(
 	items: readonly TrashEntry[],
 	retentionDays: number,
@@ -266,9 +239,6 @@ export function purgeExpired(
 		.slice(0, TRASH_MAX_ITEMS);
 }
 
-/**
-Whole days before an entry is purged, at least one while it is still there.
-*/
 export const daysLeft = (
 	entry: TrashEntry,
 	retentionDays: number,
@@ -281,9 +251,6 @@ export const removeFromTrash = (
 	id: string,
 ): TrashEntry[] => items.filter((entry) => entry.id !== id);
 
-/**
-Which side of TabLodge an entry belongs to, for the Sessions and Bookmarks filter.
-*/
 export type TrashFilter = 'all' | 'sessions' | 'bookmarks';
 
 export const trashSide = (entry: TrashEntry): Exclude<TrashFilter, 'all'> =>
@@ -299,15 +266,9 @@ export const filterTrash = (
 		? [...items]
 		: items.filter((entry) => trashSide(entry) === filter);
 
-/**
-A line for the list: what it was, where it came from, and how many links it holds.
-*/
 export function describeEntry(entry: TrashEntry): {
 	title: string;
 	origin: string;
-	/**
-	Links inside it, for the kinds that hold several.
-	*/
 	links: number;
 } {
 	const title = entry.label || 'Deleted item';
@@ -352,13 +313,7 @@ export function describeEntry(entry: TrashEntry): {
 
 export type Restored = {
 	store: Store;
-	/**
-	Set when the original place was gone and the item went somewhere else.
-	*/
 	note?: string;
-	/**
-	Set when the entry could not be put back, with the reason. The library is unchanged and the entry stays.
-	*/
 	error?: string;
 };
 
@@ -370,12 +325,6 @@ const clampIndex = (value: unknown, length: number): number =>
 
 const failed = (store: Store, error: string): Restored => ({store, error});
 
-/**
-Puts an entry back in the library. Where its folder or column is gone it goes to the first one, and `note` says so.
-Bookmarks get new ids; the rest keep theirs. All of them sync, because a restore is newer than the delete. Entries
-made by other devices are read defensively: anything that does not look like a session, link, bookmark, column, or
-folder is refused instead of written.
-*/
 export function restoreEntry(
 	store: Store,
 	entry: TrashEntry,
@@ -487,7 +436,6 @@ export function restoreEntry(
 				columnId:
 					typeof data.columnId === 'string' ? data.columnId : bookmark.columnId,
 			};
-			// With no bookmark before it, the one after it says where it went.
 			const next =
 				typeof data.nextId === 'string'
 					? store.bookmarks.findIndex((item) => item.id === data.nextId)
@@ -529,7 +477,6 @@ export function restoreEntry(
 				.filter((bookmark): bookmark is Bookmark => bookmark !== null)
 				.map((bookmark) => ({...bookmark, columnId: column.id}));
 			const added = restoreColumn(store, column, bookmarks, now);
-			// Links moved elsewhere when the column was deleted go back if they are still where they were put.
 			const moved = new Set(
 				Array.isArray(data.movedIds) ? (data.movedIds as unknown[]) : [],
 			);

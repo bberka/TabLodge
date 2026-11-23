@@ -10,13 +10,8 @@ import {Chips, Field} from '../ui/widgets';
 import {editIn, type LibraryName, newId, useLibraryOf} from './library-store';
 import {addColumn, columnViews} from './board-edits';
 
-// The selector's last entry; choosing it asks for a name and an icon.
 const NEW_COLUMN = '__new-column__';
 
-/**
-The state of a column selector: the existing columns plus a "New column" entry. `resolve` makes the new column when
-that entry is chosen and returns where to save.
-*/
 export function useColumnChoice(
 	initial = '',
 	library: LibraryName = 'regular',
@@ -50,9 +45,6 @@ export function useColumnChoice(
 		setNewIcon,
 		newColor,
 		setNewColor,
-		/**
-		A new column was chosen but has no name yet.
-		*/
 		incomplete: creating && columns.length > 0 && !newName.trim(),
 		async resolve(): Promise<{id: string; name: string}> {
 			const name = creating ? newName.trim() : '';
@@ -74,9 +66,6 @@ export function useColumnChoice(
 	};
 }
 
-/**
-The selector itself: column chips, and a name and icon only once "New column" is chosen.
-*/
 export function ColumnChoice({
 	choice,
 }: {

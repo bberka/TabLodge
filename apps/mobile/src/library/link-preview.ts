@@ -4,9 +4,6 @@ import {SYNC_CONFIG_KEY} from '../../../extension/src/shared/sync/client';
 import {readJson} from '../platform/storage';
 import {readPage} from './page-title';
 
-/**
-Sent with requests the phone makes to a site itself. Some sites refuse the network library's own default.
-*/
 export const USER_AGENT =
 	'Mozilla/5.0 (Linux; Android) TabLodge/1.0 link-preview';
 
@@ -14,15 +11,11 @@ export type Preview = {title?: string; description?: string};
 
 const WAIT_MS = 6000;
 const DEBOUNCE_MS = 500;
-// A page larger than this is not worth downloading for a title.
 const MAX_BYTES = 3_000_000;
 
 const text = (value: unknown): string | undefined =>
 	typeof value === 'string' && value.trim() !== '' ? value : undefined;
 
-/**
-The sync server's address and token, when a server is connected.
-*/
 async function server(): Promise<{url: string; token: string} | undefined> {
 	const saved = await readJson(SYNC_CONFIG_KEY);
 	return isRecord(saved) &&
@@ -32,10 +25,6 @@ async function server(): Promise<{url: string; token: string} | undefined> {
 		: undefined;
 }
 
-/**
-The title and description of a page. With a server connected, the server reads it, so the site sees the server and not
-this phone. Without one, the phone reads the page itself. Nothing when the page cannot be read.
-*/
 export async function loadPreview(
 	page: string,
 	signal: AbortSignal,
@@ -75,9 +64,6 @@ export async function loadPreview(
 	return readPage(await response.text());
 }
 
-/**
-Looks a link up a moment after it stops changing. `loading` is true from the change until the answer, or until it fails.
-*/
 export function useLinkPreview(
 	url: string | undefined,
 	enabled: boolean,
@@ -94,7 +80,6 @@ export function useLinkPreview(
 		}
 
 		const controller = new AbortController();
-		// An answer for an address that has since changed is dropped.
 		let live = true;
 		setState({loading: true, url});
 		const timer = setTimeout(() => {

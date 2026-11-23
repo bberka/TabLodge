@@ -1,8 +1,3 @@
-/*
-What another app shared with TabLodge, decided without Android: a link to save, an export file to import, a backup
-to restore, or a file the app cannot use. The share library copies a shared file into the app's cache before handing
-it over; the app reads that copy once and `cacheCopies` lists the copies so they can be deleted.
-*/
 import {pageAddress} from '../../../extension/src/shared/quotes';
 import {extractUrls, splitShared} from './store-shape';
 
@@ -26,9 +21,6 @@ export type ShareOutcome =
 			text: string;
 			title: string;
 			urls: string[];
-			/**
-			The words shared around the link, which the save drawer offers to save as a quote instead.
-			*/
 			quote?: string;
 	  }
 	| {kind: 'quote'; quote: string; url?: string}
@@ -55,9 +47,6 @@ const BACKUP_TYPES = new Set([
 	'application/x-zip-compressed',
 ]);
 
-/**
-What a shared file is for. The name decides first, because apps often send a generic or wrong type.
-*/
 function fileKind(file: SharedFile): 'import' | 'backup' | undefined {
 	const name = (file.fileName ?? '').toLowerCase();
 	if (name.endsWith('.zip') || name.endsWith('.zip.enc')) {
@@ -81,23 +70,18 @@ function fileKind(file: SharedFile): 'import' | 'backup' | undefined {
 const WEB_LINK = /https?:\/\/[^\s"'<>]+/i;
 const QUOTED = /^["'«»“”„]([\s\S]+)["'«»“”„]$/;
 
-/**
-Shared text without the quotation marks Chrome puts around a selection.
-*/
 function unquote(text: string) {
 	const trimmed = text.trim();
 	return (QUOTED.exec(trimmed)?.[1] ?? trimmed).trim();
 }
 
 export function readShare(share: IncomingShare): ShareOutcome {
-	// Browsers share "Page title https://example.com"; the words around the link become the title.
 	const full = share.text ?? share.webUrl ?? '';
 	const parts = splitShared(full);
 	const urls = extractUrls(full);
 	const file = share.files?.[0];
 	const kind = file ? fileKind(file) : undefined;
 	if (file && kind) {
-		// The library falls back to the content address when it could not copy the file, which the app cannot read.
 		return file.path?.startsWith('file://')
 			? {
 					kind,
@@ -112,8 +96,6 @@ export function readShare(share: IncomingShare): ShareOutcome {
 		return {kind: file.mimeType ? 'refused' : 'unreadable'};
 	}
 
-	// A selection Chrome shares is "the text" in quotation marks, with a link to the passage (`#:~:text=`) when it
-	// could make one. Other words keep opening Save link, which offers to save them as a quote instead.
 	if (!file && !share.webUrl) {
 		const trimmed = full.trim();
 		if (urls.length === 0 && QUOTED.test(trimmed)) {
@@ -138,10 +120,6 @@ export function readShare(share: IncomingShare): ShareOutcome {
 	};
 }
 
-/**
-The shared files that are copies in this app's cache folder (`cacheUri`, ending in a slash). Files the share
-library left where they were are not the app's to delete.
-*/
 export function cacheCopies(share: IncomingShare, cacheUri: string): string[] {
 	return (share.files ?? []).flatMap((file) =>
 		file.path?.startsWith(cacheUri) &&

@@ -6,10 +6,6 @@ import {useColors} from '../ui/theme';
 import {Segmented} from '../ui/widgets';
 import {type LibraryName} from './library-store';
 
-/**
-Which library a link is saved to, when the phone has a private one: the regular library or the private one. Choosing a
-locked private library asks for its password first, and switches once it is open.
-*/
 export function LibraryChoice({
 	value,
 	onChange,
