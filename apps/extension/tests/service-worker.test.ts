@@ -10919,6 +10919,65 @@ test('a palette restore that moves the session to the trash offers Undo on the t
 	);
 });
 
+test('Undo from a palette toast still works in a worker that stopped and started again', async () => {
+	const tabs = [
+		webTab(1, 10, 0, {
+			active: true,
+			url: 'https://front.example/',
+			title: 'Front',
+		}),
+		{
+			id: 2,
+			windowId: 20,
+			index: 0,
+			active: true,
+			url: 'chrome-extension://tablodge/palette.html?window=10&tab=1',
+		},
+	];
+	const first = createWorkerHarness(
+		stateWithSession({restoreTarget: 'current-window', restoreMode: 'remove'}),
+		tabs,
+		{extraWindows: [20]},
+	);
+	const restored = await first.sendMessage(
+		{type: 'RESTORE_GROUP', groupId: 'session-1'},
+		{
+			url: 'chrome-extension://tablodge/palette.html?window=10&tab=1',
+			tab: {id: 2, windowId: 20},
+		},
+	);
+	assert.ok(restored.trashId);
+	const shown = await first.sendMessage(
+		{
+			type: 'SHOW_TRASH_UNDO',
+			tabId: 1,
+			message: 'Restored “Research”. Removed it from your sessions.',
+			trashId: restored.trashId,
+		},
+		{
+			url: 'chrome-extension://tablodge/palette.html?window=10&tab=1',
+			tab: {id: 2, windowId: 20},
+		},
+	);
+	assert.equal(shown.ok, true, shown.error);
+
+	const restarted = createWorkerHarness(stateWithSession(), tabs, {
+		extraWindows: [20],
+		storage: structuredClone(first.extraStorage),
+		sessionStorage: structuredClone(first.sessionStore),
+	});
+	const undo = await restarted.sendMessage(
+		{type: 'TRASH_UNDO', id: restored.trashId},
+		{url: 'https://front.example/', tab: {id: 1, windowId: 10}},
+	);
+	assert.equal(undo.ok, true, undo.error);
+	assert.equal(undo.message, 'Restored to Research.');
+	assert.equal(
+		(await restarted.sendMessage({type: 'GET_TRASH'})).items.length,
+		0,
+	);
+});
+
 test('a palette restore still works, and shows no error, where the page cannot show the Undo toast', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({restoreTarget: 'current-window', restoreMode: 'remove'}),

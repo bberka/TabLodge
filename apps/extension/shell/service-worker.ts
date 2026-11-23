@@ -10659,10 +10659,41 @@ async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
 
 /**
 The undo id of each Save quote toast, and each palette restore toast, with the tab that shows it: Undo in a page may
-only take back what that page's toast reported (see QUOTE_UNDO and TRASH_UNDO).
+only take back what that page's toast reported (see QUOTE_UNDO and TRASH_UNDO). Session storage, because a toast set to
+stay until dismissed outlives the idle worker, and a restarted worker must still let its tab undo.
 */
-const quoteUndoTabs = new Map<string, number>();
-const trashUndoTabs = new Map<string, number>();
+const TOAST_UNDO_PREFIX = 'toastUndoTab:';
+
+async function bindToastUndo(
+	type: 'QUOTE_UNDO' | 'TRASH_UNDO',
+	id: string,
+	tabId: number,
+) {
+	try {
+		await chrome.storage.session?.set({
+			[`${TOAST_UNDO_PREFIX}${type}:${id}`]: tabId,
+		});
+	} catch {}
+}
+
+async function claimToastUndo(
+	type: 'QUOTE_UNDO' | 'TRASH_UNDO',
+	id: string,
+	tabId: number | undefined,
+): Promise<boolean> {
+	const key = `${TOAST_UNDO_PREFIX}${type}:${id}`;
+	try {
+		const stored = await chrome.storage.session?.get(key);
+		if (!isInteger(tabId) || stored?.[key] !== tabId) {
+			return false;
+		}
+
+		await chrome.storage.session?.remove(key);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 /**
 Messages from code in a web page: the site content script and the toasts the worker draws on a page. They get the source
@@ -10763,13 +10794,11 @@ async function handleSourceMessage(
 			const {id} = message;
 			if (
 				typeof id !== 'string' ||
-				!isInteger(sender.tab?.id) ||
-				quoteUndoTabs.get(id) !== sender.tab.id
+				!(await claimToastUndo('QUOTE_UNDO', id, sender.tab?.id))
 			) {
 				return {ok: false, error: "Can't undo: it was too long ago."};
 			}
 
-			quoteUndoTabs.delete(id);
 			return undoAction(id);
 		}
 
@@ -10777,13 +10806,11 @@ async function handleSourceMessage(
 			const {id} = message;
 			if (
 				typeof id !== 'string' ||
-				!isInteger(sender.tab?.id) ||
-				trashUndoTabs.get(id) !== sender.tab.id
+				!(await claimToastUndo('TRASH_UNDO', id, sender.tab?.id))
 			) {
 				return {ok: false, error: "Can't undo: it was too long ago."};
 			}
 
-			trashUndoTabs.delete(id);
 			const result = await restoreTrash(id);
 			return result.ok
 				? {ok: true, message: `Restored to ${result.placed}.`}
@@ -11517,7 +11544,7 @@ async function showTrashUndo(
 			return {ok: false, error: 'That page cannot show a message.'};
 		}
 
-		trashUndoTabs.set(message.trashId, tab.id);
+		await bindToastUndo('TRASH_UNDO', message.trashId, tab.id);
 		return {ok: true};
 	} catch {
 		return {ok: false, error: 'That page cannot show a message.'};
@@ -12609,7 +12636,7 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	let shown = false;
 	if (isInteger(tab?.id)) {
 		if (result.ok && result.undoId) {
-			quoteUndoTabs.set(result.undoId, tab.id);
+			await bindToastUndo('QUOTE_UNDO', result.undoId, tab.id);
 		}
 
 		try {
