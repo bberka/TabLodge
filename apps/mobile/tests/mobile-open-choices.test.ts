@@ -47,8 +47,24 @@ describe('Open in choices', () => {
 		{id: 'org.mozilla.firefox', name: 'Firefox'},
 	];
 
-	test('one link gets the in-app tab, the default browser, each browser, then the chooser', () => {
+	test('one link gets the in-app tab, the default browser, and the chooser, without the browsers', () => {
 		const choices = openChoices(browsers, {several: false});
+		assert.deepEqual(
+			choices.map((choice) => [choice.label, choice.opener]),
+			[
+				['In-app tab', {how: 'inapp', app: ''}],
+				['Default browser', {how: 'system', app: ''}],
+				['Open with…', {how: 'chooser', app: ''}],
+			],
+		);
+		assert.deepEqual(
+			choices.map((choice) => choice.image),
+			[undefined, undefined, undefined],
+		);
+	});
+
+	test('several links get each installed browser and no chooser', () => {
+		const choices = openChoices(browsers, {several: true});
 		assert.deepEqual(
 			choices.map((choice) => [choice.label, choice.opener]),
 			[
@@ -56,18 +72,9 @@ describe('Open in choices', () => {
 				['Default browser', {how: 'system', app: ''}],
 				['Chrome', {how: 'app', app: 'com.android.chrome'}],
 				['Firefox', {how: 'app', app: 'org.mozilla.firefox'}],
-				['Open with…', {how: 'chooser', app: ''}],
 			],
 		);
 		assert.equal(choices[2].image, 'data:image/png;base64,AA');
-	});
-
-	test('several links get no chooser', () => {
-		assert.ok(
-			openChoices(browsers, {several: true}).every(
-				(choice) => choice.opener.how !== 'chooser',
-			),
-		);
 	});
 
 	test('two browsers with one name keep apart', () => {
@@ -76,7 +83,7 @@ describe('Open in choices', () => {
 				{id: 'a.browser', name: 'Browser'},
 				{id: 'b.browser', name: 'Browser'},
 			],
-			{several: false},
+			{several: true},
 		).map((choice) => choice.key);
 		assert.equal(new Set(keys).size, keys.length);
 	});
