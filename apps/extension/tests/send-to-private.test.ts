@@ -405,6 +405,14 @@ test('sending a session takes its name, links in order and saved date, and it ar
 			['https://b.example/', ''],
 		],
 	);
+	const changed = structuredClone(result.sent);
+	changed.sessions[0].links[1].notes = 'different note';
+	const kept = addSent(arrived.store, changed);
+	assert.equal(
+		kept.store.groups.length,
+		2,
+		'a session with other notes is kept',
+	);
 	const replay = addSent(arrived.store, result.sent);
 	assert.equal(
 		replay.store.groups.length,

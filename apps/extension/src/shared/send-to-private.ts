@@ -556,8 +556,16 @@ const sameSessionExists = (groups: Session[], session: Session) =>
 		(group) =>
 			group.createdAt === session.createdAt &&
 			group.name === session.name &&
+			group.description === session.description &&
 			group.tabs.length === session.tabs.length &&
-			group.tabs.every((tab, index) => tab.url === session.tabs[index].url),
+			group.tabs.every((tab, index) => {
+				const other = session.tabs[index];
+				return (
+					tab.url === other.url &&
+					tab.title === other.title &&
+					tab.notes === other.notes
+				);
+			}),
 	);
 
 function addSentSession(store: Store, sent: SentSession): Store {

@@ -177,8 +177,9 @@ export async function sendToPrivate(targets: SendTarget[]): Promise<boolean> {
 	try {
 		await editRegular((current) => {
 			const again = takeOutForPrivate(current, targets);
-			removed = again.ok;
-			return again.ok ? again.store : current;
+			removed =
+				again.ok && JSON.stringify(again.sent) === JSON.stringify(taken.sent);
+			return again.ok && removed ? again.store : current;
 		});
 	} catch {
 		await withdrawSent(id);

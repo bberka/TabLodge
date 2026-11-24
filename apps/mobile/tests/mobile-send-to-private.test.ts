@@ -683,6 +683,40 @@ describe('Send to private storage on the phone', () => {
 		assert.equal(app.regular.getLibrary().groups[0]?.tabs.length, 1000);
 	});
 
+	test('a bookmark added to the column while the send is queued is not lost', async () => {
+		const app = await startApp();
+		await app.privateLibrary.setupPrivate(PASSWORD);
+		await withColumns(app);
+		const paused = Promise.withResolvers<void>();
+		holds.write.set(PENDING_KEY, paused.promise);
+		const sending = app.send.sendToPrivate([
+			{kind: 'column', columnId: 'work'},
+		]);
+		while (holds.write.has(PENDING_KEY)) {
+			await new Promise((resolve) => {
+				setImmediate(resolve);
+			});
+		}
+
+		await app.regular.editRegular((store) =>
+			addBookmark(
+				store,
+				{url: 'https://late.example/', title: 'Late', columnId: 'work'},
+				'late',
+				99,
+			),
+		);
+		paused.resolve();
+		assert.equal(await sending, false);
+		assert.equal(lastSnack()?.message, 'Those links changed. Nothing was sent');
+		const store = app.regular.getLibrary();
+		assert.equal(
+			store.bookmarks.filter((entry) => entry.columnId === 'work').length,
+			4,
+		);
+		assert.equal(pending(), undefined);
+	});
+
 	test('an empty column sends nothing and says so', async () => {
 		const app = await startApp();
 		await app.privateLibrary.setupPrivate(PASSWORD);
