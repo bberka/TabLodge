@@ -373,9 +373,6 @@ export async function importScrollingCheck(env: Env, theme: Theme) {
 		const savedLinksControl = dialog.getByRole('radiogroup', {
 			name: 'Links already saved',
 		});
-		const savedLinksLabel = dialog.getByText('Links already saved', {
-			exact: true,
-		});
 		for (const viewport of [
 			{width: 440, height: 956},
 			{width: 768, height: 1024},
@@ -384,10 +381,16 @@ export async function importScrollingCheck(env: Env, theme: Theme) {
 		]) {
 			await page.setViewportSize(viewport);
 			await assertInline(targetLabel, targetColumn, 'bookmark column picker');
-			await assertInline(
-				savedLinksLabel,
-				savedLinksControl,
-				'saved links selector',
+			const savedLinksBounds = await savedLinksControl.boundingBox();
+			assert.ok(savedLinksBounds);
+			assert.ok(
+				savedLinksBounds.x + savedLinksBounds.width <= viewport.width,
+				`saved links choice should fit a ${viewport.width}px viewport`,
+			);
+			assert.equal(
+				await savedLinksControl.getByRole('radio').count(),
+				2,
+				'saved links choice should offer Skip and Add again',
 			);
 		}
 
@@ -520,9 +523,7 @@ export async function importNewColumnCheck(env: Env, theme: Theme) {
 				0,
 			);
 			assert.equal(
-				await dialog
-					.getByRole('radio', {name: 'One column', exact: true})
-					.count(),
+				await dialog.getByRole('radio', {name: /^One column/}).count(),
 				0,
 			);
 			const columnSelect = dialog.getByRole('combobox', {
@@ -700,8 +701,7 @@ export async function browserBookmarksImportCheck(env: Env, theme: Theme) {
 					.getByRole('heading', {name: 'Review bookmark import'})
 					.waitFor();
 				const oneColumnMode = dialog.getByRole('radio', {
-					name: 'One column',
-					exact: true,
+					name: /^One column/,
 				});
 				await until(
 					async () =>

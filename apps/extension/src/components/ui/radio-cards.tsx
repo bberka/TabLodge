@@ -144,6 +144,44 @@ function RadioCard({
 	);
 }
 
+type RadioChoice<T extends string> = {
+	value: T;
+	title: React.ReactNode;
+	description: React.ReactNode;
+	icon?: RadioCardProps['icon'];
+	disabled?: boolean;
+};
+
+type RadioChoiceGroupProps<T extends string> = {
+	choices: ReadonlyArray<RadioChoice<T>>;
+	value: T;
+	onValueChange: (value: T) => void;
+} & Omit<RadioCardGroupProps, 'value' | 'onValueChange' | 'children'>;
+
+function RadioChoiceGroup<T extends string>({
+	choices,
+	value,
+	onValueChange,
+	...props
+}: RadioChoiceGroupProps<T>) {
+	return (
+		<RadioCardGroup
+			value={value}
+			onValueChange={(next) => {
+				const choice = choices.find((entry) => entry.value === next);
+				if (choice) {
+					onValueChange(choice.value);
+				}
+			}}
+			{...props}
+		>
+			{choices.map((choice) => (
+				<RadioCard key={choice.value} {...choice} />
+			))}
+		</RadioCardGroup>
+	);
+}
+
 type SegmentedControlProps<T extends string> = {
 	value: T;
 	onValueChange: (value: T) => void;
@@ -215,4 +253,4 @@ function SegmentedControl<T extends string>({
 	);
 }
 
-export {RadioCard, RadioCardGroup, SegmentedControl};
+export {RadioCard, RadioCardGroup, RadioChoiceGroup, SegmentedControl};

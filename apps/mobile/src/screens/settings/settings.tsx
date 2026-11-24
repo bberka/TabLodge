@@ -42,12 +42,13 @@ import {BottomSheet} from '../../ui/bottom-sheet';
 import {resultCount} from '../../library/search-count';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {useSettledText} from '../../ui/search-count';
+import {SHARE_MODE_CHOICES} from '../../../../extension/src/shared/choice-copy';
 import {DataCard} from './data-settings';
 import {TrashCard} from './trash-settings';
 import {ExcludedCard} from './excluded-settings';
 import {SettingsFooter} from './settings-footer';
 import {OpenLinksCard} from './open-links-settings';
-import {SelectRow, ValueRow} from './select-row';
+import {asChoices, SelectRow, ValueRow} from './select-row';
 import {DeviceNameField} from './device-name-field';
 import {SharedPagesButton} from './shared-pages-settings';
 import {
@@ -424,10 +425,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										<SelectRow
 											row={ROWS.defaultShareMode}
 											value={links.defaultShareMode}
-											choices={[
-												{id: 'snapshot', name: 'Snapshot'},
-												{id: 'live', name: 'Live link'},
-											]}
+											choices={asChoices(SHARE_MODE_CHOICES)}
 											onChange={(value) => {
 												void setSyncedSetting('defaultShareMode', value);
 											}}

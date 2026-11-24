@@ -48,6 +48,7 @@ export {
 export {
 	RadioCard,
 	RadioCardGroup,
+	RadioChoiceGroup,
 	SegmentedControl,
 } from '../components/ui/radio-cards';
 export {

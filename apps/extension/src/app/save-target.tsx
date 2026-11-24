@@ -1,7 +1,8 @@
 import {Bookmark, PanelsTopLeft, Plus} from 'lucide-react';
+import {SAVE_TARGET_CHOICES} from '../shared/choice-copy';
 import {
 	Label,
-	SegmentedControl,
+	RadioChoiceGroup,
 	Select,
 	SelectContent,
 	SelectItem,
@@ -18,26 +19,12 @@ The session picker's value for "create a new session", like the new column choic
 */
 export const NEW_SESSION = '__new-session__';
 
-const OPTIONS = [
-	{
-		value: 'bookmark',
-		label: (
-			<span className="inline-flex items-center gap-2">
-				<Bookmark className="h-4 w-4" aria-hidden="true" />
-				Bookmark column
-			</span>
-		),
-	},
-	{
-		value: 'session',
-		label: (
-			<span className="inline-flex items-center gap-2">
-				<PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
-				Session
-			</span>
-		),
-	},
-] as const;
+const ICONS = {bookmark: Bookmark, session: PanelsTopLeft} as const;
+
+const CHOICES = SAVE_TARGET_CHOICES.map((choice) => ({
+	...choice,
+	icon: ICONS[choice.value],
+}));
 
 /**
 The "Save to" switch between a bookmark column and an existing session. Renders nothing when there is no session to
@@ -62,11 +49,10 @@ export function SaveTargetChoice({
 	}
 
 	return (
-		<SegmentedControl
-			fullWidth
+		<RadioChoiceGroup
 			label="Save to"
 			value={target}
-			options={OPTIONS}
+			choices={CHOICES}
 			onValueChange={onTargetChange}
 		/>
 	);
