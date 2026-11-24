@@ -734,6 +734,14 @@ export async function importPastedCheck(env: Env, theme: Theme) {
 				.count(),
 			1,
 		);
+		await captureEvidence(page, `import-paste-preview-${theme}.png`, dialog);
+		assert.ok(
+			await dialog.evaluate(
+				(node: ScrollElement & {scrollWidth: number; clientWidth: number}) =>
+					node.scrollWidth <= node.clientWidth + 1,
+			),
+			'the pasted review fits without sideways scrolling',
+		);
 		await until(
 			async () =>
 				(await page.locator(':focus').textContent())?.trim() ===
