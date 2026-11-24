@@ -208,6 +208,7 @@ export function sessionMenuActions(
 		select,
 		addLinks,
 		bookmark,
+		canSendToPrivate = false,
 	}: {
 		colors: Colors;
 		folders: Store['folders'];
@@ -216,6 +217,7 @@ export function sessionMenuActions(
 		select: (id: string) => void;
 		addLinks: (id: string) => void;
 		bookmark: (target: BookmarkLinks) => void;
+		canSendToPrivate?: boolean;
 	},
 ): SheetAction[] {
 	const menuItem = (action: SessionAction): SheetAction => {
@@ -286,6 +288,17 @@ export function sessionMenuActions(
 			},
 		},
 		menuItem('share'),
+		...(canSendToPrivate && session.tabs.length > 0
+			? [
+					{
+						icon: 'lock-closed-outline' as const,
+						label: SEND_TO_PRIVATE_LABEL,
+						onPress() {
+							void sendToPrivate([{kind: 'session', sessionId: session.id}]);
+						},
+					},
+				]
+			: []),
 		...(['archive', 'delete'] as const).map((action) => menuItem(action)),
 	];
 }

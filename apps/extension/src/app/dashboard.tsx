@@ -1286,6 +1286,12 @@ export function SessionManager({
 				showStatus,
 				reload,
 			),
+		sendGroupToPrivate: (group) =>
+			void sendLinksToPrivate(
+				[{kind: 'session', sessionId: group.id}],
+				showStatus,
+				reload,
+			),
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
 		deleteGroup: (group) => deleteGroup(group),
@@ -2764,6 +2770,7 @@ type CardActions = {
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	openTabPrivately: (tab: SavedTabRecord) => void;
 	sendTabToPrivate: (group: Session, tab: SavedTabRecord) => void;
+	sendGroupToPrivate: (group: Session) => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
 	deleteGroup: (group: Session) => void;
@@ -2944,6 +2951,7 @@ const GroupCard = memo(
 			handlers.restore(group, event);
 		const onExpanded = (next: boolean) => handlers.expand(group.id, next);
 		const onDelete = () => handlers.deleteGroup(group);
+		const sendState = useSendToPrivate();
 		const onArchive = () => handlers.archive(group);
 		const inArchivedFolder =
 			folderName !== undefined && isArchivedFolder({name: folderName});
@@ -3176,6 +3184,13 @@ const GroupCard = memo(
 				label: 'Share',
 				icon: Share2,
 				onSelect: () => handlers.share(group),
+			},
+			{
+				id: 'send-private',
+				label: SEND_TO_PRIVATE_LABEL,
+				icon: ACTION_ICONS.sendPrivate,
+				hidden: sendState === 'hidden' || group.tabs.length === 0,
+				onSelect: () => handlers.sendGroupToPrivate(group),
 			},
 			{type: 'separator'},
 			{

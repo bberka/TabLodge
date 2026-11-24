@@ -14,9 +14,10 @@ import {isRecord} from '../../../extension/src/shared/library-values';
 import type {Store} from '../../../extension/src/shared/types';
 import {recordKey} from '../../../extension/src/shared/sync/changes';
 import {
-	addSentLinks,
-	parseSentLinks,
-	type SentLink,
+	addSent,
+	emptyPayload,
+	parseSentPayload,
+	type SentPayload,
 } from '../../../extension/src/shared/send-to-private';
 import {
 	createSyncClient,
@@ -867,7 +868,7 @@ export async function wakePrivate(): Promise<void> {
 	await refreshPrivateStatus();
 }
 
-type PendingSend = {id: string; links: SentLink[]};
+type PendingSend = {id: string} & SentPayload;
 
 const heldSends = new Set<string>();
 let sendQueue: Promise<unknown> = Promise.resolve();
@@ -882,7 +883,7 @@ async function readPending(): Promise<PendingSend[]> {
 	return Array.isArray(saved)
 		? saved.flatMap((entry): PendingSend[] =>
 				isRecord(entry) && typeof entry.id === 'string'
-					? [{id: entry.id, links: parseSentLinks(entry.links)}]
+					? [{id: entry.id, ...parseSentPayload(entry)}]
 					: [],
 			)
 		: [];
@@ -895,8 +896,8 @@ const writePending = async (pending: PendingSend[]) =>
 
 export const canReceiveSent = (): boolean => exists && lock !== undefined;
 
-export async function queueSentLinks(
-	links: SentLink[],
+export async function queueSent(
+	sent: SentPayload,
 	{held = true}: {held?: boolean} = {},
 ): Promise<string> {
 	return serialSend(async () => {
@@ -909,7 +910,7 @@ export async function queueSentLinks(
 			heldSends.add(id);
 		}
 
-		await writePending([...(await readPending()), {id, links}]);
+		await writePending([...(await readPending()), {id, ...sent}]);
 		return id;
 	});
 }
@@ -953,12 +954,14 @@ export async function takeInSent(): Promise<void> {
 		}
 
 		await core.mutate(async () => {
-			await core.write(
-				addSentLinks(
-					core.store,
-					ready.flatMap((entry) => entry.links),
-				).store,
-			);
+			const received = emptyPayload();
+			for (const entry of ready) {
+				received.links.push(...entry.links);
+				received.columns.push(...entry.columns);
+				received.sessions.push(...entry.sessions);
+			}
+
+			await core.write(addSent(core.store, received).store);
 		});
 		client?.localChanged();
 		const imported = new Set(ready.map((entry) => entry.id));
