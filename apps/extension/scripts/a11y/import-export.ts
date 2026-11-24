@@ -663,7 +663,7 @@ export async function savedTabNewColumnCheck(env: Env, theme: Theme) {
 
 export async function importPastedCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
-	await check(`pasted text import by keyboard (${theme})`, async () => {
+	await check(`pasting text into the import dialog (${theme})`, async () => {
 		const page = await openPage(context, extensionId, 'newtab');
 		await seed(page);
 		await page.reload();
@@ -671,68 +671,80 @@ export async function importPastedCheck(env: Env, theme: Theme) {
 		const before = (await readDevStore(page)).bookmarks.map(
 			(bookmark) => bookmark.url,
 		);
+		const copy = async (text: string) => {
+			await page.evaluate(async (value) => {
+				const {navigator} = globalThis as typeof globalThis & {
+					navigator: {clipboard: {writeText(text: string): Promise<void>}};
+				};
+				await navigator.clipboard.writeText(value);
+			}, text);
+		};
+
 		await openMenuItemByKeyboard(
 			page,
 			page.getByRole('button', {name: 'Dashboard menu'}),
 			'Import',
 		);
 		const dialog = page.getByRole('dialog');
-		const field = dialog.getByLabel('Links, a list, or an export');
-		await field.waitFor();
+		await dialog
+			.getByRole('heading', {name: 'Drop a file here, or paste text'})
+			.waitFor();
 		assert.equal(
-			await field.getAttribute('placeholder'),
-			'Paste addresses, Markdown, or what another app exported',
-			'the field carries the Android app’s wording',
+			await dialog.locator('textarea').count(),
+			0,
+			'the dialog offers no text box of its own, so paste needs no field',
 		);
-		const readText = dialog.getByRole('button', {
-			name: 'Read text',
-			exact: true,
-		});
+
+		await captureEvidence(page, `import-paste-${theme}.png`, dialog);
+
+		await copy('https://example.com/link-field-keeps-paste');
+		const linkField = dialog.getByLabel('Shared page link');
+		await linkField.focus();
+		await page.keyboard.press('Control+V');
 		assert.equal(
-			await readText.isDisabled(),
-			true,
-			'empty text cannot be read',
+			await linkField.inputValue(),
+			'https://example.com/link-field-keeps-paste',
+			'a text field inside the dialog keeps its own paste',
 		);
-		await field.focus();
-		await page.keyboard.type(' '.repeat(3));
+		await linkField.fill('');
+
+		await copy(' '.repeat(3));
+		await dialog.getByRole('button', {name: 'Choose file'}).focus();
+		await page.keyboard.press('Control+V');
 		assert.equal(
-			await readText.isDisabled(),
-			true,
-			'whitespace-only text cannot be read',
+			await dialog
+				.getByRole('heading', {name: 'Review bookmark import'})
+				.count(),
+			0,
+			'whitespace-only text does not open a review',
 		);
-		await page.keyboard.press('Control+A');
-		await page.keyboard.press('Backspace');
+
+		await copy('hello, is anyone there');
+		await page.keyboard.press('Control+V');
+		const alert = dialog.getByRole('alert');
+		await alert.waitFor();
+		assert.match(
+			(await alert.textContent()) ?? '',
+			/No web links found/,
+			'unrecognized text says what an unrecognized file says',
+		);
+
 		const first = `https://example.com/pasted-${theme}-1`;
 		const second = `https://example.com/pasted-${theme}-2`;
-		await page.keyboard.type(
-			`First pasted page\n${first}\n\nSecond pasted page\n${second}`,
-		);
-		assert.deepEqual(
-			await axeViolationLines(page, env.axeSource),
-			[],
-			'the paste field should pass axe',
-		);
-		await captureEvidence(page, `import-paste-${theme}.png`, field);
-		await page.keyboard.press('Tab');
-		await until(
-			async () =>
-				(await page.locator(':focus').textContent())?.trim() === 'Read text',
-			'focus to reach Read text from the field',
-		);
-		await page.keyboard.press('Enter');
+		await copy(`First pasted page\n${first}\n\nSecond pasted page\n${second}`);
+		await page.keyboard.press('Control+V');
 		await dialog
 			.getByRole('heading', {name: 'Review bookmark import'})
 			.waitFor();
-		assert.match(
-			(await dialog.textContent()) ?? '',
-			/Detected: Plain URL list/,
-		);
-		assert.match((await dialog.textContent()) ?? '', /First pasted page/);
-		assert.equal(
-			await dialog
-				.getByRole('button', {name: 'Import 2 bookmarks', exact: true})
-				.count(),
-			1,
+		const review = (await dialog.textContent()) ?? '';
+		assert.match(review, /Pasted text/, 'the review names the pasted text');
+		assert.match(review, /Detected: Plain URL list/);
+		assert.match(review, /First pasted page/);
+		assert.match(review, /Second pasted page/);
+		assert.deepEqual(
+			await axeViolationLines(page, env.axeSource),
+			[],
+			'the pasted review should pass axe',
 		);
 		await captureEvidence(page, `import-paste-preview-${theme}.png`, dialog);
 		assert.ok(
@@ -741,6 +753,12 @@ export async function importPastedCheck(env: Env, theme: Theme) {
 					node.scrollWidth <= node.clientWidth + 1,
 			),
 			'the pasted review fits without sideways scrolling',
+		);
+		assert.equal(
+			await dialog
+				.getByRole('button', {name: 'Import 2 bookmarks', exact: true})
+				.count(),
+			1,
 		);
 		await until(
 			async () =>

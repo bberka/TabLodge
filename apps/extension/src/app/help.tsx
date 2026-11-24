@@ -434,7 +434,7 @@ function Help() {
 							the top of the page to import a file, your browser bookmarks, or
 							text you paste, or to share and export bookmarks. Import reads
 							JSON, browser bookmark HTML, CSV, Markdown, and plain URL lists,
-							from a file or pasted into its text field, and lets you skip or
+							from a file or pasted into the dialog itself, and lets you skip or
 							add duplicates again. With Columns from folders, bookmark folders
 							become columns; folders with the same name merge, and links
 							without a folder go in the first column. One column puts every
@@ -918,32 +918,32 @@ function Help() {
 							<MenuLocation label="Dashboard" /> at the top of the page. Share
 							and export lets you pick all bookmarks, all sessions (including
 							archived sessions), or everything. Import takes a file, a shared
-							page link, or text you paste into its field, and pasted text reads
-							as a file holding that text would, so what Copy puts on the
-							clipboard comes back in with its links. TabLodge never reads your
-							clipboard: text reaches Import only when you paste it into the
-							field yourself. Session import also reads exports from OneTab,
-							Session Buddy, Tab Session Manager, and Toby. Bookmark import also
-							reads a Raindrop.io export (CSV or HTML): its collections become
-							columns, its tags come along, and its highlights are not imported.
-							It also reads the JSON exports of Linkwarden (its collections
-							become columns), Karakeep (its lists become columns), Omnivore
-							(one metadata file from the ZIP at a time), wallabag, and
-							Pinboard, and the bookmarks.csv that Mastodon exports (post
-							addresses, without titles). These are read from each tool’s
-							published format, not from real files, so the preview marks them
-							best effort. A link’s note in Linkwarden, Karakeep, or Pinboard
-							becomes its bookmark note, and tags from Linkwarden, Karakeep,
-							wallabag, and Pinboard come along. The bookmarks HTML exports of
-							Karakeep and Pinboard import as browser bookmark files. A session
-							menu can export just that session in any format. In Share and
-							export, one dropdown picks what to share and another picks the
-							format, with Download and, for pages, Markdown, and plain links,
-							Copy. Its Everything choice makes a full ZIP backup with settings,
-							excluded sites, theme, snapshots, and the trash bin, and so does
-							Export in Settings, which opens the same dialog on Everything.
-							Import recognizes a full backup by itself; for other files, choose
-							Bookmarks or Sessions. Open{' '}
+							page link, or text you paste into it, and pasted text reads as a
+							file holding that text would, so Copy in Share and export comes
+							back in with its links. Pasting goes straight to the review, with
+							no button to press. TabLodge never reads your clipboard: text
+							reaches Import only when you paste it yourself. Session import
+							also reads exports from OneTab, Session Buddy, Tab Session
+							Manager, and Toby. Bookmark import also reads a Raindrop.io export
+							(CSV or HTML): its collections become columns, its tags come
+							along, and its highlights are not imported. It also reads the JSON
+							exports of Linkwarden (its collections become columns), Karakeep
+							(its lists become columns), Omnivore (one metadata file from the
+							ZIP at a time), wallabag, and Pinboard, and the bookmarks.csv that
+							Mastodon exports (post addresses, without titles). These are read
+							from each tool’s published format, not from real files, so the
+							preview marks them best effort. A link’s note in Linkwarden,
+							Karakeep, or Pinboard becomes its bookmark note, and tags from
+							Linkwarden, Karakeep, wallabag, and Pinboard come along. The
+							bookmarks HTML exports of Karakeep and Pinboard import as browser
+							bookmark files. A session menu can export just that session in any
+							format. In Share and export, one dropdown picks what to share and
+							another picks the format, with Download and, for pages, Markdown,
+							and plain links, Copy. Its Everything choice makes a full ZIP
+							backup with settings, excluded sites, theme, snapshots, and the
+							trash bin, and so does Export in Settings, which opens the same
+							dialog on Everything. Import recognizes a full backup by itself;
+							for other files, choose Bookmarks or Sessions. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"

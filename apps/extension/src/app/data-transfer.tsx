@@ -49,7 +49,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 	SegmentedControl,
-	Textarea,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import type {
@@ -1284,7 +1283,6 @@ export function ImportDialog({
 	const [busy, setBusy] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	const [link, setLink] = useState('');
-	const [pasted, setPasted] = useState('');
 	const [linkNeedsPassword, setLinkNeedsPassword] = useState(false);
 	const [linkPassword, setLinkPassword] = useState('');
 	const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
@@ -1344,7 +1342,6 @@ export function ImportDialog({
 		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
 		setNewColumn({name: ''});
 		setLink(initialLink ?? '');
-		setPasted('');
 		setLinkNeedsPassword(false);
 		setLinkPassword('');
 		if (initialLink && isSharedPageUrl(initialLink)) {
@@ -1584,21 +1581,43 @@ export function ImportDialog({
 		}
 	}
 
-	function readPasted() {
-		const attempt = readPastedImport(pasted);
-		if (!attempt) {
+	useEffect(() => {
+		if (!open || everything || full || locked || step !== 'source') {
 			return;
 		}
 
-		if (attempt.ok) {
-			setError('');
-			setParsed(attempt.parsed);
-			setSource({type: 'paste'});
-			return;
-		}
+		const onPaste = (event: ClipboardEvent) => {
+			const focused = event.target as HTMLElement | null;
+			if (
+				event.defaultPrevented ||
+				focused?.closest(
+					'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+				)
+			) {
+				return;
+			}
 
-		setError(attempt.message);
-	}
+			const attempt = readPastedImport(
+				event.clipboardData?.getData('text') ?? '',
+			);
+			if (!attempt) {
+				return;
+			}
+
+			event.preventDefault();
+			if (attempt.ok) {
+				setError('');
+				setParsed(attempt.parsed);
+				setSource({type: 'paste'});
+				return;
+			}
+
+			setError(attempt.message);
+		};
+
+		document.addEventListener('paste', onPaste);
+		return () => document.removeEventListener('paste', onPaste);
+	}, [open, everything, full, locked, step]);
 
 	async function readBrowserBookmarks() {
 		const generation = ++readGenerationRef.current;
@@ -1816,7 +1835,7 @@ export function ImportDialog({
 				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
 				: step === 'preview'
 					? 'Nothing is saved until you choose Import.'
-					: `Pick a file, or paste text or a shared page link. A ${PROJECT.name} full backup is recognized on its own; any other file or pasted text is read as the kind you choose below.`;
+					: `Pick a file, or paste text or a shared page link anywhere in this window. A ${PROJECT.name} full backup is recognized on its own; any other file or pasted text is read as the kind you choose below.`;
 	const kindSwitch =
 		!full && source?.type !== 'browser' ? (
 			<ChoiceSelect
@@ -1960,7 +1979,9 @@ export function ImportDialog({
 										>
 											{dragging
 												? 'Drop the file to read it'
-												: 'Drop a file here'}
+												: everything
+													? 'Drop a file here'
+													: 'Drop a file here, or paste text'}
 										</h3>
 										<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
 											{everything
@@ -1994,52 +2015,6 @@ export function ImportDialog({
 										onChange={(event) => void readFile(event.target.files?.[0])}
 									/>
 								</section>
-								{!everything && (
-									<section
-										className="rounded-lg border border-border px-4 py-3"
-										aria-labelledby="import-paste-heading"
-									>
-										<h3
-											id="import-paste-heading"
-											className="text-sm font-medium"
-										>
-											From text
-										</h3>
-										<form
-											className="mt-2 space-y-2"
-											onSubmit={(event) => {
-												event.preventDefault();
-												readPasted();
-											}}
-										>
-											<Label htmlFor="import-paste" className="sr-only">
-												Links, a list, or an export
-											</Label>
-											<Textarea
-												id="import-paste"
-												rows={3}
-												autoComplete="off"
-												spellCheck={false}
-												placeholder="Paste addresses, Markdown, or what another app exported"
-												value={pasted}
-												onChange={(event) => {
-													setPasted(event.target.value);
-													setError('');
-												}}
-											/>
-											<Button
-												type="submit"
-												variant="secondary"
-												size="sm"
-												className="self-start"
-												disabled={reading || pasted.trim() === ''}
-											>
-												<ClipboardPaste aria-hidden="true" />
-												Read text
-											</Button>
-										</form>
-									</section>
-								)}
 								{kind === 'bookmarks' && !everything && (
 									<section
 										className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
