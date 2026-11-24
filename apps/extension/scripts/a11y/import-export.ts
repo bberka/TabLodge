@@ -3,10 +3,11 @@ import {Buffer} from 'node:buffer';
 import {readFile} from 'node:fs/promises';
 import {type Page} from 'playwright';
 import {assertInline, captureEvidence} from './evidence.ts';
-import {seed} from './fixtures.ts';
+import {readDevStore, seed} from './fixtures.ts';
 import {check, type Env, type Theme, until} from './harness.ts';
 import {
 	axeViolationLines,
+	openMenuItemByKeyboard,
 	openPage,
 	type ScrollElement,
 	setTheme,
@@ -656,6 +657,120 @@ export async function savedTabNewColumnCheck(env: Env, theme: Theme) {
 			.filter({has: page.getByRole('heading', {name, exact: true})});
 		await column.waitFor();
 		assert.equal(await column.locator('[data-bookmark-id]').count(), 1);
+		await page.close();
+	});
+}
+
+export async function importPastedCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(`pasted text import by keyboard (${theme})`, async () => {
+		const page = await openPage(context, extensionId, 'newtab');
+		await seed(page);
+		await page.reload();
+		await setTheme(page, theme);
+		const before = (await readDevStore(page)).bookmarks.map(
+			(bookmark) => bookmark.url,
+		);
+		await openMenuItemByKeyboard(
+			page,
+			page.getByRole('button', {name: 'Dashboard menu'}),
+			'Import',
+		);
+		const dialog = page.getByRole('dialog');
+		const field = dialog.getByLabel('Links, a list, or an export');
+		await field.waitFor();
+		assert.equal(
+			await field.getAttribute('placeholder'),
+			'Paste addresses, Markdown, or what another app exported',
+			'the field carries the Android app’s wording',
+		);
+		const readText = dialog.getByRole('button', {
+			name: 'Read text',
+			exact: true,
+		});
+		assert.equal(
+			await readText.isDisabled(),
+			true,
+			'empty text cannot be read',
+		);
+		await field.focus();
+		await page.keyboard.type(' '.repeat(3));
+		assert.equal(
+			await readText.isDisabled(),
+			true,
+			'whitespace-only text cannot be read',
+		);
+		await page.keyboard.press('Control+A');
+		await page.keyboard.press('Backspace');
+		const first = `https://example.com/pasted-${theme}-1`;
+		const second = `https://example.com/pasted-${theme}-2`;
+		await page.keyboard.type(
+			`First pasted page\n${first}\n\nSecond pasted page\n${second}`,
+		);
+		assert.deepEqual(
+			await axeViolationLines(page, env.axeSource),
+			[],
+			'the paste field should pass axe',
+		);
+		await captureEvidence(page, `import-paste-${theme}.png`, field);
+		await page.keyboard.press('Tab');
+		await until(
+			async () =>
+				(await page.locator(':focus').textContent())?.trim() === 'Read text',
+			'focus to reach Read text from the field',
+		);
+		await page.keyboard.press('Enter');
+		await dialog
+			.getByRole('heading', {name: 'Review bookmark import'})
+			.waitFor();
+		assert.match(
+			(await dialog.textContent()) ?? '',
+			/Detected: Plain URL list/,
+		);
+		assert.match((await dialog.textContent()) ?? '', /First pasted page/);
+		assert.equal(
+			await dialog
+				.getByRole('button', {name: 'Import 2 bookmarks', exact: true})
+				.count(),
+			1,
+		);
+		await until(
+			async () =>
+				(await page.locator(':focus').textContent())?.trim() ===
+				'Import 2 bookmarks',
+			'focus to move to the Import action',
+		);
+		await page.keyboard.press('Enter');
+		await dialog.waitFor({state: 'hidden'});
+		await until(async () => {
+			const after = (await readDevStore(page)).bookmarks.map(
+				(bookmark) => bookmark.url,
+			);
+			return after.length === before.length + 2 && after.includes(first);
+		}, 'the two pasted links to be imported');
+		assert.deepEqual(
+			(await readDevStore(page)).bookmarks
+				.filter((bookmark) => bookmark.url === second)
+				.map((bookmark) => bookmark.title),
+			['Second pasted page'],
+		);
+		const undo = page.getByRole('button', {name: 'Undo', exact: true});
+		await undo.focus();
+		await page.keyboard.press('Enter');
+		await until(async () => {
+			const after = (await readDevStore(page)).bookmarks.map(
+				(bookmark) => bookmark.url,
+			);
+			return (
+				after.length === before.length &&
+				!after.includes(first) &&
+				!after.includes(second)
+			);
+		}, 'Undo to remove exactly the two pasted bookmarks');
+		assert.deepEqual(
+			(await readDevStore(page)).bookmarks.map((bookmark) => bookmark.url),
+			before,
+		);
 		await page.close();
 	});
 }

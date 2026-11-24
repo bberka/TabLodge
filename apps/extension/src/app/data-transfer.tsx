@@ -12,6 +12,7 @@ import {
 	Bookmark,
 	Check,
 	CloudUpload,
+	ClipboardPaste,
 	ExternalLink,
 	CircleAlert,
 	Archive,
@@ -48,6 +49,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 	SegmentedControl,
+	Textarea,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import type {
@@ -113,6 +115,7 @@ import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
+import {readPastedImport} from './pasted-import';
 import {PROJECT} from './project';
 import {copyPageLink, SharedPagesList, useSharedPages} from './shared-pages';
 import {
@@ -1216,7 +1219,8 @@ export function ShareDialog({
 	);
 }
 
-type ImportSource = {type: 'file' | 'link'; name: string} | {type: 'browser'};
+type ImportSource =
+	{type: 'file' | 'link'; name: string} | {type: 'paste'} | {type: 'browser'};
 type BookmarkTarget = 'folders' | 'column';
 
 type ImportDialogProps = {
@@ -1280,6 +1284,7 @@ export function ImportDialog({
 	const [busy, setBusy] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	const [link, setLink] = useState('');
+	const [pasted, setPasted] = useState('');
 	const [linkNeedsPassword, setLinkNeedsPassword] = useState(false);
 	const [linkPassword, setLinkPassword] = useState('');
 	const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
@@ -1339,6 +1344,7 @@ export function ImportDialog({
 		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
 		setNewColumn({name: ''});
 		setLink(initialLink ?? '');
+		setPasted('');
 		setLinkNeedsPassword(false);
 		setLinkPassword('');
 		if (initialLink && isSharedPageUrl(initialLink)) {
@@ -1578,6 +1584,22 @@ export function ImportDialog({
 		}
 	}
 
+	function readPasted() {
+		const attempt = readPastedImport(pasted);
+		if (!attempt) {
+			return;
+		}
+
+		if (attempt.ok) {
+			setError('');
+			setParsed(attempt.parsed);
+			setSource({type: 'paste'});
+			return;
+		}
+
+		setError(attempt.message);
+	}
+
 	async function readBrowserBookmarks() {
 		const generation = ++readGenerationRef.current;
 		setError('');
@@ -1762,7 +1784,12 @@ export function ImportDialog({
 			offerUndo(message, undoId, showStatus, async () => onImported?.());
 		} catch (reason) {
 			showStatus(
-				String(messageOf(reason) || 'Could not import this file.'),
+				String(
+					messageOf(reason) ||
+						(source.type === 'paste'
+							? 'Could not import this text.'
+							: 'Could not import this file.'),
+				),
 				true,
 			);
 		} finally {
@@ -1789,7 +1816,7 @@ export function ImportDialog({
 				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
 				: step === 'preview'
 					? 'Nothing is saved until you choose Import.'
-					: `Pick a file or paste a shared page link. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
+					: `Pick a file, or paste text or a shared page link. A ${PROJECT.name} full backup is recognized on its own; any other file or pasted text is read as the kind you choose below.`;
 	const kindSwitch =
 		!full && source?.type !== 'browser' ? (
 			<ChoiceSelect
@@ -1967,6 +1994,56 @@ export function ImportDialog({
 										onChange={(event) => void readFile(event.target.files?.[0])}
 									/>
 								</section>
+								{!everything && (
+									<section
+										className="rounded-lg border border-border px-4 py-3"
+										aria-labelledby="import-paste-heading"
+									>
+										<h3
+											id="import-paste-heading"
+											className="text-sm font-medium"
+										>
+											From text
+										</h3>
+										<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+											Reads like a file holding this text: same preview,
+											duplicates, and Undo.
+										</p>
+										<form
+											className="mt-2 space-y-2"
+											onSubmit={(event) => {
+												event.preventDefault();
+												readPasted();
+											}}
+										>
+											<Label htmlFor="import-paste" className="sr-only">
+												Links, a list, or an export
+											</Label>
+											<Textarea
+												id="import-paste"
+												rows={3}
+												autoComplete="off"
+												spellCheck={false}
+												placeholder="Paste addresses, Markdown, or what another app exported"
+												value={pasted}
+												onChange={(event) => {
+													setPasted(event.target.value);
+													setError('');
+												}}
+											/>
+											<Button
+												type="submit"
+												variant="secondary"
+												size="sm"
+												className="self-start"
+												disabled={reading || pasted.trim() === ''}
+											>
+												<ClipboardPaste aria-hidden="true" />
+												Read text
+											</Button>
+										</form>
+									</section>
+								)}
 								{kind === 'bookmarks' && !everything && (
 									<section
 										className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
@@ -2233,6 +2310,8 @@ export function ImportDialog({
 											<Globe className="h-4 w-4" aria-hidden="true" />
 										) : source.type === 'link' ? (
 											<Link2 className="h-4 w-4" aria-hidden="true" />
+										) : source.type === 'paste' ? (
+											<ClipboardPaste className="h-4 w-4" aria-hidden="true" />
 										) : (
 											<FileText className="h-4 w-4" aria-hidden="true" />
 										)}
@@ -2241,7 +2320,9 @@ export function ImportDialog({
 										<p className="text-sm font-medium wrap-anywhere">
 											{source.type === 'browser'
 												? 'This browser’s bookmarks'
-												: source.name}
+												: source.type === 'paste'
+													? 'Pasted text'
+													: source.name}
 										</p>
 										<p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
 											Detected:{' '}

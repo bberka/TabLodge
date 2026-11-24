@@ -431,10 +431,11 @@ function Help() {
 					body: (
 						<>
 							On the dashboard, use the <MenuLocation label="Dashboard" /> at
-							the top of the page to import a file or your browser bookmarks, or
-							to share and export bookmarks. Import reads JSON, browser bookmark
-							HTML, CSV, Markdown, and plain URL lists, and lets you skip or add
-							duplicates again. With Columns from folders, bookmark folders
+							the top of the page to import a file, your browser bookmarks, or
+							text you paste, or to share and export bookmarks. Import reads
+							JSON, browser bookmark HTML, CSV, Markdown, and plain URL lists,
+							from a file or pasted into its text field, and lets you skip or
+							add duplicates again. With Columns from folders, bookmark folders
 							become columns; folders with the same name merge, and links
 							without a folder go in the first column. One column puts every
 							link in a column you choose. Use a column’s menu to export that
@@ -442,7 +443,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'share and export dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
+						'share and export dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks paste text field what another app exported duplicates skip add again columns from folders one column',
 				},
 				{
 					title: 'Save from YouTube, Reddit, Spotify, and other sites',
@@ -916,28 +917,33 @@ function Help() {
 							Import and Share and export live in the{' '}
 							<MenuLocation label="Dashboard" /> at the top of the page. Share
 							and export lets you pick all bookmarks, all sessions (including
-							archived sessions), or everything. Session import also reads
-							exports from OneTab, Session Buddy, Tab Session Manager, and Toby.
-							Bookmark import also reads a Raindrop.io export (CSV or HTML): its
-							collections become columns, its tags come along, and its
-							highlights are not imported. It also reads the JSON exports of
-							Linkwarden (its collections become columns), Karakeep (its lists
-							become columns), Omnivore (one metadata file from the ZIP at a
-							time), wallabag, and Pinboard, and the bookmarks.csv that Mastodon
-							exports (post addresses, without titles). These are read from each
-							tool’s published format, not from real files, so the preview marks
-							them best effort. A link’s note in Linkwarden, Karakeep, or
-							Pinboard becomes its bookmark note, and tags from Linkwarden,
-							Karakeep, wallabag, and Pinboard come along. The bookmarks HTML
-							exports of Karakeep and Pinboard import as browser bookmark files.
-							A session menu can export just that session in any format. In
-							Share and export, one dropdown picks what to share and another
-							picks the format, with Download and, for pages, Markdown, and
-							plain links, Copy. Its Everything choice makes a full ZIP backup
-							with settings, excluded sites, theme, snapshots, and the trash
-							bin, and so does Export in Settings, which opens the same dialog
-							on Everything. Import recognizes a full backup by itself; for
-							other files, choose Bookmarks or Sessions. Open{' '}
+							archived sessions), or everything. Import takes a file, a shared
+							page link, or text you paste into its field, and pasted text reads
+							as a file holding that text would, so what Copy puts on the
+							clipboard comes back in with its links. TabLodge never reads your
+							clipboard: text reaches Import only when you paste it into the
+							field yourself. Session import also reads exports from OneTab,
+							Session Buddy, Tab Session Manager, and Toby. Bookmark import also
+							reads a Raindrop.io export (CSV or HTML): its collections become
+							columns, its tags come along, and its highlights are not imported.
+							It also reads the JSON exports of Linkwarden (its collections
+							become columns), Karakeep (its lists become columns), Omnivore
+							(one metadata file from the ZIP at a time), wallabag, and
+							Pinboard, and the bookmarks.csv that Mastodon exports (post
+							addresses, without titles). These are read from each tool’s
+							published format, not from real files, so the preview marks them
+							best effort. A link’s note in Linkwarden, Karakeep, or Pinboard
+							becomes its bookmark note, and tags from Linkwarden, Karakeep,
+							wallabag, and Pinboard come along. The bookmarks HTML exports of
+							Karakeep and Pinboard import as browser bookmark files. A session
+							menu can export just that session in any format. In Share and
+							export, one dropdown picks what to share and another picks the
+							format, with Download and, for pages, Markdown, and plain links,
+							Copy. Its Everything choice makes a full ZIP backup with settings,
+							excluded sites, theme, snapshots, and the trash bin, and so does
+							Export in Settings, which opens the same dialog on Everything.
+							Import recognizes a full backup by itself; for other files, choose
+							Bookmarks or Sessions. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
@@ -961,7 +967,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'share and export sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'share and export sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export paste text clipboard raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',
