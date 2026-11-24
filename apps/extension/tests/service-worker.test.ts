@@ -15698,6 +15698,7 @@ async function lockedPrivateLibrary({storage, ...extra}: HarnessOptions = {}) {
 function regularBeside(
 	privateWorker: ReturnType<typeof createWorkerHarness>,
 	extra: HarnessOptions = {},
+	state: StoredState = stateWithSession(),
 ) {
 	const shared = structuredClone(privateWorker.extraStorage);
 	for (const key of Object.keys(shared)) {
@@ -15710,7 +15711,7 @@ function regularBeside(
 		}
 	}
 
-	return createWorkerHarness(stateWithSession(), undefined, {
+	return createWorkerHarness(state, undefined, {
 		...extra,
 		storage: {...shared, ...extra.storage},
 	});
@@ -16085,6 +16086,384 @@ test('a sent link reaches the regular server only as a delete and the private se
 				bookmark.url === 'https://later.example/' &&
 				bookmark.columnId === 'sent-from-regular-windows',
 		),
+	);
+});
+
+const columnLibrary = (extra: Partial<StoredState> = {}): StoredState => {
+	const base = stateWithSession();
+	return {
+		...base,
+		bookmarkColumns: [
+			...base.bookmarkColumns,
+			{
+				id: 'work',
+				name: 'Work',
+				icon: 'star',
+				color: '#336699',
+				createdAt: 5,
+				isDefault: false,
+			},
+			{
+				id: 'source-youtube',
+				name: 'YouTube',
+				createdAt: 6,
+				isDefault: false,
+			},
+		],
+		bookmarks: [
+			{
+				id: 'w1',
+				title: 'First',
+				url: 'https://first.example/',
+				columnId: 'work',
+				notes: 'a note',
+				tags: ['alpha'],
+				createdAt: 11,
+				updatedAt: 11,
+			},
+			{
+				id: 'o1',
+				title: 'Other',
+				url: 'https://other.example/',
+				columnId: 'bookmark-default',
+				createdAt: 12,
+				updatedAt: 12,
+			},
+			{
+				id: 'w2',
+				title: 'Second',
+				url: 'https://second.example/',
+				columnId: 'work',
+				createdAt: 13,
+				updatedAt: 13,
+			},
+			{
+				id: 'y1',
+				title: 'Video',
+				url: 'https://youtube.example/watch',
+				columnId: 'source-youtube',
+				createdAt: 14,
+				updatedAt: 14,
+			},
+		],
+		...extra,
+	};
+};
+
+const sendColumn = (
+	harness: ReturnType<typeof createWorkerHarness>,
+	columnId: string,
+) =>
+	harness.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: [{kind: 'column', columnId}],
+	});
+
+test('a sent column arrives in private storage with its look, bookmarks, order, notes and tags, and leaves the regular library', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker, {}, columnLibrary());
+	const sent = await sendColumn(regular, 'work');
+	assert.equal(sent.ok, true, sent.error);
+	assert.equal(sent.count, 2);
+	assert.equal(sent.keptColumn, undefined);
+	assert.ok(sent.undoId);
+	assert.deepEqual(
+		regular.state.bookmarkColumns.map((column) => column.id),
+		['bookmark-default', 'source-youtube'],
+	);
+	assert.deepEqual(
+		regular.state.bookmarks.map((bookmark) => bookmark.id),
+		['o1', 'y1'],
+	);
+	assert.equal(trashOf(regular).length, 0);
+	assert.equal(inboxEntries(regular.extraStorage).length, 1);
+	await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)});
+	const stored = JSON.stringify(regular.extraStorage);
+	assert.equal(stored.includes('first.example'), false);
+	assert.equal(stored.includes('a note'), false);
+
+	const unlocked = restartPrivate(
+		{...privateWorker, extraStorage: regular.extraStorage},
+		{browserRestart: true},
+	);
+	const opened = await unlocked.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(opened.ok, true, opened.error);
+	const library = await unlocked.sendMessage({type: 'GET_STATE'});
+	const column = library.bookmarkColumns?.find(
+		(entry) => entry.name === 'Work',
+	);
+	assert.equal(column?.icon, 'star');
+	assert.equal(column?.color, '#336699');
+	assert.deepEqual(
+		structuredClone(
+			library.bookmarks
+				?.filter((bookmark) => bookmark.columnId === column?.id)
+				.map((bookmark) => [bookmark.title, bookmark.notes, bookmark.tags]),
+		),
+		[
+			['First', 'a note', ['alpha']],
+			['Second', undefined, undefined],
+		],
+	);
+});
+
+test('a sent column joins a private column of the same name', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const created = await privateWorker.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'work',
+	});
+	assert.ok(created.ok);
+	const regular = regularBeside(privateWorker, {}, columnLibrary());
+	assert.equal((await sendColumn(regular, 'work')).ok, true);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const live = restartPrivate({
+		...privateWorker,
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: {
+				...(regular.extraStorage[entry] as object),
+				holdUntil: 0,
+			},
+		},
+	});
+	await eventually(() => inboxEntries(live.extraStorage).length === 0);
+	const library = await live.sendMessage({type: 'GET_STATE'});
+	assert.equal(
+		library.bookmarkColumns?.filter(
+			(column) => column.name.toLowerCase() === 'work',
+		).length,
+		1,
+	);
+	const joined = library.bookmarkColumns?.find(
+		(column) => column.name.toLowerCase() === 'work',
+	);
+	assert.deepEqual(
+		structuredClone(
+			library.bookmarks
+				?.filter((bookmark) => bookmark.columnId === joined?.id)
+				.map((bookmark) => bookmark.title),
+		),
+		['First', 'Second'],
+	);
+});
+
+test('a column with a site source sends its bookmarks and stays with its source on, and the result says so', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker, {}, columnLibrary());
+	regular.grantOrigins([
+		'https://www.youtube.com/*',
+		'https://m.youtube.com/*',
+		'https://youtube.com/*',
+	]);
+	const on = await regular.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: true,
+	});
+	assert.equal(on.ok, true, on.error);
+	const sent = await sendColumn(regular, 'source-youtube');
+	assert.equal(sent.ok, true, sent.error);
+	assert.equal(sent.count, 1);
+	assert.equal(sent.keptColumn, 'YouTube');
+	assert.ok(
+		regular.state.bookmarkColumns.some(
+			(column) => column.id === 'source-youtube',
+		),
+	);
+	assert.equal(
+		regular.state.bookmarks.some(
+			(bookmark) => bookmark.columnId === 'source-youtube',
+		),
+		false,
+	);
+	const status = await regular.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(
+		status.ok && status.sources.find((item) => item.id === 'youtube')?.wanted,
+		true,
+	);
+});
+
+test('a column that Settings points a site at stays after its bookmarks are sent', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker, {}, columnLibrary());
+	regular.grantOrigins([
+		'https://www.youtube.com/*',
+		'https://m.youtube.com/*',
+		'https://youtube.com/*',
+	]);
+	await regular.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: true,
+	});
+	const chosen = await regular.sendMessage({
+		type: 'SET_SITE_SOURCE_COLUMN',
+		source: 'youtube',
+		columnId: 'work',
+	});
+	assert.equal(chosen.ok, true, chosen.error);
+	const sent = await sendColumn(regular, 'work');
+	assert.equal(sent.ok, true, sent.error);
+	assert.equal(sent.keptColumn, 'Work');
+	assert.ok(
+		regular.state.bookmarkColumns.some((column) => column.id === 'work'),
+	);
+});
+
+test('one Undo brings the whole column back exactly and withdraws the entry', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const library = columnLibrary();
+	const regular = regularBeside(privateWorker, {}, library);
+	const before = structuredClone({
+		columns: regular.state.bookmarkColumns,
+		bookmarks: regular.state.bookmarks,
+	});
+	const sent = await sendColumn(regular, 'work');
+	assert.equal(sent.ok, true, sent.error);
+	const undone = await regular.sendMessage({
+		type: 'UNDO',
+		id: String(sent.undoId),
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.deepEqual(
+		structuredClone({
+			columns: regular.state.bookmarkColumns,
+			bookmarks: regular.state.bookmarks,
+		}),
+		before,
+	);
+	assert.equal(inboxEntries(regular.extraStorage).length, 0);
+});
+
+test('a column of 1,000 bookmarks and a session of 1,000 links each send as one action with one Undo', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const base = columnLibrary();
+	const big = {
+		...base,
+		groups: [
+			{
+				...base.groups[0],
+				id: 'big-session',
+				tabs: Array.from({length: 1000}, (_, index) => ({
+					id: `t${index}`,
+					title: `Tab ${index}`,
+					url: `https://tab-${index}.example/`,
+					pinned: false,
+					originalIndex: index,
+				})),
+			},
+		],
+		bookmarks: Array.from({length: 1000}, (_, index) => ({
+			id: `b${index}`,
+			title: `Link ${index}`,
+			url: `https://link-${index}.example/`,
+			columnId: 'work',
+			createdAt: index + 1,
+			updatedAt: index + 1,
+		})),
+	} as StoredState;
+	const regular = regularBeside(privateWorker, {}, big);
+	const column = await sendColumn(regular, 'work');
+	assert.equal(column.ok, true, column.error);
+	assert.equal(column.count, 1000);
+	assert.equal(inboxEntries(regular.extraStorage).length, 1);
+	const session = await regular.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: [{kind: 'session', sessionId: 'big-session'}],
+	});
+	assert.equal(session.ok, true, session.error);
+	assert.equal(session.count, 1000);
+	assert.equal(inboxEntries(regular.extraStorage).length, 2);
+	assert.equal(regular.state.groups.length, 0);
+	assert.equal(regular.state.bookmarks.length, 0);
+	const undone = await regular.sendMessage({
+		type: 'UNDO',
+		id: String(session.undoId),
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(regular.state.groups[0]?.tabs.length, 1000);
+});
+
+test('a sent session keeps its name, link order and saved date, and arrives outside any folder', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const base = stateWithSession();
+	const library = {
+		...base,
+		folders: [
+			...base.folders,
+			{id: 'trips', name: 'Trips', createdAt: 1, isDefault: false},
+		],
+		groups: [
+			{
+				...base.groups[0],
+				id: 'trip',
+				name: 'Lisbon',
+				folderId: 'trips',
+				createdAt: 1_600_000_000_000,
+				updatedAt: 1_650_000_000_000,
+				tabs: ['c', 'a', 'b'].map((name, index) => ({
+					id: `t-${name}`,
+					title: `Page ${name}`,
+					url: `https://${name}.example/`,
+					notes: name === 'a' ? 'keep me' : '',
+					pinned: false,
+					originalIndex: index,
+				})),
+			},
+		],
+	} as StoredState;
+	const regular = regularBeside(privateWorker, {}, library);
+	const sent = await regular.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: [{kind: 'session', sessionId: 'trip'}],
+	});
+	assert.equal(sent.ok, true, sent.error);
+	assert.equal(sent.count, 3);
+	assert.equal(regular.state.groups.length, 0);
+	await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)});
+	const live = restartPrivate(
+		{...privateWorker, extraStorage: regular.extraStorage},
+		{browserRestart: true},
+	);
+	const opened = await live.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(opened.ok, true, opened.error);
+	const state = await live.sendMessage({type: 'GET_STATE'});
+	const session = state.groups?.find((group) => group.name === 'Lisbon');
+	assert.equal(session?.createdAt, 1_600_000_000_000);
+	assert.equal(session?.folderId, 'unfiled');
+	assert.deepEqual(
+		structuredClone(session?.tabs.map((tab) => [tab.url, tab.notes])),
+		[
+			['https://c.example/', ''],
+			['https://a.example/', 'keep me'],
+			['https://b.example/', ''],
+		],
+	);
+});
+
+test('sending an empty column or a missing session changes nothing and says so', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const library = columnLibrary();
+	library.bookmarks = [];
+	const regular = regularBeside(privateWorker, {}, library);
+	const empty = await sendColumn(regular, 'work');
+	assert.equal(empty.ok, false);
+	assert.match(String(empty.error), /no bookmarks/);
+	const gone = await regular.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: [{kind: 'session', sessionId: 'nope'}],
+	});
+	assert.equal(gone.ok, false);
+	assert.equal(inboxEntries(regular.extraStorage).length, 0);
+	assert.ok(
+		regular.state.bookmarkColumns.some((column) => column.id === 'work'),
 	);
 });
 
