@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
 	ArrowLeft,
+	ChevronRight,
 	Bookmark,
 	Check,
 	CloudUpload,
@@ -48,7 +49,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-	SegmentedControl,
+	RadioChoiceGroup,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import type {
@@ -68,6 +69,7 @@ import {
 	type ShareGroup,
 	type ShareMethod,
 } from '../shared/share-formats';
+import {SHARE_MODE_CHOICES} from '../shared/choice-copy';
 import {
 	buildExport,
 	dateStamp,
@@ -1089,15 +1091,12 @@ export function ShareDialog({
 								shared.supportsLivePassword && (
 									<div className="space-y-3 rounded-lg border border-border p-3">
 										<div className="space-y-1.5">
-											<Label>Link type</Label>
+											<Label id="share-link-type">Link type</Label>
 											{source.pageSource ? (
-												<SegmentedControl
-													aria-label="Link type"
+												<RadioChoiceGroup
+													aria-labelledby="share-link-type"
 													value={shareMode}
-													options={[
-														{value: 'snapshot', label: 'Snapshot'},
-														{value: 'live', label: 'Live link'},
-													]}
+													choices={SHARE_MODE_CHOICES}
 													onValueChange={(value) => {
 														setShareMode(value);
 														setShareModePicked(true);
@@ -1871,7 +1870,7 @@ export function ImportDialog({
 				size="lg"
 				className={
 					step === 'preview' && !full
-						? 'h-[calc(100dvh-2rem)] overflow-hidden'
+						? 'max-h-[calc(100dvh-2rem)] overflow-hidden'
 						: step === 'source' && !locked
 							? 'max-h-[calc(100dvh-1rem)] overflow-hidden'
 							: undefined
@@ -2190,23 +2189,11 @@ export function ImportDialog({
 								<Stat label="Page copies" value={full.counts.copies} />
 							</dl>
 							<div className="rounded-lg bg-muted/40 p-3">
-								<OptionRow
-									inlineControl
-									id="full-import-mode"
-									label="How to bring it in"
-									help={
-										fullMode === 'merge'
-											? 'Adds what is new and skips links you already have.'
-											: 'Swaps all your data for the backup.'
-									}
-								>
-									<SegmentedControl
+								<OptionRow id="full-import-mode" label="How to bring it in">
+									<RadioChoiceGroup
 										aria-labelledby="full-import-mode"
 										value={fullMode}
-										options={[
-											{value: 'merge', label: 'Add to mine'},
-											{value: 'replace', label: 'Replace everything'},
-										]}
+										choices={FULL_IMPORT_CHOICES}
 										onValueChange={setFullMode}
 									/>
 								</OptionRow>
@@ -2375,19 +2362,21 @@ export function ImportDialog({
 										))}
 									</ul>
 								)}
-								<div
-									data-import-preview=""
-									className="flex min-h-32 min-w-0 flex-1 flex-col"
-								>
-									<p className="mb-1.5 text-xs font-medium text-muted-foreground">
+								<details data-import-preview="" className="group min-w-0">
+									<summary className="flex w-fit cursor-pointer items-center gap-1 rounded-sm text-xs font-medium text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring">
+										<ChevronRight
+											className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+											aria-hidden="true"
+										/>
 										Preview
 										{preview.links > preview.sample.length
 											? ` (first ${preview.sample.length} of ${preview.links.toLocaleString()})`
 											: ''}
-									</p>
+									</summary>
 									<ScrollArea
 										type="auto"
-										className="min-h-0 flex-1 rounded-md border border-border"
+										className="mt-1.5 rounded-md border border-border"
+										viewportClassName="max-h-60"
 									>
 										<ol className="divide-y divide-border/70">
 											{preview.sample.map((item, index) => (
@@ -2423,10 +2412,9 @@ export function ImportDialog({
 											))}
 										</ol>
 									</ScrollArea>
-								</div>
+								</details>
 								<div className="grid gap-3 rounded-lg bg-muted/40 p-3">
 									<OptionRow
-										inlineControl
 										id="import-duplicates"
 										label="Links already saved"
 										help={
@@ -2435,13 +2423,10 @@ export function ImportDialog({
 												: 'None found.'
 										}
 									>
-										<SegmentedControl
+										<RadioChoiceGroup
 											aria-labelledby="import-duplicates"
 											value={duplicateMode}
-											options={[
-												{value: 'skip', label: 'Skip'},
-												{value: 'allow', label: 'Add again'},
-											]}
+											choices={DUPLICATE_CHOICES}
 											onValueChange={setDuplicateMode}
 										/>
 									</OptionRow>
@@ -2455,40 +2440,26 @@ export function ImportDialog({
 													: undefined
 											}
 										>
-											<SegmentedControl
+											<RadioChoiceGroup
 												aria-labelledby="import-titles"
 												value={titlePolicy}
-												options={[
-													{value: 'existing', label: 'Keep mine'},
-													{value: 'latest', label: 'Use imported'},
-												]}
+												choices={TITLE_CHOICES}
 												onValueChange={setTitlePolicy}
 											/>
 										</OptionRow>
 									)}
 									{kind === 'bookmarks' && (
 										<OptionRow
-											inlineControl
+											inlineControl={!hasBookmarkFolders}
 											id="import-target"
 											label="Put bookmarks in"
-											help={
-												bookmarkTarget === 'folders'
-													? 'Each folder becomes a column (merged by name); links without a folder go to the first column.'
-													: undefined
-											}
 										>
-											<div className="flex min-w-0 flex-wrap items-center gap-2">
+											<div className="grid min-w-0 gap-2">
 												{hasBookmarkFolders && (
-													<SegmentedControl
+													<RadioChoiceGroup
 														aria-labelledby="import-target"
 														value={target}
-														options={[
-															{
-																value: 'folders',
-																label: 'Columns from folders',
-															},
-															{value: 'column', label: 'One column'},
-														]}
+														choices={TARGET_CHOICES}
 														onValueChange={setTarget}
 													/>
 												)}
@@ -2624,6 +2595,59 @@ function Note({children}: {children: ReactNode}) {
 	);
 }
 
+const FULL_IMPORT_CHOICES = [
+	{
+		value: 'merge',
+		title: 'Add to mine',
+		description: 'Adds what is new and skips links you already have.',
+	},
+	{
+		value: 'replace',
+		title: 'Replace everything',
+		description: 'Swaps all your data for the backup.',
+	},
+] as const;
+
+const DUPLICATE_CHOICES = [
+	{
+		value: 'skip',
+		title: 'Skip',
+		description: 'Leaves them out, so each link stays saved once.',
+	},
+	{
+		value: 'allow',
+		title: 'Add again',
+		description: 'Saves them again as new links.',
+	},
+] as const;
+
+const TITLE_CHOICES = [
+	{
+		value: 'existing',
+		title: 'Keep mine',
+		description: 'The links you already have keep their titles.',
+	},
+	{
+		value: 'latest',
+		title: 'Use imported',
+		description: 'The links you already have take the imported titles.',
+	},
+] as const;
+
+const TARGET_CHOICES = [
+	{
+		value: 'folders',
+		title: 'Columns from folders',
+		description:
+			'Each folder becomes a column, merged by name. Links without a folder go to the first column.',
+	},
+	{
+		value: 'column',
+		title: 'One column',
+		description: 'Every imported bookmark goes into the column you pick.',
+	},
+] as const;
+
 function OptionRow({
 	id,
 	label,
@@ -2638,13 +2662,7 @@ function OptionRow({
 	children: ReactNode;
 }) {
 	return (
-		<div
-			className={
-				inlineControl
-					? 'flex flex-col gap-1'
-					: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'
-			}
-		>
+		<div className={inlineControl ? 'flex flex-col gap-1' : 'grid gap-2'}>
 			<div
 				className={
 					inlineControl
@@ -2674,7 +2692,7 @@ function OptionRow({
 					</p>
 				)}
 			</div>
-			{!inlineControl && <div className="shrink-0">{children}</div>}
+			{!inlineControl && children}
 		</div>
 	);
 }

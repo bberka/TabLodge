@@ -17,6 +17,8 @@ import {
 	validateCredential,
 	weakPasswordHint,
 } from '../../../../extension/src/shared/passcode';
+import {SHARE_MODE_CHOICES} from '../../../../extension/src/shared/choice-copy';
+import {asChoices, ChoiceGroup} from '../settings/select-row';
 import type {SharedPageMode} from '../../../../extension/src/shared/sync/shared-pages';
 import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
@@ -421,15 +423,11 @@ export function ShareSheet({
 					capabilities.supportsLivePassword && (
 						<>
 							{scope?.source ? (
-								<Chips
-									items={[
-										{id: 'snapshot', name: 'Snapshot'},
-										{id: 'live', name: 'Live link'},
-									]}
-									selected={shareMode}
-									onSelect={(id) => {
-										setShareMode(id as SharedPageMode);
-									}}
+								<ChoiceGroup
+									title="Link type"
+									choices={asChoices(SHARE_MODE_CHOICES)}
+									value={shareMode}
+									onPick={setShareMode}
 								/>
 							) : (
 								<Text style={{color: colors.muted}}>

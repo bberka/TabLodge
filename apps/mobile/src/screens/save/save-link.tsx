@@ -41,6 +41,7 @@ import {
 } from '../../library/library-store';
 import {hostIsExcluded} from '../../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../../library/library-choice';
+import {ChoiceGroup} from '../settings/select-row';
 import {useView} from '../../library/view';
 import {cleanPageTitle, linkSettings} from '../../library/links';
 import {useLinkPreview} from '../../library/link-preview';
@@ -50,7 +51,8 @@ import {defaultSessionName} from '../../library/session-name';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
-import {Button, Chips, Field, Icon, Segmented} from '../../ui/widgets';
+import {Button, Chips, Field, Icon} from '../../ui/widgets';
+import {SAVE_TARGET_ROWS, type SaveTarget} from './save-target';
 
 const NEW_SESSION = '__new-session__';
 
@@ -78,9 +80,7 @@ export function SaveLinkForm({
 	const choice = useColumnChoice(editing?.columnId, library);
 	const store = useLibraryOf(library);
 	const sessions = sessionsIn(store, ALL_SESSIONS_ID, settings.sessionSort);
-	const [destination, setDestination] = useState<'bookmark' | 'session'>(
-		'bookmark',
-	);
+	const [destination, setDestination] = useState<SaveTarget>('bookmark');
 	const [sessionPick, setSessionPick] = useState(NEW_SESSION);
 	const [sessionName, setSessionName] = useState('');
 	const toSession = destination === 'session' && !editing;
@@ -250,18 +250,11 @@ export function SaveLinkForm({
 			>
 				{!editing && <LibraryChoice value={library} onChange={setLibrary} />}
 				{!editing && (
-					<Segmented
-						label="Save to"
-						items={[
-							{
-								id: 'bookmark',
-								name: 'Bookmark column',
-								icon: 'bookmark-outline',
-							},
-							{id: 'session', name: 'Session', icon: 'albums-outline'},
-						]}
-						selected={destination}
-						onSelect={setDestination}
+					<ChoiceGroup
+						title="Save to"
+						choices={SAVE_TARGET_ROWS}
+						value={destination}
+						onPick={setDestination}
 					/>
 				)}
 				{editing?.deviceName && (

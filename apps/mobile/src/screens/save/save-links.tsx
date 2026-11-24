@@ -23,6 +23,7 @@ import {
 } from '../../library/library-store';
 import {hostIsExcluded} from '../../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../../library/library-choice';
+import {ChoiceGroup} from '../settings/select-row';
 import {useView} from '../../library/view';
 import {setPreferences} from '../../settings/preferences';
 import {SheetHeader} from '../../ui/bottom-sheet';
@@ -30,9 +31,8 @@ import {useColors} from '../../ui/theme';
 import {linkSettings} from '../../library/links';
 import {defaultSessionName} from '../../library/session-name';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {Button, Chips, Field, Segmented} from '../../ui/widgets';
-
-type Mode = 'bookmarks' | 'session';
+import {Button, Chips, Field} from '../../ui/widgets';
+import {SAVE_TARGET_ROWS, type SaveTarget} from './save-target';
 
 const NEW_SESSION = '__new-session__';
 
@@ -58,7 +58,7 @@ export function SaveLinksForm({
 	const sessions = sessionsIn(store, 'all', settings.sessionSort);
 	const [text, setText] = useState(initialText);
 	const urls = entry ? extractUrls(text) : shared;
-	const [mode, setMode] = useState<Mode>('bookmarks');
+	const [mode, setMode] = useState<SaveTarget>('bookmark');
 	const [name, setName] = useState('');
 	const [target, setTarget] = useState(NEW_SESSION);
 	const [saving, setSaving] = useState(false);
@@ -81,7 +81,7 @@ export function SaveLinksForm({
 	);
 	const blocked =
 		links.length === 0 ||
-		(mode === 'bookmarks' && choice.incomplete) ||
+		(mode === 'bookmark' && choice.incomplete) ||
 		(mode === 'session' && !creating && !sessionId);
 
 	const finish = (outcome: SaveOutcome) => {
@@ -93,7 +93,7 @@ export function SaveLinksForm({
 	};
 
 	const saveLinks = async () => {
-		if (mode === 'bookmarks') {
+		if (mode === 'bookmark') {
 			const column = await choice.resolve();
 			const run = counted(bookmarkCount, (current) =>
 				addBookmarks(
@@ -194,16 +194,13 @@ export function SaveLinksForm({
 					/>
 				)}
 				<LibraryChoice value={library} onChange={setLibrary} />
-				<Segmented
-					label="Save as"
-					items={[
-						{id: 'bookmarks', name: 'Bookmarks', icon: 'bookmark-outline'},
-						{id: 'session', name: 'Session', icon: 'albums-outline'},
-					]}
-					selected={mode}
-					onSelect={setMode}
+				<ChoiceGroup
+					title="Save to"
+					choices={SAVE_TARGET_ROWS}
+					value={mode}
+					onPick={setMode}
 				/>
-				{mode === 'bookmarks' && <ColumnChoice choice={choice} />}
+				{mode === 'bookmark' && <ColumnChoice choice={choice} />}
 				{mode === 'session' && (
 					<View style={styles.group}>
 						<Text style={{color: colors.muted}}>Session</Text>

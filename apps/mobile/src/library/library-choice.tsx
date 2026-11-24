@@ -1,9 +1,7 @@
 import {useEffect, useState} from 'react';
-import {Text, View} from 'react-native';
 import {usePrivateState} from '../private/private-library';
 import {openPrivateSheet} from '../private/private-sheets';
-import {useColors} from '../ui/theme';
-import {Segmented} from '../ui/widgets';
+import {ChoiceGroup} from '../screens/settings/select-row';
 import {type LibraryName} from './library-store';
 
 export function LibraryChoice({
@@ -13,7 +11,6 @@ export function LibraryChoice({
 	value: LibraryName;
 	onChange: (library: LibraryName) => void;
 }) {
-	const colors = useColors();
 	const state = usePrivateState();
 	const [waiting, setWaiting] = useState(false);
 	useEffect(() => {
@@ -28,40 +25,36 @@ export function LibraryChoice({
 		return null;
 	}
 
+	const locked = state.locked || state.needsPassword;
 	return (
-		<View style={{gap: 6}}>
-			<Segmented
-				label="Library"
-				items={[
-					{id: 'regular', name: 'Regular', icon: 'bookmark-outline'},
-					{
-						id: 'private',
-						name:
-							state.locked || state.needsPassword
-								? 'Private (locked)'
-								: 'Private',
-						icon:
-							state.locked || state.needsPassword
-								? 'lock-closed-outline'
-								: 'glasses-outline',
-					},
-				]}
-				selected={value}
-				onSelect={(next) => {
-					if (next === 'private' && (state.locked || state.needsPassword)) {
-						setWaiting(true);
-						openPrivateSheet(state.needsPassword ? 'protect' : 'unlock');
-					} else {
-						setWaiting(false);
-						onChange(next);
-					}
-				}}
-			/>
-			{value === 'private' && (
-				<Text style={{color: colors.muted}}>
-					Saved only to your private library.
-				</Text>
-			)}
-		</View>
+		<ChoiceGroup
+			title="Library"
+			choices={[
+				{
+					id: 'regular',
+					name: 'Regular',
+					hint: 'Your everyday bookmarks and sessions.',
+					icon: 'bookmark-outline',
+				},
+				{
+					id: 'private',
+					name: locked ? 'Private (locked)' : 'Private',
+					hint: locked
+						? 'Saved only to your private library. Asks to unlock first.'
+						: 'Saved only to your private library.',
+					icon: locked ? 'lock-closed-outline' : 'glasses-outline',
+				},
+			]}
+			value={value}
+			onPick={(next) => {
+				if (next === 'private' && locked) {
+					setWaiting(true);
+					openPrivateSheet(state.needsPassword ? 'protect' : 'unlock');
+				} else {
+					setWaiting(false);
+					onChange(next);
+				}
+			}}
+		/>
 	);
 }

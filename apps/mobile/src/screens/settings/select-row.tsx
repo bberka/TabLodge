@@ -163,6 +163,96 @@ export function RowLabel({
 	);
 }
 
+export function asChoices<T extends string>(
+	list: ReadonlyArray<{value: T; title: string; description: string}>,
+): Array<Choice<T>> {
+	return list.map(({value, title, description}) => ({
+		id: value,
+		name: title,
+		hint: description,
+	}));
+}
+
+function ChoiceRows<T extends string>({
+	choices,
+	value,
+	onPick,
+}: {
+	choices: Array<Choice<T>>;
+	value: T;
+	onPick: (id: T) => void;
+}) {
+	const colors = useColors();
+	return choices.map((choice) => {
+		const on = choice.id === value;
+		return (
+			<Pressable
+				key={choice.id}
+				accessibilityRole="radio"
+				accessibilityState={{checked: on}}
+				accessibilityLabel={choice.name}
+				accessibilityHint={choice.hint}
+				style={({pressed}) => [
+					styles.choice,
+					pressed && {backgroundColor: colors.pressed},
+				]}
+				onPress={() => {
+					onPick(choice.id);
+				}}
+			>
+				{choice.image ? (
+					<Image source={{uri: choice.image}} style={styles.image} />
+				) : (
+					choice.icon && (
+						<Icon
+							name={choice.icon}
+							size={22}
+							color={choice.color ?? colors.muted}
+						/>
+					)
+				)}
+				<View style={styles.choiceText}>
+					<Text
+						style={{
+							color: choice.color ?? colors.text,
+							fontSize: 16,
+							fontWeight: on ? '700' : '400',
+						}}
+					>
+						{choice.name}
+					</Text>
+					{choice.hint && (
+						<Text style={{color: colors.muted}}>{choice.hint}</Text>
+					)}
+				</View>
+				{on && <Icon name="checkmark" size={22} color={colors.accent} />}
+			</Pressable>
+		);
+	});
+}
+
+export function ChoiceGroup<T extends string>({
+	title,
+	choices,
+	value,
+	onPick,
+}: {
+	title: string;
+	choices: Array<Choice<T>>;
+	value: T;
+	onPick: (id: T) => void;
+}) {
+	const colors = useColors();
+	return (
+		<View>
+			<Text style={{color: colors.muted}}>{title}</Text>
+			<View accessibilityRole="radiogroup" accessibilityLabel={title}>
+				<ChoiceRows choices={choices} value={value} onPick={onPick} />
+			</View>
+		</View>
+	);
+}
+
 export function ChoiceList<T extends string>({
 	title,
 	choices,
@@ -190,52 +280,7 @@ export function ChoiceList<T extends string>({
 				accessibilityRole="radiogroup"
 				keyboardShouldPersistTaps="handled"
 			>
-				{choices.map((choice) => {
-					const on = choice.id === value;
-					return (
-						<Pressable
-							key={choice.id}
-							accessibilityRole="radio"
-							accessibilityState={{checked: on}}
-							accessibilityLabel={choice.name}
-							accessibilityHint={choice.hint}
-							style={({pressed}) => [
-								styles.choice,
-								pressed && {backgroundColor: colors.pressed},
-							]}
-							onPress={() => {
-								onPick(choice.id);
-							}}
-						>
-							{choice.image ? (
-								<Image source={{uri: choice.image}} style={styles.image} />
-							) : (
-								choice.icon && (
-									<Icon
-										name={choice.icon}
-										size={22}
-										color={choice.color ?? colors.muted}
-									/>
-								)
-							)}
-							<View style={styles.choiceText}>
-								<Text
-									style={{
-										color: choice.color ?? colors.text,
-										fontSize: 16,
-										fontWeight: on ? '700' : '400',
-									}}
-								>
-									{choice.name}
-								</Text>
-								{choice.hint && (
-									<Text style={{color: colors.muted}}>{choice.hint}</Text>
-								)}
-							</View>
-							{on && <Icon name="checkmark" size={22} color={colors.accent} />}
-						</Pressable>
-					);
-				})}
+				<ChoiceRows choices={choices} value={value} onPick={onPick} />
 			</ScrollView>
 			{footer}
 		</View>
