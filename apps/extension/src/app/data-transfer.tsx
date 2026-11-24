@@ -2005,10 +2005,6 @@ export function ImportDialog({
 										>
 											From text
 										</h3>
-										<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-											Reads like a file holding this text: same preview,
-											duplicates, and Undo.
-										</p>
 										<form
 											className="mt-2 space-y-2"
 											onSubmit={(event) => {

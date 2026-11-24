@@ -1593,6 +1593,10 @@ function parseUrlList(lines: string[]): ParsedImport {
 			trimmed.slice(match.index + match[0].length)
 		).replaceAll(/^[\s,\-:;|–—]+|[\s,\-:;|–—]+$/g, '');
 		const link = collector.link(url, onLine || titleAbove);
+		if (onLine) {
+			dropTitleAbove();
+		}
+
 		titleAbove = undefined;
 		if (link) {
 			links.push(link);

@@ -123,6 +123,17 @@ test('addresses and Markdown links pasted from anywhere import', () => {
 			['Second page', 'https://b.example/two'],
 		],
 	);
+	const titledBytes = pasted(
+		'Unused heading\nhttps://a.example/one Inline title\n',
+	);
+	assert.deepEqual(linksOf(titledBytes), [
+		['Inline title', 'https://a.example/one'],
+	]);
+	assert.equal(
+		titledBytes.invalid,
+		1,
+		'the heading the inline title replaced is counted as skipped',
+	);
 	const markdown = pasted(
 		'- [One](https://a.example/one)\n- [Two](https://b.example/two)\n',
 	);
