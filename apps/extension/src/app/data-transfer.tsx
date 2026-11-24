@@ -13,6 +13,7 @@ import {
 	Bookmark,
 	Check,
 	CloudUpload,
+	ClipboardPaste,
 	ExternalLink,
 	CircleAlert,
 	Archive,
@@ -115,6 +116,7 @@ import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
+import {readPastedImport} from './pasted-import';
 import {PROJECT} from './project';
 import {copyPageLink, SharedPagesList, useSharedPages} from './shared-pages';
 import {
@@ -1215,7 +1217,8 @@ export function ShareDialog({
 	);
 }
 
-type ImportSource = {type: 'file' | 'link'; name: string} | {type: 'browser'};
+type ImportSource =
+	{type: 'file' | 'link'; name: string} | {type: 'paste'} | {type: 'browser'};
 type BookmarkTarget = 'folders' | 'column';
 
 type ImportDialogProps = {
@@ -1577,6 +1580,44 @@ export function ImportDialog({
 		}
 	}
 
+	useEffect(() => {
+		if (!open || everything || full || locked || step !== 'source') {
+			return;
+		}
+
+		const onPaste = (event: ClipboardEvent) => {
+			const focused = event.target as HTMLElement | null;
+			if (
+				event.defaultPrevented ||
+				focused?.closest(
+					'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+				)
+			) {
+				return;
+			}
+
+			const attempt = readPastedImport(
+				event.clipboardData?.getData('text') ?? '',
+			);
+			if (!attempt) {
+				return;
+			}
+
+			event.preventDefault();
+			if (attempt.ok) {
+				setError('');
+				setParsed(attempt.parsed);
+				setSource({type: 'paste'});
+				return;
+			}
+
+			setError(attempt.message);
+		};
+
+		document.addEventListener('paste', onPaste);
+		return () => document.removeEventListener('paste', onPaste);
+	}, [open, everything, full, locked, step]);
+
 	async function readBrowserBookmarks() {
 		const generation = ++readGenerationRef.current;
 		setError('');
@@ -1761,7 +1802,12 @@ export function ImportDialog({
 			offerUndo(message, undoId, showStatus, async () => onImported?.());
 		} catch (reason) {
 			showStatus(
-				String(messageOf(reason) || 'Could not import this file.'),
+				String(
+					messageOf(reason) ||
+						(source.type === 'paste'
+							? 'Could not import this text.'
+							: 'Could not import this file.'),
+				),
 				true,
 			);
 		} finally {
@@ -1788,7 +1834,7 @@ export function ImportDialog({
 				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
 				: step === 'preview'
 					? 'Nothing is saved until you choose Import.'
-					: `Pick a file or paste a shared page link. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
+					: `Pick a file, or paste text or a shared page link anywhere in this window. A ${PROJECT.name} full backup is recognized on its own; any other file or pasted text is read as the kind you choose below.`;
 	const kindSwitch =
 		!full && source?.type !== 'browser' ? (
 			<ChoiceSelect
@@ -1932,7 +1978,9 @@ export function ImportDialog({
 										>
 											{dragging
 												? 'Drop the file to read it'
-												: 'Drop a file here'}
+												: everything
+													? 'Drop a file here'
+													: 'Drop a file here, or paste text'}
 										</h3>
 										<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
 											{everything
@@ -2220,6 +2268,8 @@ export function ImportDialog({
 											<Globe className="h-4 w-4" aria-hidden="true" />
 										) : source.type === 'link' ? (
 											<Link2 className="h-4 w-4" aria-hidden="true" />
+										) : source.type === 'paste' ? (
+											<ClipboardPaste className="h-4 w-4" aria-hidden="true" />
 										) : (
 											<FileText className="h-4 w-4" aria-hidden="true" />
 										)}
@@ -2228,7 +2278,9 @@ export function ImportDialog({
 										<p className="text-sm font-medium wrap-anywhere">
 											{source.type === 'browser'
 												? 'This browser’s bookmarks'
-												: source.name}
+												: source.type === 'paste'
+													? 'Pasted text'
+													: source.name}
 										</p>
 										<p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
 											Detected:{' '}
@@ -2614,7 +2666,7 @@ function OptionRow({
 			<div
 				className={
 					inlineControl
-						? 'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1'
+						? 'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:justify-between sm:gap-x-6'
 						: 'min-w-0'
 				}
 			>
