@@ -399,11 +399,21 @@ export async function importScrollingCheck(env: Env, theme: Theme) {
 			{width: 1920, height: 1080},
 		]) {
 			await page.setViewportSize(viewport);
-			await assertInline(targetLabel, targetColumn, 'bookmark column picker');
+			await assertInline(
+				targetLabel,
+				targetColumn,
+				'bookmark column picker',
+				targetColumn.locator(
+					'xpath=ancestor::*[contains(@class,"justify-between")][1]',
+				),
+			);
 			await assertInline(
 				savedLinksLabel,
 				savedLinksControl,
 				'saved links selector',
+				savedLinksControl.locator(
+					'xpath=ancestor::*[contains(@class,"justify-between")][1]',
+				),
 			);
 		}
 
