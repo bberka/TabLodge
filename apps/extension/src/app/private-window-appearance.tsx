@@ -1,6 +1,8 @@
 import {useEffect, useState, type ReactNode} from 'react';
+import {TooltipProvider} from '../shared/ui';
 import type {PrivateStorageMode} from '../shared/types';
 import {PRIVATE_CONFIG_KEY} from './private-config';
+import {PrivateLockButton} from './private-lock-ui';
 import {send} from './message-client';
 
 const PRIVATE_WINDOW_MODE_SUMMARY: Record<PrivateStorageMode, string> = {
@@ -109,13 +111,18 @@ function PrivateWindowFrame({children}: {children: ReactNode}) {
 							</p>
 						</div>
 					</div>
-					<a
-						data-private-settings
-						href="options.html#settings-private-windows"
-						className="rounded-xs underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-					>
-						Private window settings
-					</a>
+					<TooltipProvider>
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							<a
+								data-private-settings
+								href="options.html#settings-private-windows"
+								className="rounded-xs underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								Private window settings
+							</a>
+							<PrivateLockButton />
+						</div>
+					</TooltipProvider>
 				</aside>
 				{children}
 			</div>

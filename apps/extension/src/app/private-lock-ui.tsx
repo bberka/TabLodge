@@ -455,9 +455,6 @@ export function PrivateLockGate({children}: {children: ReactNode}) {
 	);
 }
 
-/**
-Lock now, in the header of private pages. Shows nothing in regular windows or when no lock is set.
-*/
 export function PrivateLockButton() {
 	const {info} = usePrivateLockInfo();
 	if (!privateWindow() || !info?.enabled || info.locked) {
