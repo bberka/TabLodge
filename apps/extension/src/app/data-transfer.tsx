@@ -2648,7 +2648,7 @@ function OptionRow({
 			<div
 				className={
 					inlineControl
-						? 'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1'
+						? 'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:justify-between sm:gap-x-6'
 						: 'min-w-0'
 				}
 			>

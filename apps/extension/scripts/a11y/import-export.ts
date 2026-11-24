@@ -13,6 +13,21 @@ import {
 	setTheme,
 } from './pages.ts';
 
+type LayoutRowHost = {
+	querySelectorAll(selector: string): Array<{
+		className: unknown;
+		textContent: string | null;
+		parentElement: {
+			parentElement: {
+				querySelector(selector: string): {
+					getBoundingClientRect(): {right: number};
+				} | null;
+				getBoundingClientRect(): {right: number};
+			} | null;
+		} | null;
+	}>;
+};
+
 async function pickImportKind(page: Page, name: string) {
 	await page.locator('#import-what').focus();
 	await page.keyboard.press('Enter');
@@ -754,6 +769,31 @@ export async function importPastedCheck(env: Env, theme: Theme) {
 			),
 			'the pasted review fits without sideways scrolling',
 		);
+		await page.setViewportSize({width: 1440, height: 900});
+		for (const label of ['Links already saved', 'Put bookmarks in']) {
+			const gap = await dialog.evaluate((node: LayoutRowHost, text: string) => {
+				const labelNode = [...node.querySelectorAll('*')].find(
+					(element) =>
+						element.textContent?.trim() === text &&
+						String(element.className).includes('font-medium'),
+				);
+				const row = labelNode?.parentElement?.parentElement;
+				const control = row?.querySelector(
+					'[role="radiogroup"], [role="combobox"]',
+				);
+				const rowBox = row?.getBoundingClientRect();
+				const controlBox = control?.getBoundingClientRect();
+				return rowBox && controlBox
+					? Math.round(rowBox.right - controlBox.right)
+					: undefined;
+			}, label);
+			assert.equal(
+				gap,
+				0,
+				`${label} puts its control on the right edge on a wide screen`,
+			);
+		}
+
 		assert.equal(
 			await dialog
 				.getByRole('button', {name: 'Import 2 bookmarks', exact: true})
