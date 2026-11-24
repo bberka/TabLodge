@@ -257,9 +257,11 @@ export async function assertInline(
 	label: Locator,
 	control: Locator,
 	description: string,
+	row?: Locator,
 ) {
 	const labelBounds = await label.boundingBox();
 	const controlBounds = await control.boundingBox();
+	const rowBounds = await row?.boundingBox();
 	assert.ok(labelBounds);
 	assert.ok(controlBounds);
 	assert.ok(
@@ -274,9 +276,14 @@ export async function assertInline(
 		controlBounds.x >= labelBounds.x + labelBounds.width,
 		`${description} should follow its label`,
 	);
+	const flushWithRow =
+		rowBounds !== undefined &&
+		rowBounds !== null &&
+		rowBounds.x + rowBounds.width - (controlBounds.x + controlBounds.width) <=
+			2;
 	assert.ok(
-		controlBounds.x - (labelBounds.x + labelBounds.width) <= 24,
-		`${description} should sit beside its label`,
+		controlBounds.x - (labelBounds.x + labelBounds.width) <= 24 || flushWithRow,
+		`${description} should sit beside its label, or flush with its row on a wide screen`,
 	);
 }
 

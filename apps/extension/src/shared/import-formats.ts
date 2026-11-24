@@ -1554,33 +1554,56 @@ function parseMarkdown(lines: string[]): ParsedImport {
 	return result('markdown', 'Markdown list', 'verified', groups, collector);
 }
 
-// One link per line. The first http(s) URL on a line is the link; the rest of the line, if any, its title.
+// One link per line. The first http(s) URL on a line is the link, the rest of the line its title, or else the line above it.
 function parseUrlList(lines: string[]): ParsedImport {
 	const collector = new Collector();
 	const links: ImportLink[] = [];
+	let titleAbove: string | undefined;
+	const dropTitleAbove = () => {
+		if (titleAbove === undefined) {
+			return;
+		}
+
+		collector.invalid += 1;
+		titleAbove = undefined;
+	};
+
 	for (const line of lines) {
 		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith('#')) {
+		if (!trimmed) {
+			dropTitleAbove();
+			continue;
+		}
+
+		if (trimmed.startsWith('#')) {
 			continue;
 		}
 
 		const match = /https?:\/\/[^\s"'<>|]+/i.exec(trimmed);
 		if (!match) {
-			collector.invalid += 1;
+			dropTitleAbove();
+			titleAbove = trimmed;
 			continue;
 		}
 
 		const url = match[0].replace(/[),.;]+$/, '');
-		const title = (
+		const onLine = (
 			trimmed.slice(0, match.index) +
 			' ' +
 			trimmed.slice(match.index + match[0].length)
 		).replaceAll(/^[\s,\-:;|–—]+|[\s,\-:;|–—]+$/g, '');
-		const link = collector.link(url, title);
+		const link = collector.link(url, onLine || titleAbove);
+		if (onLine) {
+			dropTitleAbove();
+		}
+
+		titleAbove = undefined;
 		if (link) {
 			links.push(link);
 		}
 	}
+
+	dropTitleAbove();
 
 	return result(
 		'url-list',

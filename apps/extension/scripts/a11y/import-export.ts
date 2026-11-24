@@ -3,14 +3,30 @@ import {Buffer} from 'node:buffer';
 import {readFile} from 'node:fs/promises';
 import {type Page} from 'playwright';
 import {assertInline, captureEvidence} from './evidence.ts';
-import {seed} from './fixtures.ts';
+import {readDevStore, seed} from './fixtures.ts';
 import {check, type Env, type Theme, until} from './harness.ts';
 import {
 	axeViolationLines,
+	openMenuItemByKeyboard,
 	openPage,
 	type ScrollElement,
 	setTheme,
 } from './pages.ts';
+
+type LayoutRowHost = {
+	querySelectorAll(selector: string): Array<{
+		className: unknown;
+		textContent: string | null;
+		parentElement: {
+			parentElement: {
+				querySelector(selector: string): {
+					getBoundingClientRect(): {right: number};
+				} | null;
+				getBoundingClientRect(): {right: number};
+			} | null;
+		} | null;
+	}>;
+};
 
 async function pickImportKind(page: Page, name: string) {
 	await page.locator('#import-what').focus();
@@ -383,11 +399,21 @@ export async function importScrollingCheck(env: Env, theme: Theme) {
 			{width: 1920, height: 1080},
 		]) {
 			await page.setViewportSize(viewport);
-			await assertInline(targetLabel, targetColumn, 'bookmark column picker');
+			await assertInline(
+				targetLabel,
+				targetColumn,
+				'bookmark column picker',
+				targetColumn.locator(
+					'xpath=ancestor::*[contains(@class,"justify-between")][1]',
+				),
+			);
 			await assertInline(
 				savedLinksLabel,
 				savedLinksControl,
 				'saved links selector',
+				savedLinksControl.locator(
+					'xpath=ancestor::*[contains(@class,"justify-between")][1]',
+				),
 			);
 		}
 
@@ -656,6 +682,171 @@ export async function savedTabNewColumnCheck(env: Env, theme: Theme) {
 			.filter({has: page.getByRole('heading', {name, exact: true})});
 		await column.waitFor();
 		assert.equal(await column.locator('[data-bookmark-id]').count(), 1);
+		await page.close();
+	});
+}
+
+export async function importPastedCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(`pasting text into the import dialog (${theme})`, async () => {
+		const page = await openPage(context, extensionId, 'newtab');
+		await seed(page);
+		await page.reload();
+		await setTheme(page, theme);
+		const before = (await readDevStore(page)).bookmarks.map(
+			(bookmark) => bookmark.url,
+		);
+		const copy = async (text: string) => {
+			await page.evaluate(async (value) => {
+				const {navigator} = globalThis as typeof globalThis & {
+					navigator: {clipboard: {writeText(text: string): Promise<void>}};
+				};
+				await navigator.clipboard.writeText(value);
+			}, text);
+		};
+
+		await openMenuItemByKeyboard(
+			page,
+			page.getByRole('button', {name: 'Dashboard menu'}),
+			'Import',
+		);
+		const dialog = page.getByRole('dialog');
+		await dialog
+			.getByRole('heading', {name: 'Drop a file here, or paste text'})
+			.waitFor();
+		assert.equal(
+			await dialog.locator('textarea').count(),
+			0,
+			'the dialog offers no text box of its own, so paste needs no field',
+		);
+
+		await captureEvidence(page, `import-paste-${theme}.png`, dialog);
+
+		await copy('https://example.com/link-field-keeps-paste');
+		const linkField = dialog.getByLabel('Shared page link');
+		await linkField.focus();
+		await page.keyboard.press('Control+V');
+		assert.equal(
+			await linkField.inputValue(),
+			'https://example.com/link-field-keeps-paste',
+			'a text field inside the dialog keeps its own paste',
+		);
+		await linkField.fill('');
+
+		await copy(' '.repeat(3));
+		await dialog.getByRole('button', {name: 'Choose file'}).focus();
+		await page.keyboard.press('Control+V');
+		assert.equal(
+			await dialog
+				.getByRole('heading', {name: 'Review bookmark import'})
+				.count(),
+			0,
+			'whitespace-only text does not open a review',
+		);
+
+		await copy('hello, is anyone there');
+		await page.keyboard.press('Control+V');
+		const alert = dialog.getByRole('alert');
+		await alert.waitFor();
+		assert.match(
+			(await alert.textContent()) ?? '',
+			/No web links found/,
+			'unrecognized text says what an unrecognized file says',
+		);
+
+		const first = `https://example.com/pasted-${theme}-1`;
+		const second = `https://example.com/pasted-${theme}-2`;
+		await copy(`First pasted page\n${first}\n\nSecond pasted page\n${second}`);
+		await page.keyboard.press('Control+V');
+		await dialog
+			.getByRole('heading', {name: 'Review bookmark import'})
+			.waitFor();
+		const review = (await dialog.textContent()) ?? '';
+		assert.match(review, /Pasted text/, 'the review names the pasted text');
+		assert.match(review, /Detected: Plain URL list/);
+		assert.match(review, /First pasted page/);
+		assert.match(review, /Second pasted page/);
+		assert.deepEqual(
+			await axeViolationLines(page, env.axeSource),
+			[],
+			'the pasted review should pass axe',
+		);
+		await captureEvidence(page, `import-paste-preview-${theme}.png`, dialog);
+		assert.ok(
+			await dialog.evaluate(
+				(node: ScrollElement & {scrollWidth: number; clientWidth: number}) =>
+					node.scrollWidth <= node.clientWidth + 1,
+			),
+			'the pasted review fits without sideways scrolling',
+		);
+		await page.setViewportSize({width: 1440, height: 900});
+		for (const label of ['Links already saved', 'Put bookmarks in']) {
+			const gap = await dialog.evaluate((node: LayoutRowHost, text: string) => {
+				const labelNode = [...node.querySelectorAll('*')].find(
+					(element) =>
+						element.textContent?.trim() === text &&
+						String(element.className).includes('font-medium'),
+				);
+				const row = labelNode?.parentElement?.parentElement;
+				const control = row?.querySelector(
+					'[role="radiogroup"], [role="combobox"]',
+				);
+				const rowBox = row?.getBoundingClientRect();
+				const controlBox = control?.getBoundingClientRect();
+				return rowBox && controlBox
+					? Math.round(rowBox.right - controlBox.right)
+					: undefined;
+			}, label);
+			assert.equal(
+				gap,
+				0,
+				`${label} puts its control on the right edge on a wide screen`,
+			);
+		}
+
+		assert.equal(
+			await dialog
+				.getByRole('button', {name: 'Import 2 bookmarks', exact: true})
+				.count(),
+			1,
+		);
+		await until(
+			async () =>
+				(await page.locator(':focus').textContent())?.trim() ===
+				'Import 2 bookmarks',
+			'focus to move to the Import action',
+		);
+		await page.keyboard.press('Enter');
+		await dialog.waitFor({state: 'hidden'});
+		await until(async () => {
+			const after = (await readDevStore(page)).bookmarks.map(
+				(bookmark) => bookmark.url,
+			);
+			return after.length === before.length + 2 && after.includes(first);
+		}, 'the two pasted links to be imported');
+		assert.deepEqual(
+			(await readDevStore(page)).bookmarks
+				.filter((bookmark) => bookmark.url === second)
+				.map((bookmark) => bookmark.title),
+			['Second pasted page'],
+		);
+		const undo = page.getByRole('button', {name: 'Undo', exact: true});
+		await undo.focus();
+		await page.keyboard.press('Enter');
+		await until(async () => {
+			const after = (await readDevStore(page)).bookmarks.map(
+				(bookmark) => bookmark.url,
+			);
+			return (
+				after.length === before.length &&
+				!after.includes(first) &&
+				!after.includes(second)
+			);
+		}, 'Undo to remove exactly the two pasted bookmarks');
+		assert.deepEqual(
+			(await readDevStore(page)).bookmarks.map((bookmark) => bookmark.url),
+			before,
+		);
 		await page.close();
 	});
 }
