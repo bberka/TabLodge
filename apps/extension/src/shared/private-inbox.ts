@@ -1,6 +1,6 @@
 import {fromBase64, toBase64} from './private-lock';
 import {isRecord} from './library-values';
-import {parseSentLinks, type SentLink} from './send-to-private';
+import {parseSentPayload, type SentPayload} from './send-to-private';
 
 export const INBOX_PUBLIC_KEY = 'tablodge.sendprivate.key';
 export const INBOX_ENTRY_PREFIX = 'tablodge.sendprivate.entry.';
@@ -87,10 +87,15 @@ const importPublic = async (raw: string) =>
 const authenticated = (id: string, epk: string) =>
 	new TextEncoder().encode(`${id}\n${epk}`);
 
+export const payloadBody = (sent: SentPayload) =>
+	sent.columns.length > 0 || sent.sessions.length > 0
+		? {v: 2, ...sent}
+		: {v: 1, links: sent.links};
+
 export async function sealForInbox(
 	publicKey: string,
 	id: string,
-	links: SentLink[],
+	sent: SentPayload,
 ): Promise<InboxEntry> {
 	const recipient = await importPublic(publicKey);
 	const ephemeral = await crypto.subtle.generateKey(CURVE, true, [
@@ -109,7 +114,7 @@ export async function sealForInbox(
 	const ct = await crypto.subtle.encrypt(
 		{name: 'AES-GCM', iv, additionalData: authenticated(id, epk)},
 		key,
-		new TextEncoder().encode(JSON.stringify({v: 1, links})),
+		new TextEncoder().encode(JSON.stringify(payloadBody(sent))),
 	);
 	return {v: 1, epk, iv: toBase64(iv), ct: toBase64(new Uint8Array(ct))};
 }
@@ -118,7 +123,7 @@ export async function openInboxEntry(
 	pair: InboxKeyPair,
 	id: string,
 	stored: unknown,
-): Promise<SentLink[] | undefined> {
+): Promise<SentPayload | undefined> {
 	const entry = parseInboxEntry(stored);
 	if (!entry) {
 		return undefined;
@@ -148,8 +153,8 @@ export async function openInboxEntry(
 			fromBase64(entry.ct),
 		);
 		const body: unknown = JSON.parse(new TextDecoder().decode(plain));
-		return isRecord(body) && body.v === 1
-			? parseSentLinks(body.links)
+		return isRecord(body) && (body.v === 1 || body.v === 2)
+			? parseSentPayload(body)
 			: undefined;
 	} catch {
 		return undefined;

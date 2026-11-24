@@ -12,6 +12,16 @@ With a separate saved library, the menu of a link in a session or a bookmark col
 
 The private library does not have to be unlocked. The regular window encrypts the link to the private library's public key, so only the private library can read it, and it waits on this device until a private window unlocks the library. It then syncs with the private library if that syncs. **Undo** in the toast brings the link back until the toast closes. A library set up before this version has to be unlocked once in a private window before regular windows can send to it. Snapshots and backups taken before the send still hold the link, and **Erase private data** also drops links still on their way. The Android app has the same action; see [Android app](android.md).
 
+## Send a whole column or session
+
+The menu of a bookmark column and the menu of a session offer **Send to private storage** under the same conditions as a link, and an empty column offers nothing. One send is one action with one toast and one **Undo**, however many links it holds, up to 20,000.
+
+- **A column** keeps its name, color, icon, bookmark order, notes, and tags. When the private library has a column with that name, ignoring case, the bookmarks are added to it; a bookmark identical to one already there (same address, title, note, and tags) is not added again. Otherwise the column is new. The column and its bookmarks leave the regular library without the trash.
+- **A column with a site source**, such as the column YouTube saves into or one you picked under **Settings › Sources**, sends its bookmarks and stays in the regular library, empty, with its source on. The toast says so. On the phone only the sites' own columns count, because the phone has no Sources settings.
+- **A session** keeps its name, the order of its links, its saved date, its color, and its description, and arrives in the private library outside any folder. A saved tab's pinned state, tab group, and split view are not kept.
+
+A column or session is sealed in the same kind of entry as links, in a newer payload version. A build older than this one keeps such an entry without opening or deleting it, and takes it in once it is updated. Entries for single links are unchanged.
+
 ## Sources in private windows
 
 Sites are added to and removed from **Settings › Sources** in a regular window. A save on a site you added in Sources, made in a private window, is added only when private windows use the regular library. With a separate library, private windows save nothing from sources, and a site set to **Save to TabLodge only** saves on the site as usual there.
