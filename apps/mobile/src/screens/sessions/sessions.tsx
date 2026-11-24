@@ -243,6 +243,7 @@ export function SessionsScreen({
 				select: selection.start,
 				addLinks: setAddingToId,
 				bookmark: setBookmarking,
+				canSendToPrivate: canSendToPrivate(view, privateState),
 			})
 		: [];
 	const tabMenuSession = store.groups.find(

@@ -239,6 +239,9 @@ export function BookmarksScreen({
 			: columns.find((column) => column.id === columnId)?.name;
 	const isEditableColumn =
 		!atList && store.bookmarkColumns.some((column) => column.id === columnId);
+	const columnHasBookmarks = store.bookmarks.some(
+		(bookmark) => bookmark.columnId === columnId,
+	);
 	const columnIndex = atList
 		? -1
 		: store.bookmarkColumns.findIndex((column) => column.id === columnId);
@@ -444,6 +447,18 @@ export function BookmarksScreen({
 									bookmarks: shown,
 								},
 							});
+						},
+					},
+				]
+			: []),
+		...(sendable && !isSearching && isEditableColumn && columnHasBookmarks
+			? [
+					{
+						icon: 'lock-closed-outline' as const,
+						label: SEND_TO_PRIVATE_LABEL,
+						hint: 'Move this column to the private library',
+						onPress() {
+							void sendToPrivate([{kind: 'column', columnId}]);
 						},
 					},
 				]

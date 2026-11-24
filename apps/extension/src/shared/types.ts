@@ -1430,7 +1430,7 @@ export type TabLodgeResponses = {
 	EMPTY_TRASH: {count: number} & Undoable;
 	UNDO: {label: string};
 	DROP_UNDO: {};
-	SEND_TO_PRIVATE: {count: number} & Undoable;
+	SEND_TO_PRIVATE: {count: number; keptColumn?: string} & Undoable;
 	SEND_TO_PRIVATE_STATE: {state: SendToPrivateState};
 	GET_STORAGE_USAGE: {usage: StorageUsage};
 	SYNC_STATUS: {status: SyncStatus};

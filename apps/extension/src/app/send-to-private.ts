@@ -1,11 +1,10 @@
 import {useSyncExternalStore} from 'react';
 import {INBOX_PUBLIC_KEY} from '../shared/private-inbox';
 import {LOCK_RECORD_KEY} from '../shared/private-lock';
-import type {SendTarget} from '../shared/send-to-private';
+import {sentMessage, type SendTarget} from '../shared/send-to-private';
 import type {SendToPrivateState} from '../shared/types';
 import type {ShowStatus} from './common';
 import {send} from './message-client';
-import {plural} from './plural';
 import {inPrivateWindow, PRIVATE_CONFIG_KEY} from './private-config';
 
 export {SEND_TO_PRIVATE_LABEL} from '../shared/send-to-private';
@@ -70,7 +69,7 @@ export async function sendLinksToPrivate(
 	}
 
 	await reload();
-	const message = `${plural(result.count, 'link')} sent to private storage.`;
+	const message = sentMessage(result.count, result.keptColumn);
 	const {undoId} = result;
 	if (!undoId) {
 		showStatus(message, false, {toast: true});

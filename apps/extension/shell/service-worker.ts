@@ -10,6 +10,7 @@ import {
 	siteSourceStatuses,
 	siteSourceUndoLabel,
 	sourceChoice,
+	sourceSavingInto,
 	applySyncedChoices,
 	withChoice,
 	withoutChoice,
@@ -246,11 +247,12 @@ import {
 	type InboxKeyPair,
 } from '../src/shared/private-inbox';
 import {
-	addSentLinks,
+	addSent,
+	emptyPayload,
 	MAX_SENT_LINKS,
 	parseSendTargets,
+	sentLinkCount,
 	takeOutForPrivate,
-	type SentLink,
 } from '../src/shared/send-to-private';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
@@ -9094,6 +9096,21 @@ async function sendToPrivateState(): Promise<SendToPrivateState> {
 		: 'needs-private-window';
 }
 
+async function siteSourceColumnIds(store: Store): Promise<Set<string>> {
+	const statuses = siteSourceStatuses(await readSourcesState());
+	return new Set(
+		store.bookmarkColumns.flatMap((column) =>
+			sourceSavingInto(column.id, store.bookmarkColumns, statuses) ||
+			statuses.some(
+				(status) =>
+					(status.wanted || status.enabled) && status.columnId === column.id,
+			)
+				? [column.id]
+				: [],
+		),
+	);
+}
+
 async function inboxPublicKey(): Promise<string | undefined> {
 	const saved = await chrome.storage.local.get([INBOX_PUBLIC_KEY]);
 	return parseInboxPublicKey(saved[INBOX_PUBLIC_KEY]);
@@ -9135,12 +9152,15 @@ async function sendToPrivate(
 				return {ok: false, error: SEND_NEEDS_PRIVATE_WINDOW};
 			}
 
-			const taken = takeOutForPrivate(await getStore(), targets);
+			const current = await getStore();
+			const taken = takeOutForPrivate(current, targets, {
+				keepColumnIds: await siteSourceColumnIds(current),
+			});
 			if (!taken.ok) {
 				return taken;
 			}
 
-			const entry = await sealForInbox(publicKey, id, taken.links);
+			const entry = await sealForInbox(publicKey, id, taken.sent);
 			await library.set({
 				[key]: {...entry, holdUntil: Date.now() + SEND_HOLD_MS},
 			});
@@ -9164,7 +9184,11 @@ async function sendToPrivate(
 				await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
 			} catch {}
 
-			return {ok: true, count: taken.links.length};
+			return {
+				ok: true,
+				count: taken.count,
+				...(taken.keptColumn && {keptColumn: taken.keptColumn}),
+			};
 		}),
 	);
 }
@@ -9271,7 +9295,7 @@ async function takeInSentLinks({
 		const stored = await chrome.storage.local.get(null);
 		const now = Date.now();
 		const taken: string[] = [];
-		const links: SentLink[] = [];
+		const received = emptyPayload();
 		let wakeAt = Infinity;
 		for (const [key, value] of Object.entries(stored)) {
 			if (!isInboxEntryKey(key)) {
@@ -9294,11 +9318,13 @@ async function takeInSentLinks({
 			}
 
 			taken.push(key);
-			links.push(...opened);
+			received.links.push(...opened.links);
+			received.columns.push(...opened.columns);
+			received.sessions.push(...opened.sessions);
 		}
 
-		if (links.length > 0) {
-			const merged = addSentLinks(await getStore(), links);
+		if (sentLinkCount(received) > 0) {
+			const merged = addSent(await getStore(), received);
 			if (merged.added > 0) {
 				await writeStore(merged.store);
 			}

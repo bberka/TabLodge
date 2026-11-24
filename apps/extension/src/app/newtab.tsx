@@ -2407,6 +2407,13 @@ function NewTab() {
 		remove(column) {
 			void requestDeleteColumn(column);
 		},
+		canSendToPrivate: () => sendState !== 'hidden',
+		sendToPrivate: (column) =>
+			void sendLinksToPrivate(
+				[{kind: 'column', columnId: column.id}],
+				showStatus,
+				reload,
+			),
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
 		drop: (event, column, axis) => dropOnColumn(event, column, axis),
@@ -3871,6 +3878,8 @@ type BoardActions = {
 	*/
 	pickTarget: (request: TargetPickerRequest) => void;
 	remove: (column: BookmarkColumnData) => void;
+	canSendToPrivate: () => boolean;
+	sendToPrivate: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
 		columnId: string,
@@ -3938,6 +3947,13 @@ function columnMenuActions(
 			icon: Share2,
 			disabled: siblings.length === 0,
 			onSelect: () => actions.share(column),
+		},
+		{
+			id: 'send-private',
+			label: SEND_TO_PRIVATE_LABEL,
+			icon: ACTION_ICONS.sendPrivate,
+			hidden: !actions.canSendToPrivate() || siblings.length === 0,
+			onSelect: () => actions.sendToPrivate(column),
 		},
 		{type: 'separator'},
 		{
