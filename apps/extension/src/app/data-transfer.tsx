@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
 	ArrowLeft,
+	ChevronRight,
 	Bookmark,
 	Check,
 	CloudUpload,
@@ -2309,19 +2310,21 @@ export function ImportDialog({
 										))}
 									</ul>
 								)}
-								<div
-									data-import-preview=""
-									className="flex min-h-32 min-w-0 flex-1 flex-col"
-								>
-									<p className="mb-1.5 text-xs font-medium text-muted-foreground">
+								<details data-import-preview="" className="group min-w-0">
+									<summary className="flex w-fit cursor-pointer items-center gap-1 rounded-sm text-xs font-medium text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring">
+										<ChevronRight
+											className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+											aria-hidden="true"
+										/>
 										Preview
 										{preview.links > preview.sample.length
 											? ` (first ${preview.sample.length} of ${preview.links.toLocaleString()})`
 											: ''}
-									</p>
+									</summary>
 									<ScrollArea
 										type="auto"
-										className="min-h-0 flex-1 rounded-md border border-border"
+										className="mt-1.5 rounded-md border border-border"
+										viewportClassName="max-h-60"
 									>
 										<ol className="divide-y divide-border/70">
 											{preview.sample.map((item, index) => (
@@ -2357,7 +2360,7 @@ export function ImportDialog({
 											))}
 										</ol>
 									</ScrollArea>
-								</div>
+								</details>
 								<div className="grid gap-3 rounded-lg bg-muted/40 p-3">
 									<OptionRow
 										id="import-duplicates"

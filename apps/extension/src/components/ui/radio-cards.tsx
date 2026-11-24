@@ -166,6 +166,7 @@ function RadioChoiceGroup<T extends string>({
 }: RadioChoiceGroupProps<T>) {
 	return (
 		<RadioCardGroup
+			className="sm:auto-cols-fr sm:grid-flow-col"
 			value={value}
 			onValueChange={(next) => {
 				const choice = choices.find((entry) => entry.value === next);

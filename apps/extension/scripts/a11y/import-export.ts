@@ -394,6 +394,23 @@ export async function importScrollingCheck(env: Env, theme: Theme) {
 			);
 		}
 
+		const previewToggle = dialog.locator('summary', {hasText: 'Preview'});
+		assert.equal(
+			await dialog
+				.locator('details[data-import-preview]')
+				.evaluate((node: {open: boolean}) => node.open),
+			false,
+			'the preview starts collapsed',
+		);
+		await previewToggle.focus();
+		await page.keyboard.press('Enter');
+		assert.equal(
+			await dialog
+				.locator('details[data-import-preview]')
+				.evaluate((node: {open: boolean}) => node.open),
+			true,
+			'Enter opens the preview',
+		);
 		await captureEvidence(page, `bookmark-import-flat-${theme}.png`);
 		await page.screenshot({path: `.dev/evidence/import-${theme}.png`});
 		const body = dialog.locator('div').filter({has: page.locator('ol')});
