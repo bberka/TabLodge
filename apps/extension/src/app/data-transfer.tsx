@@ -1824,7 +1824,7 @@ export function ImportDialog({
 				size="lg"
 				className={
 					step === 'preview' && !full
-						? 'h-[calc(100dvh-2rem)] overflow-hidden'
+						? 'max-h-[calc(100dvh-2rem)] overflow-hidden'
 						: step === 'source' && !locked
 							? 'max-h-[calc(100dvh-1rem)] overflow-hidden'
 							: undefined
