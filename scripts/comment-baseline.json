@@ -42,7 +42,7 @@
 	"apps/extension/src/app/popup.tsx": 21,
 	"apps/extension/src/app/private-config.ts": 2,
 	"apps/extension/src/app/private-lock-dialogs.tsx": 4,
-	"apps/extension/src/app/private-lock-ui.tsx": 16,
+	"apps/extension/src/app/private-lock-ui.tsx": 15,
 	"apps/extension/src/app/private-storage.tsx": 1,
 	"apps/extension/src/app/private-sync-settings.tsx": 11,
 	"apps/extension/src/app/project.ts": 8,

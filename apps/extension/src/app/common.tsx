@@ -39,9 +39,7 @@ import {
 	type ToastPosition,
 } from '../shared/toast-prefs';
 import {PrivateWindowMark} from './private-window-appearance';
-import {PrivateLockButton} from './private-lock-ui';
 import {
-	inPrivateWindow,
 	PRIVATE_CONFIG_KEY,
 	PRIVATE_STORAGE_PREFIX,
 	privateConfigNeedsReload,
@@ -902,10 +900,9 @@ export function AppHeader({
 						})}
 					</nav>
 				</div>
-				{(Boolean(children) || inPrivateWindow()) && (
+				{Boolean(children) && (
 					<div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-end gap-2">
 						{children}
-						<PrivateLockButton />
 					</div>
 				)}
 			</header>

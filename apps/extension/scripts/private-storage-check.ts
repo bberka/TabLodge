@@ -470,6 +470,19 @@ async function runLockChecks(
 		name: 'Set a password',
 	});
 	await lockHeading.waitFor();
+	const privateBanner = privatePage.locator(
+		'aside[aria-label="Private window"]',
+	);
+	await privateBanner
+		.getByRole('link', {name: 'Private window settings'})
+		.waitFor();
+	assert.equal(
+		await privateBanner
+			.getByRole('button', {name: 'Lock private windows now'})
+			.count(),
+		0,
+		'no lock button before a lock is set',
+	);
 	await normal.reload();
 	await normal
 		.getByText(
@@ -521,6 +534,21 @@ async function runLockChecks(
 	await privatePage.getByRole('checkbox').check();
 	await submit.click();
 	await privatePage.locator('[data-private-lock-settings]').waitFor();
+	assert.equal(
+		await privateBanner
+			.getByRole('button', {name: 'Lock private windows now'})
+			.count(),
+		1,
+		'the private banner holds the lock button once the lock is set',
+	);
+	assert.equal(
+		await privatePage
+			.locator('header')
+			.getByRole('button', {name: 'Lock private windows now'})
+			.count(),
+		0,
+		'the page header no longer holds the lock button',
+	);
 	const sealed = await storedPrivateValues(normal);
 	assert.ok(sealed.length >= 2);
 	assert.ok(
@@ -582,12 +610,54 @@ async function runLockChecks(
 
 	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
 	await privatePage.getByText('Saved private', {exact: true}).waitFor();
-	const lockNow = privatePage.getByRole('button', {
+	const newtabBanner = privatePage.locator(
+		'aside[aria-label="Private window"]',
+	);
+	const bannerSettings = newtabBanner.getByRole('link', {
+		name: 'Private window settings',
+	});
+	const lockNow = newtabBanner.getByRole('button', {
 		name: 'Lock private windows now',
 	});
+	await bannerSettings.waitFor();
+	await privatePage.setViewportSize({width: 1440, height: 900});
+	assert.equal(
+		await privatePage
+			.locator('header')
+			.getByRole('button', {name: 'Lock private windows now'})
+			.count(),
+		0,
+		'the dashboard header no longer holds the lock button',
+	);
+	const [settingsBox, lockBox] = await Promise.all([
+		bannerSettings.boundingBox(),
+		lockNow.boundingBox(),
+	]);
+	assert.ok(settingsBox, 'the settings link renders');
+	assert.ok(lockBox, 'the lock button renders');
+	assert.ok(
+		lockBox.x > settingsBox.x,
+		'the lock button sits to the right of the settings link',
+	);
+	assert.ok(
+		Math.abs(
+			lockBox.y + lockBox.height / 2 - (settingsBox.y + settingsBox.height / 2),
+		) < 8,
+		'the lock button sits on the settings link’s row',
+	);
 	await lockNow.focus();
 	await privatePage.keyboard.press('Enter');
 	await lockedHeading(privatePage).waitFor();
+	assert.equal(
+		await newtabBanner
+			.getByRole('button', {name: 'Lock private windows now'})
+			.count(),
+		0,
+		'no lock button while the library is locked',
+	);
+	await newtabBanner
+		.getByRole('link', {name: 'Private window settings'})
+		.waitFor();
 	assert.equal(
 		(await focused(privatePage)).tag,
 		'INPUT',
@@ -1422,6 +1492,17 @@ try {
 		true,
 	);
 	await configure(normal, privatePage, 'temporary');
+	await privatePage
+		.locator('aside[aria-label="Private window"]')
+		.getByRole('link', {name: 'Private window settings'})
+		.waitFor();
+	assert.equal(
+		await privatePage
+			.getByRole('button', {name: 'Lock private windows now'})
+			.count(),
+		0,
+		'a private library without a lock shows no lock button',
+	);
 	assert.equal(
 		(
 			await send(privatePage, {
