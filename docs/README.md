@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="../extension/icons/tablodge.svg" alt="" width="72" height="72"><br>
+  <img src="../apps/extension/shell/icons/tablodge.svg" alt="" width="72" height="72"><br>
   TabLodge
 </h1>
 
@@ -33,7 +33,7 @@ TabLodge is a browser extension for Chromium browsers and desktop Firefox. Save 
 The in app Help page explains every feature and setting.
 
 <p align="center">
-  <img src="../site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with a board of bookmark columns above saved sessions" width="800">
+  <img src="../apps/site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with a board of bookmark columns above saved sessions" width="800">
 </p>
 
 ## Install
