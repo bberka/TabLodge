@@ -346,6 +346,7 @@ export function Chips({
 			ref={rowRef}
 			horizontal
 			showsHorizontalScrollIndicator={false}
+			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => {
 				setRowWidth(event.nativeEvent.layout.width);
 			}}

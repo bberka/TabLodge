@@ -23,8 +23,13 @@ describe('the sideways chip row keeps the selected chip in sight', () => {
 		assert.equal(chipScrollX({x: 340, width: 200}, ROW), 340 - CHIP_EDGE_GAP);
 	});
 
-	test('a row that has not been measured yet, or a chip wider than it, stays at the start', () => {
+	test('a narrow row gives up the gap before the chip, so the chip ends in view', () => {
+		assert.equal(chipScrollX({x: 900, width: 400}, 400), 900);
+		assert.equal(chipScrollX({x: 340, width: 390}, ROW), 340 - 10);
+	});
+
+	test('an unmeasured row stays at its start, and a chip wider than the row starts at its own left edge', () => {
 		assert.equal(chipScrollX({x: 900, width: 120}, 0), 0);
-		assert.equal(chipScrollX({x: 5, width: 500}, ROW), 0);
+		assert.equal(chipScrollX({x: 5, width: 500}, ROW), 5);
 	});
 });

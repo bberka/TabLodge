@@ -4,11 +4,10 @@ export function chipScrollX(
 	chip: {x: number; width: number},
 	rowWidth: number,
 ): number {
-	if (rowWidth <= 0) {
+	if (rowWidth <= 0 || chip.x + chip.width <= rowWidth) {
 		return 0;
 	}
 
-	return chip.x + chip.width <= rowWidth
-		? 0
-		: Math.max(0, chip.x - CHIP_EDGE_GAP);
+	const gap = Math.max(0, Math.min(CHIP_EDGE_GAP, rowWidth - chip.width));
+	return Math.max(0, chip.x - gap);
 }
