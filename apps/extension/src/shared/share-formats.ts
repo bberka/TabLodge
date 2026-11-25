@@ -1,4 +1,3 @@
-// Pure builders for the Share dialog: an HTML page, Markdown, plain links and rich text.
 import {escapeHtml} from './escape-html';
 import {
 	SHARED_PAGE_DATA_FORMAT,

@@ -1,6 +1,3 @@
-// The full-backup ZIP: manifest.json, data.json, preferences.json, snapshots.json, trash.json and copies.json.
-// Pure (no browser APIs), so the layout is tested without a page. The worker validates the contents;
-// this module only builds the archive and reads it back, with limits against oversized or damaged files.
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {EnvelopeError, decryptBytes, encryptBytes} from './crypto-envelope';
 import type {Credential} from './passcode';
@@ -11,17 +8,11 @@ import {
 } from './backup-format';
 import {dateStamp} from './export-formats';
 
-/**
-What the worker hands over for a full backup: stored values, as they are in `chrome.storage.local`.
-*/
 export type FullBackupParts = {
 	state: unknown;
 	preferences: unknown;
 	snapshots: unknown;
 	trash: unknown;
-	/**
-	The readable page copies kept on the device (page-copy.ts). Backups made before copies existed have none.
-	*/
 	copies?: unknown;
 };
 
@@ -46,9 +37,6 @@ export type FullBackupManifest = {
 
 export type FullBackupContents = FullBackupParts & {
 	manifest: FullBackupManifest;
-	/**
-	Counted from the data itself, not taken from the manifest.
-	*/
 	counts: FullBackupCounts;
 };
 
@@ -62,16 +50,12 @@ const FILES = {
 	trash: 'trash.json',
 	copies: 'copies.json',
 } as const;
-// Everything is sent to the worker in one message, which Chromium caps near 64 MB.
 const MAX_UNPACKED_BYTES = 60 * 1024 * 1024;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 const lengthOf = (value: unknown) => (Array.isArray(value) ? value.length : 0);
 
-/**
-True when the bytes start with a ZIP local file header ("PK\x03\x04").
-*/
 export function looksLikeZip(bytes: Uint8Array): boolean {
 	return (
 		bytes.length > 3 &&
@@ -106,9 +90,6 @@ export function fullBackupFilename(appName: string, date = new Date()) {
 	return `${fileNamePrefix(appName)}-full-${dateStamp(date)}.zip`;
 }
 
-/**
-Name of a protected backup. It is not a ZIP until decrypted, so it does not end in plain ".zip".
-*/
 export function protectedFullBackupFilename(
 	appName: string,
 	date = new Date(),
@@ -116,9 +97,6 @@ export function protectedFullBackupFilename(
 	return `${fullBackupFilename(appName, date)}.enc`;
 }
 
-/**
-Encrypts a full-backup ZIP with a password (see crypto-envelope.ts). Only this ZIP is ever protected.
-*/
 export function protectFullBackup(
 	zip: Uint8Array,
 	credential: Credential,
@@ -126,9 +104,6 @@ export function protectFullBackup(
 	return encryptBytes(zip, credential);
 }
 
-/**
-Decrypts and reads a protected full backup. Throws a FullBackupError with a message for the user when the credential is wrong or the file is damaged, and reads nothing in that case. Returns null when it decrypts to something that is not a TabLodge full backup.
-*/
 export async function readProtectedFullBackup(
 	bytes: Uint8Array,
 	credential: string,
@@ -186,15 +161,11 @@ function parseEntry(files: Record<string, Uint8Array>, name: string): unknown {
 	}
 }
 
-/**
-Reads a full-backup ZIP, or throws a FullBackupError with a message for the user. Returns null for a ZIP that is not a TabLodge full backup.
-*/
 export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 	if (!looksLikeZip(bytes)) {
 		return null;
 	}
 
-	// Only these entries are read, so a `locked.json` from a backup made while the locked area existed is skipped.
 	const wanted = new Set<string>(Object.values(FILES));
 	let unpacked = 0;
 	let files: Record<string, Uint8Array>;
