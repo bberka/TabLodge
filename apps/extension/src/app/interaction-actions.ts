@@ -14,9 +14,6 @@ const LINK_DRAG_TYPES = new Set([
 const MAX_SESSION_DROP_LINKS = 500;
 
 export type DragPayloadKind = 'column' | 'bookmark' | 'session' | 'link';
-/**
-A link that can be dragged, copied, or bookmarked (saved tabs satisfy this).
-*/
 export type LinkLike = {
 	url: string;
 	title?: string | null;
@@ -26,9 +23,6 @@ export type SessionDragData = {
 	name: string;
 	links: Array<{url: string; title: string}>;
 };
-/**
-The parts of a drag event the document guard reads (a DragEvent satisfies this).
-*/
 export type DropGuardEvent = {
 	defaultPrevented: boolean;
 	dataTransfer?: {types?: Iterable<string> | ArrayLike<string> | null} | null;
@@ -36,15 +30,11 @@ export type DropGuardEvent = {
 };
 type ClosestTarget = {closest?: (selectors: string) => unknown};
 
-/**
-Reads `value[key]` when `value` is an object, as optional chaining on untyped JSON would.
-*/
 const field = (value: unknown, key: string): unknown =>
 	value !== null && typeof value === 'object'
 		? (value as Record<string, unknown>)[key]
 		: undefined;
 
-// What a drag carries, judged from its types alone: drag data is unreadable until the drop.
 export function dragPayloadKind(
 	types: Iterable<string> | ArrayLike<string> | null | undefined,
 ): DragPayloadKind | null {
@@ -64,9 +54,6 @@ export function dragPayloadKind(
 	return list.some((type) => LINK_DRAG_TYPES.has(type)) ? 'link' : null;
 }
 
-// Document-level guard only; it never saves anything. Valid drop targets (bookmark columns, Unfiled)
-// call preventDefault first. Any other link drag gets the "no drop" cursor and a stray drop is
-// swallowed so the page does not navigate to the dragged link. Text fields keep native drops.
 export function shouldBlockDocumentDrop(
 	event: DropGuardEvent | null | undefined,
 ) {
@@ -83,7 +70,6 @@ export function shouldBlockDocumentDrop(
 	);
 }
 
-// Reads the session payload placed by applyLinkDrag. Returns null for anything malformed.
 export function parseSessionDragData(raw: unknown): SessionDragData | null {
 	let data: unknown;
 	try {
@@ -124,10 +110,6 @@ export function parseSessionDragData(raw: unknown): SessionDragData | null {
 	};
 }
 
-/**
-The one link a dragged or pasted `DataTransfer` carries, or null when it holds no web address. The title is empty
-when the source gave none.
-*/
 export function parseDraggedLink(
 	dataTransfer: Pick<DataTransfer, 'getData'> | null,
 ): {url: string; title: string} | null {
@@ -151,7 +133,6 @@ export function parseDraggedLink(
 			.getData('text/uri-list')
 			.split(/\r?\n/)
 			.find((line) => line.trim() && !line.trimStart().startsWith('#')) || '';
-	// A single saved tab carries its title only in the html anchor, beside its url in text/uri-list.
 	if (!raw || !title) {
 		const html = dataTransfer.getData('text/html');
 		if (html) {
@@ -181,9 +162,6 @@ export function parseDraggedLink(
 	};
 }
 
-/**
-Every link a drop carries: links from a named group drag, otherwise the single dragged link.
-*/
 export function parseDroppedLinks(
 	dataTransfer: Pick<DataTransfer, 'types' | 'getData'>,
 ): Array<{url: string; title: string}> {
@@ -213,18 +191,11 @@ export function activateSessionTitle<E, R>(
 	return action === 'edit' ? handlers.edit(event) : handlers.toggle(event);
 }
 
-/**
-What writeClipboard puts on the clipboard. `html` is set only for rich text, so callers can write text/html
-alongside text/plain.
-*/
 export type ClipboardContent = {
 	text: string;
 	html: string | null;
 };
 
-/**
-The clipboard methods writeClipboard uses (navigator.clipboard satisfies this).
-*/
 export type ClipboardLike = {
 	write?(items: unknown[]): Promise<unknown>;
 	writeText(text: string): Promise<unknown>;
@@ -251,9 +222,6 @@ export async function writeClipboard(
 	return html ? 'plain' : 'text';
 }
 
-// Data placed on a drag so saved tabs or grouped links can be dropped into documents, editors, and
-// chat boxes. A single tab drops as a link; a named group drops as a titled list and also carries
-// SESSION_DRAG_TYPE so TabLodge's own columns can add every link.
 export function buildLinkDragData(
 	tabs: readonly LinkLike[] | null | undefined,
 	name = '',
@@ -292,9 +260,6 @@ export function buildLinkDragData(
 	};
 }
 
-/**
-The DataTransfer members applyLinkDrag writes (a DataTransfer satisfies this).
-*/
 export type LinkDragTarget = {
 	setData(format: string, data: string): void;
 	effectAllowed?: DataTransfer['effectAllowed'];

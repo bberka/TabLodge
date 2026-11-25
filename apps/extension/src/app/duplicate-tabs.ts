@@ -1,8 +1,5 @@
 import {webUrl} from '../shared/web-url';
 
-/**
-What Undo needs to put a closed duplicate back where it was.
-*/
 export type ClosedTab = {
 	url: string;
 	windowId: number;
@@ -12,9 +9,6 @@ export type ClosedTab = {
 
 type DuplicateTab = ClosedTab & {id: number};
 
-/**
-Tabs that can be closed because another copy of the same address stays open. Duplicates are exact matches of the canonical web address (a different query or fragment is a different page), across every normal window. Pinned tabs and the tab being viewed in each window are never closed; when a group has one, every unprotected copy goes. Otherwise the most recently used copy stays.
-*/
 export function findDuplicateTabs(tabs: readonly chrome.tabs.Tab[]) {
 	const byUrl = new Map<string, chrome.tabs.Tab[]>();
 	for (const tab of tabs) {
@@ -73,9 +67,6 @@ function isNewer(a: chrome.tabs.Tab, b: chrome.tabs.Tab) {
 	return left === right ? (a.id ?? 0) > (b.id ?? 0) : left > right;
 }
 
-/**
-Closed tabs in the order that restores their positions: window by window, left to right.
-*/
 export function reopenOrder<T extends ClosedTab>(closed: readonly T[]) {
 	return closed.toSorted(
 		(a, b) => a.windowId - b.windowId || a.index - b.index,

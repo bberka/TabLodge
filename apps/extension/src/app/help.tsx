@@ -1140,7 +1140,6 @@ function Help() {
 			label: `${PROJECT.license} License`,
 			href: PROJECT.licenseUrl,
 		},
-		// Written into the package by scripts/build.ts.
 		{
 			icon: FileText,
 			label: 'Open source licences',

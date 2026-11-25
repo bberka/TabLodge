@@ -14,16 +14,12 @@ import {
 	typedSessionName,
 } from './session-name';
 
-// The small window the service worker opens after a save that started without a page (shortcut, right-click menu,
-// toolbar button) when Settings says "Ask each time". The sessions already exist with the fallback name; Save
-// renames them, and Cancel, Escape or closing the window keeps that name.
 function NameSessionPrompt() {
 	const ids = promptGroupIds(location.search);
 	const [initialName, setInitialName] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
 
-	// Escape keeps the default name, like closing the window.
 	useCloseOnEscape();
 
 	useEffect(() => {
@@ -46,7 +42,6 @@ function NameSessionPrompt() {
 
 	async function save(typed: string) {
 		const name = typedSessionName(typed);
-		// Left empty (or unchanged): the default name stays.
 		if (!name || name === initialName || ids.length === 0) {
 			window.close();
 			return;

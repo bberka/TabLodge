@@ -1,5 +1,3 @@
-// The big dialogs (backup, import, share, snapshots, trash) are loaded the first time they are opened, so a page
-// does not download or parse them just to show its list. Once opened, a dialog stays mounted so it can animate closed.
 import {
 	lazy,
 	Suspense,
@@ -16,9 +14,6 @@ import type * as Recovery from './recovery';
 import type * as SharedPages from './shared-pages';
 import type * as TabStats from './tab-stats-dialog';
 
-/**
-Wraps a lazily imported dialog: nothing is loaded or mounted until `open` is first true.
-*/
 function lazyDialog<Props extends {open: boolean}>(
 	load: () => Promise<ComponentType<Props>>,
 ) {
@@ -74,9 +69,6 @@ const RecoveryToolsLoaded = lazy(async () => ({
 	default: (await import('./recovery')).RecoveryTools,
 }));
 
-/**
-The backups list in Settings, loaded when the page reaches it.
-*/
 export function RecoveryTools(
 	props: ComponentProps<typeof Recovery.RecoveryTools>,
 ) {
@@ -93,9 +85,6 @@ export function RecoveryTools(
 	);
 }
 
-/**
-Lazy form of `useShareDialog`: `openShare(payload)` opens the dialog; render `shareDialog` once.
-*/
 export function useShareDialog(showStatus: ShowStatus) {
 	const [payload, setPayload] = useState<DataTransfer.SharePayload | null>(
 		null,
