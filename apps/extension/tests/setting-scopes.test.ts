@@ -105,9 +105,12 @@ test('every setting scoped to the device is named in docs/PRIVACY.md', () => {
 const DATA_KEYS = new Set([
 	'tablodge.state',
 	'tablodge.state.premigration',
+	'tablodge.state.preupgrade',
 	'tablodge.migration',
 	'tablodge.session.',
 	'tablodge.bookmarks.',
+	'tablodge.sidx.',
+	'tablodge.bmchunk.',
 	'tablodge.snapshots',
 	'tablodge.snapshots.live',
 	'tablodge.snapshots.meta',

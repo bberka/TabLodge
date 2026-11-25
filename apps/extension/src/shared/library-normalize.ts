@@ -12,7 +12,7 @@ import {tagFields} from './bookmark-tags';
 import {domainsField} from './column-sites';
 import {deviceStamp, isDeviceKind, MAX_DEVICE_NAME} from './device';
 import {ICON_IDS} from './icon-ids';
-import {LAYOUT_VERSION} from './library-state';
+import {SCHEMA_VERSION} from './library-index';
 import {isRecord} from './library-values';
 import {isSharedPageMode} from './sync/shared-pages';
 import {TOAST_DURATIONS, TOAST_POSITIONS} from './toast-prefs';
@@ -103,7 +103,6 @@ export function isOneOf<T extends string>(
 }
 
 // 10: sessions and bookmarks live in their own storage keys (src/shared/library-state.ts); the data model is unchanged from 9.
-export const SCHEMA_VERSION = LAYOUT_VERSION;
 
 export const DEFAULT_FOLDER_ID = 'unfiled';
 
@@ -1329,3 +1328,5 @@ export function normalizeStore(raw: Raw | null | undefined): Store {
 			: Date.now(),
 	};
 }
+
+export {SCHEMA_VERSION} from './library-index';

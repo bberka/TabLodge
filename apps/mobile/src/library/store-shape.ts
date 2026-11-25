@@ -1,5 +1,5 @@
 import type {Settings, Store} from '../../../extension/src/shared/types';
-import {LAYOUT_VERSION} from '../../../extension/src/shared/library-index';
+import {SCHEMA_VERSION} from '../../../extension/src/shared/library-index';
 
 export const isStore = (value: unknown): value is Store =>
 	typeof value === 'object' &&
@@ -11,7 +11,7 @@ export const isStore = (value: unknown): value is Store =>
 
 export function emptyStore(now: number): Store {
 	return {
-		schemaVersion: LAYOUT_VERSION,
+		schemaVersion: SCHEMA_VERSION,
 		groups: [],
 		folders: [],
 		bookmarkColumns: [],

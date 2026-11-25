@@ -22,14 +22,20 @@ import {
 export const STATE_KEY = 'tablodge.state';
 export const MIGRATION_KEY = 'tablodge.migration';
 export const PREMIGRATION_KEY = 'tablodge.state.premigration';
+export const PREUPGRADE_KEY = 'tablodge.state.preupgrade';
 export const SESSION_KEY_PREFIX = 'tablodge.session.';
 export const BOOKMARKS_KEY_PREFIX = 'tablodge.bookmarks.';
-export const LAYOUT_VERSION = 10;
+export const SESSION_PAGE_KEY_PREFIX = 'tablodge.sidx.';
+export const BOOKMARK_CHUNK_KEY_PREFIX = 'tablodge.bmchunk.';
+export const SCHEMA_VERSION = 10;
+export const INLINE_LAYOUT_VERSION = 10;
+export const LAYOUT_VERSION = 11;
 export const LEGACY_SCHEMA_VERSION = 9;
 export const BATCH_COUNT = 50;
+export const PAGE_SIZE = 100;
 
 export class LibraryDamagedError extends Error {
-	constructor(detail: string) {
+	constructor(readonly detail: string) {
 		super(
 			`The saved library could not be read (${detail}). Nothing was changed. Restore a backup from Settings, or reload the extension and try again.`,
 		);
@@ -56,13 +62,14 @@ export type SessionEntry = {
 	tabSync?: true;
 };
 
-export type BookmarksEntry = {
-	rev: number;
+/**
+One stored piece the index points at: a chunk of bookmarks, a page of session entries, or (layout 10) the whole
+bookmarks record. `sync` is true when the piece carries a `$sync` sidecar.
+*/
+export type PageRef = {
+	key: string;
 	hash: string;
 	count: number;
-	/**
-	True when the bookmarks record carries a `$sync` sidecar.
-	*/
 	sync?: true;
 };
 
@@ -75,9 +82,17 @@ export type MigrationNote = {
 	sessions: number;
 	tabs: number;
 	bookmarks: number;
+	/**
+	Keys an upgrade replaced and keeps until `keepUntil`.
+	*/
+	kept?: string[];
 };
 
 export type LibraryIndex = {
+	/**
+	10 keeps the session entries and one bookmarks record inside the index; 11 keeps them in pages and chunks.
+	*/
+	format: 10 | 11;
 	schemaVersion: number;
 	layout: 'records';
 	rev: number;
@@ -85,8 +100,12 @@ export type LibraryIndex = {
 	folders: unknown[];
 	bookmarkColumns: unknown[];
 	settings: unknown;
+	/**
+	Every session entry. In format 11 the index itself holds none: `loadIndex` fills this from the pages.
+	*/
 	sessions: SessionEntry[];
-	bookmarks: BookmarksEntry;
+	sessionPages: PageRef[];
+	bookmarkParts: PageRef[];
 	garbage: string[];
 	migratedFrom?: MigrationNote;
 	device?: string;
@@ -132,26 +151,86 @@ export function parseSessionEntry(value: unknown): SessionEntry {
 	};
 }
 
-export function parseIndex(entry: Raw): LibraryIndex {
-	const {bookmarks} = entry;
-	if (
-		!isCount(entry.rev) ||
-		!Array.isArray(entry.sessions) ||
-		!isRecord(bookmarks) ||
-		!isCount(bookmarks.rev) ||
-		typeof bookmarks.hash !== 'string' ||
-		!isCount(bookmarks.count)
-	) {
+const bookmarksRevOf = (key: string) =>
+	Number(key.slice(BOOKMARKS_KEY_PREFIX.length));
+
+function parsePageRefs(value: unknown, prefix: string): PageRef[] {
+	if (!Array.isArray(value)) {
 		throw new LibraryDamagedError('the index is incomplete');
 	}
 
-	const sessions = entry.sessions.map((value) => parseSessionEntry(value));
-	if (new Set(sessions.map((session) => session.id)).size !== sessions.length) {
-		throw new LibraryDamagedError('the index lists a session twice');
+	const refs = value.map((item: unknown): PageRef => {
+		if (
+			!isRecord(item) ||
+			typeof item.key !== 'string' ||
+			!item.key.startsWith(prefix) ||
+			typeof item.hash !== 'string' ||
+			!isCount(item.count)
+		) {
+			throw new LibraryDamagedError('the index lists an invalid page');
+		}
+
+		return {
+			key: item.key,
+			hash: item.hash,
+			count: item.count,
+			...(item.sync === true && {sync: true as const}),
+		};
+	});
+	if (new Set(refs.map((ref) => ref.key)).size !== refs.length) {
+		throw new LibraryDamagedError('the index lists a page twice');
+	}
+
+	return refs;
+}
+
+/**
+The index as stored. A layout 10 index carries its session entries; a layout 11 index leaves `sessions` empty for
+the caller to fill from `sessionPages`.
+*/
+export function parseIndex(entry: Raw): LibraryIndex {
+	const paged = Number(entry.schemaVersion) >= LAYOUT_VERSION;
+	if (!isCount(entry.rev)) {
+		throw new LibraryDamagedError('the index is incomplete');
+	}
+
+	let sessions: SessionEntry[] = [];
+	let sessionPages: PageRef[] = [];
+	let bookmarkParts: PageRef[];
+	if (paged) {
+		sessionPages = parsePageRefs(entry.sessionPages, SESSION_PAGE_KEY_PREFIX);
+		bookmarkParts = parsePageRefs(
+			entry.bookmarkChunks,
+			BOOKMARK_CHUNK_KEY_PREFIX,
+		);
+	} else {
+		const {bookmarks} = entry;
+		if (
+			!Array.isArray(entry.sessions) ||
+			!isRecord(bookmarks) ||
+			!isCount(bookmarks.rev) ||
+			typeof bookmarks.hash !== 'string' ||
+			!isCount(bookmarks.count)
+		) {
+			throw new LibraryDamagedError('the index is incomplete');
+		}
+
+		sessions = checkedSessions(
+			entry.sessions.map((value) => parseSessionEntry(value)),
+		);
+		bookmarkParts = [
+			{
+				key: bookmarksKey(bookmarks.rev),
+				hash: bookmarks.hash,
+				count: bookmarks.count,
+				...(bookmarks.sync === true && {sync: true as const}),
+			},
+		];
 	}
 
 	const note = entry.migratedFrom;
 	return {
+		format: paged ? 11 : 10,
 		schemaVersion: Number(entry.schemaVersion),
 		layout: 'records',
 		rev: entry.rev,
@@ -162,12 +241,8 @@ export function parseIndex(entry: Raw): LibraryIndex {
 			: [],
 		settings: entry.settings,
 		sessions,
-		bookmarks: {
-			rev: bookmarks.rev,
-			hash: bookmarks.hash,
-			count: bookmarks.count,
-			...(bookmarks.sync === true && {sync: true as const}),
-		},
+		sessionPages,
+		bookmarkParts,
 		device: syncText(entry.device),
 		tombstones: parseTombstones(entry.tombstones),
 		folderSync: parseSyncMap(entry.folderSync),
@@ -185,8 +260,68 @@ export function parseIndex(entry: Raw): LibraryIndex {
 						sessions: Number(note.sessions) || 0,
 						tabs: Number(note.tabs) || 0,
 						bookmarks: Number(note.bookmarks) || 0,
+						...(Array.isArray(note.kept) && {
+							kept: note.kept.filter(
+								(key): key is string =>
+									typeof key === 'string' &&
+									key.startsWith(BOOKMARKS_KEY_PREFIX),
+							),
+						}),
 					}
 				: undefined,
+	};
+}
+
+export function checkedSessions(sessions: SessionEntry[]): SessionEntry[] {
+	if (new Set(sessions.map((session) => session.id)).size !== sessions.length) {
+		throw new LibraryDamagedError('the index lists a session twice');
+	}
+
+	return sessions;
+}
+
+export const bookmarkCount = (index: LibraryIndex) =>
+	index.bookmarkParts.reduce((sum, part) => sum + part.count, 0);
+
+/**
+The index as it is written to `tablodge.state`.
+*/
+export function storedIndex(index: LibraryIndex, garbage: string[]): Raw {
+	const common = {
+		layout: 'records',
+		rev: index.rev,
+		updatedAt: index.updatedAt,
+		folders: index.folders,
+		bookmarkColumns: index.bookmarkColumns,
+		settings: index.settings,
+		garbage,
+		migratedFrom: index.migratedFrom,
+		device: index.device,
+		tombstones: index.tombstones,
+		folderSync: index.folderSync,
+		columnSync: index.columnSync,
+		preferenceSync: index.preferenceSync,
+	};
+	if (index.format === 11) {
+		return {
+			...common,
+			schemaVersion: LAYOUT_VERSION,
+			sessionPages: index.sessionPages,
+			bookmarkChunks: index.bookmarkParts,
+		};
+	}
+
+	const [part] = index.bookmarkParts;
+	return {
+		...common,
+		schemaVersion: INLINE_LAYOUT_VERSION,
+		sessions: index.sessions,
+		bookmarks: {
+			rev: bookmarksRevOf(part.key),
+			hash: part.hash,
+			count: part.count,
+			...(part.sync && {sync: true as const}),
+		},
 	};
 }
 
@@ -211,7 +346,9 @@ function contentOf(key: string, value: unknown): unknown {
 		return value;
 	}
 
-	return key.startsWith(BOOKMARKS_KEY_PREFIX)
+	return key.startsWith(BOOKMARKS_KEY_PREFIX) ||
+		key.startsWith(BOOKMARK_CHUNK_KEY_PREFIX) ||
+		key.startsWith(SESSION_PAGE_KEY_PREFIX)
 		? value.items
 		: sessionContent(value);
 }
@@ -256,7 +393,8 @@ export function assertStableIds(raw: Raw): void {
 
 export const referencedKeys = (index: LibraryIndex) => [
 	...index.sessions.map((session) => sessionKey(session.id, session.rev)),
-	bookmarksKey(index.bookmarks.rev),
+	...index.sessionPages.map((page) => page.key),
+	...index.bookmarkParts.map((part) => part.key),
 ];
 
 /**
@@ -304,21 +442,54 @@ export type PlannedSession = {
 	unchanged: boolean;
 };
 
+export type PlannedPart = {
+	ref: PageRef;
+	value: {items: unknown[]; $sync?: {items: SyncMap}};
+	json: string;
+	unchanged: boolean;
+};
+
 export type Plan = {
 	sessions: PlannedSession[];
-	bookmarks: {
-		entry: BookmarksEntry;
-		key: string;
-		value: {items: unknown[]; $sync?: {items: SyncMap}};
-		json: string;
-		unchanged: boolean;
-	};
+	sessionPages: PlannedPart[];
+	bookmarks: PlannedPart[];
 };
+
+/**
+Cuts `items` into pieces of `PAGE_SIZE` by position. A piece whose content is the same as the previous piece at that
+position is reused, so an edit changes the piece it falls in and a move changes the pieces it passes.
+*/
+export function planParts(
+	items: readonly unknown[],
+	prefix: string,
+	rev: number,
+	previous: readonly PageRef[],
+): PlannedPart[] {
+	const parts: PlannedPart[] = [];
+	for (let n = 0; n * PAGE_SIZE < items.length; n += 1) {
+		const slice = items.slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE);
+		const json = canonicalJson(slice);
+		const hash = hashText(json);
+		const old = previous[n];
+		const unchanged = old?.hash === hash && old.count === slice.length;
+		parts.push({
+			ref: unchanged
+				? old
+				: {key: `${prefix}${n}.${rev}`, hash, count: slice.length},
+			value: {items: slice},
+			json,
+			unchanged,
+		});
+	}
+
+	return parts;
+}
 
 export function planState(
 	raw: Raw,
 	rev: number,
 	previous: LibraryIndex | null,
+	format: 10 | 11,
 ): Plan {
 	const before = new Map(
 		previous?.sessions.map((session) => [session.id, session]),
@@ -370,23 +541,41 @@ export function planState(
 		},
 	);
 	const bookmarks = Array.isArray(raw.bookmarks) ? raw.bookmarks : [];
+	const paged = previous?.format === 11;
+	if (format === 11) {
+		return {
+			sessions,
+			sessionPages: planParts(
+				sessions.map((session) => session.entry),
+				SESSION_PAGE_KEY_PREFIX,
+				rev,
+				paged ? previous.sessionPages : [],
+			),
+			bookmarks: planParts(
+				bookmarks,
+				BOOKMARK_CHUNK_KEY_PREFIX,
+				rev,
+				paged ? previous.bookmarkParts : [],
+			),
+		};
+	}
+
 	const json = canonicalJson(bookmarks);
 	const hash = hashText(json);
-	const unchanged = previous?.bookmarks.hash === hash;
-	const bookmarkRev = unchanged ? previous.bookmarks.rev : rev;
+	const old = previous?.bookmarkParts[0];
+	const unchanged = old?.hash === hash && !paged;
 	return {
 		sessions,
-		bookmarks: {
-			entry: {
-				rev: bookmarkRev,
-				hash,
-				count: bookmarks.length,
-				...(previous?.bookmarks.sync && {sync: true as const}),
+		sessionPages: [],
+		bookmarks: [
+			{
+				ref: unchanged
+					? old
+					: {key: bookmarksKey(rev), hash, count: bookmarks.length},
+				value: {items: bookmarks},
+				json,
+				unchanged,
 			},
-			key: bookmarksKey(bookmarkRev),
-			value: {items: bookmarks},
-			json,
-			unchanged,
-		},
+		],
 	};
 }
