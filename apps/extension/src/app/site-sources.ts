@@ -1,8 +1,3 @@
-// Sites whose own save TabLodge can follow (Settings › Sources): the user saves a link on the site, and the same
-// link lands in that site's bookmark column. Each site is off until the user adds it in Settings, which asks for an
-// optional host permission for that site only; the content script is registered only while it is granted. A new
-// site is an entry here plus its adapter in shell/site-source.ts; Settings lists it in Add a site by itself.
-// The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
 import {canonicalJson, isRecord} from '../shared/library-values';
 import {
 	SOURCE_COLUMNS,
@@ -21,68 +16,27 @@ export type {SiteSourceId} from '../shared/source-columns';
 
 export type SiteSource = {
 	id: SiteSourceId;
-	/**
-	What the user saves to, as Settings names it.
-	*/
 	label: string;
-	/**
-	One line on what gets saved, shown in the Add a site list and under the site in Settings.
-	*/
 	description: string;
-	/**
-	The site's home page, for its icon.
-	*/
 	homepage: string;
-	/**
-	The site's source column, which takes the links unless Settings picks another, created on the first save.
-	*/
 	column: SourceColumnLook & {id: string};
-	/**
-	Match patterns for the optional host permission and the registered content script.
-	*/
 	origins: string[];
-	/**
-	Host names the content script reads on; `*.example.com` stands for any subdomain of example.com.
-	*/
 	hosts: string[];
-	/**
-	The sites (`domains`) the source column starts with when a save creates it, so a page there saved by hand goes to it too.
-	*/
 	columnSites: string[];
 	scriptId: string;
-	/**
-	The address TabLodge stores for a link the adapter read, or null when it is not a link to something saved there.
-	*/
 	canonicalUrl: (href: string) => string | null;
-	/**
-	For a site whose items link elsewhere: the item's own discussion page, kept in the bookmark's note as
-	`<name>: <address>`.
-	*/
 	discussion?: {name: string; url: (href: string) => string | null};
-	/**
-	The site's save control loads another page (Hacker News' favorite link), so the result of a save is kept for
-	the next page in the tab to show.
-	*/
 	saveLoadsPage?: true;
-	/**
-	The adapter can tell a save before the site handles it, so Settings offers Save to TabLodge only for this site:
-	the content script stops the click on the site's save control and saves the link to TabLodge alone (#296, #391).
-	Medium has none: its bookmark opens Medium's Save to list panel and the page doesn't say whether the story is in
-	a list, so every click reads as a save, and stopping it would also stop the user managing or removing the story.
-	*/
 	keepOffSite?: true;
 };
 
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
 const REDDIT_PERMALINK =
 	/^\/(?:r|u|user)\/[\w-]+\/comments\/[\da-z]+(?:\/[^#/?]*(?:\/[\da-z]+)?)?\/?$/i;
-// A post, and the pages under it (/photo/1, /analytics, ...), which are the same post.
 const X_POST = /^\/(\w{1,15})\/status\/(\d{1,20})(?:\/|$)/;
-// A post or reel, also under the author's name (/<user>/p/<id>/), as some pages link them.
 const INSTAGRAM_POST =
 	/^(?:\/[\w.]{1,30})?\/(p|reels?|tv)\/([\w-]{5,40})(?:\/|$)/;
 
-// First path segments that are GitHub's own pages, not an owner.
 const GITHUB_RESERVED = new Set([
 	'about',
 	'account',
@@ -118,7 +72,6 @@ const GITHUB_RESERVED = new Set([
 const GITHUB_REPO = /^\/([\da-z][\d\-a-z]{0,38})\/([\w\-.]{1,100})(?:\/|$)/i;
 const STACK_OVERFLOW_QUESTION =
 	/^\/(?:questions|q)\/(\d{1,12})(?:\/([\w-]{1,200}))?/;
-// First path segments that are dev.to's own pages, not an author.
 const DEVTO_RESERVED = new Set([
 	'about',
 	'api',
@@ -149,7 +102,6 @@ const DEVTO_ARTICLE = /^\/([\w-]{1,60})\/([\w-]{1,200})\/?$/;
 const LOBSTERS_STORY = /^\/s\/([\da-z]{1,12})(?:\/([\w-]{0,200}))?\/?$/i;
 const BLUESKY_POST =
 	/^\/profile\/([\w\-.:]{1,253})\/post\/([\da-z]{1,32})\/?$/i;
-// First path segments that are SoundCloud's own pages, not an artist.
 const SOUNDCLOUD_RESERVED = new Set([
 	'charts',
 	'discover',
@@ -173,7 +125,6 @@ const LETTERBOXD_FILM = /^(?:\/[\w-]{1,40})?\/film\/([\w-]{1,200})(?:\/|$)/;
 const IMDB_TITLE =
 	/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/title\/(tt\d{5,12})(?:\/|$)/;
 const GOODREADS_BOOK = /^\/book\/show\/(\d{1,12})(?:[-.][^/]*)?\/?$/;
-// A Medium post ends in its 12 hex character id: /<slug>-<id>, /@user/<slug>-<id>, /p/<id>.
 const MEDIUM_POST = /(?:^\/p\/|-)([\da-f]{12})\/?$/;
 const SUBSTACK_POST = /^\/(?:p\/[\w-]{1,200}|home\/post\/p-\d{1,15})\/?$/;
 
@@ -185,10 +136,6 @@ function parse(href: string, base: string) {
 	}
 }
 
-/**
-A video as `https://www.youtube.com/watch?v=<id>`, from a watch, Shorts, or youtu.be address. Playlist, index, and
-time parameters are dropped so the same video is always the same address.
-*/
 export function youtubeVideoUrl(href: string): string | null {
 	const url = parse(href, 'https://www.youtube.com/');
 	if (!url || url.protocol !== 'https:') {
@@ -210,9 +157,6 @@ export function youtubeVideoUrl(href: string): string | null {
 		: null;
 }
 
-/**
-A post or comment as `https://www.reddit.com<permalink>`, so old.reddit.com and www.reddit.com saves match.
-*/
 export function redditPermalinkUrl(href: string): string | null {
 	const url = parse(href, 'https://www.reddit.com/');
 	if (
@@ -228,9 +172,6 @@ export function redditPermalinkUrl(href: string): string | null {
 	return `https://www.reddit.com${path}`;
 }
 
-/**
-A post as `https://x.com/<user>/status/<id>`, so twitter.com and x.com saves match.
-*/
 export function xPostUrl(href: string): string | null {
 	const url = parse(href, 'https://x.com/');
 	const match =
@@ -241,10 +182,6 @@ export function xPostUrl(href: string): string | null {
 	return match ? `https://x.com/${match[1]}/status/${match[2]}` : null;
 }
 
-/**
-A post or a reel as `https://www.instagram.com/p/<id>/`. Instagram opens a reel at either address, and the saved
-page lists reels at `/p/`, so one form keeps a reel saved from its page and from the saved page the same (#383).
-*/
 export function instagramPostUrl(href: string): string | null {
 	const url = parse(href, 'https://www.instagram.com/');
 	const match =
@@ -255,9 +192,6 @@ export function instagramPostUrl(href: string): string | null {
 	return match ? `https://www.instagram.com/p/${match[2]}/` : null;
 }
 
-/**
-A repository as `https://github.com/<owner>/<repo>`, from any page in it.
-*/
 export function githubRepoUrl(href: string): string | null {
 	const url = parse(href, 'https://github.com/');
 	const match =
@@ -274,9 +208,6 @@ export function githubRepoUrl(href: string): string | null {
 		: null;
 }
 
-/**
-A story's own page on Hacker News, `https://news.ycombinator.com/item?id=<id>`.
-*/
 export function hackerNewsItemUrl(href: string): string | null {
 	const url = parse(href, 'https://news.ycombinator.com/');
 	const id =
@@ -290,10 +221,6 @@ export function hackerNewsItemUrl(href: string): string | null {
 		: null;
 }
 
-/**
-The address a story on Hacker News or Lobsters links to, which can be any web page, or the story's own page for a
-text post. Relative links are the site's own pages.
-*/
 function storyUrl(base: string, ownPage: (href: string) => string | null) {
 	return (href: string) => {
 		const url = parse(href, base);
@@ -307,9 +234,6 @@ function storyUrl(base: string, ownPage: (href: string) => string | null) {
 	};
 }
 
-/**
-A question as `https://stackoverflow.com/questions/<id>/<slug>`, also from a `/q/<id>` short link (without a slug).
-*/
 export function stackOverflowQuestionUrl(href: string): string | null {
 	const url = parse(href, 'https://stackoverflow.com/');
 	const match =
@@ -325,9 +249,6 @@ export function stackOverflowQuestionUrl(href: string): string | null {
 		: `https://stackoverflow.com/questions/${match[1]}`;
 }
 
-/**
-An article as `https://dev.to/<author>/<slug>`.
-*/
 export function devtoArticleUrl(href: string): string | null {
 	const url = parse(href, 'https://dev.to/');
 	const match =
@@ -339,9 +260,6 @@ export function devtoArticleUrl(href: string): string | null {
 		: null;
 }
 
-/**
-A story's own page on Lobsters, `https://lobste.rs/s/<id>/<slug>`.
-*/
 export function lobstersStoryUrl(href: string): string | null {
 	const url = parse(href, 'https://lobste.rs/');
 	const match =
@@ -357,9 +275,6 @@ export function lobstersStoryUrl(href: string): string | null {
 		: `https://lobste.rs/s/${match[1]}`;
 }
 
-/**
-Whether an https address is on one of the hosts, where `*.example.com` also takes example.com's subdomains.
-*/
 function onHost(url: URL | null, ...hosts: string[]): url is URL {
 	return (
 		url?.protocol === 'https:' &&
@@ -371,9 +286,6 @@ function onHost(url: URL | null, ...hosts: string[]): url is URL {
 	);
 }
 
-/**
-A post as `https://bsky.app/profile/<handle>/post/<id>`.
-*/
 export function blueskyPostUrl(href: string): string | null {
 	const url = parse(href, 'https://bsky.app/');
 	const match = onHost(url, 'bsky.app')
@@ -382,9 +294,6 @@ export function blueskyPostUrl(href: string): string | null {
 	return match ? `https://bsky.app/profile/${match[1]}/post/${match[2]}` : null;
 }
 
-/**
-A track as `https://soundcloud.com/<artist>/<track>`, or a playlist as `https://soundcloud.com/<artist>/sets/<name>`.
-*/
 export function soundcloudItemUrl(href: string): string | null {
 	const url = parse(href, 'https://soundcloud.com/');
 	const match = onHost(url, 'soundcloud.com', 'm.soundcloud.com')
@@ -399,10 +308,6 @@ export function soundcloudItemUrl(href: string): string | null {
 		: `https://soundcloud.com/${match[1]}/${match[3]}`;
 }
 
-/**
-A track, album, playlist, episode, show, or artist as `https://open.spotify.com/<kind>/<id>`, without the
-language prefix or share parameters.
-*/
 export function spotifyItemUrl(href: string): string | null {
 	const url = parse(href, 'https://open.spotify.com/');
 	const match = onHost(url, 'open.spotify.com')
@@ -411,9 +316,6 @@ export function spotifyItemUrl(href: string): string | null {
 	return match ? `https://open.spotify.com/${match[1]}/${match[2]}` : null;
 }
 
-/**
-A film as `https://letterboxd.com/film/<slug>/`, also from a member's page for it.
-*/
 export function letterboxdFilmUrl(href: string): string | null {
 	const url = parse(href, 'https://letterboxd.com/');
 	const match = onHost(url, 'letterboxd.com')
@@ -422,9 +324,6 @@ export function letterboxdFilmUrl(href: string): string | null {
 	return match ? `https://letterboxd.com/film/${match[1]}/` : null;
 }
 
-/**
-A film or show as `https://www.imdb.com/title/<id>/`.
-*/
 export function imdbTitleUrl(href: string): string | null {
 	const url = parse(href, 'https://www.imdb.com/');
 	const match = onHost(url, 'www.imdb.com', 'm.imdb.com')
@@ -433,9 +332,6 @@ export function imdbTitleUrl(href: string): string | null {
 	return match ? `https://www.imdb.com/title/${match[1]}/` : null;
 }
 
-/**
-A book as `https://www.goodreads.com/book/show/<id>`; the slug after the id varies, so it is dropped.
-*/
 export function goodreadsBookUrl(href: string): string | null {
 	const url = parse(href, 'https://www.goodreads.com/');
 	const match = onHost(url, 'www.goodreads.com')
@@ -444,10 +340,6 @@ export function goodreadsBookUrl(href: string): string | null {
 	return match ? `https://www.goodreads.com/book/show/${match[1]}` : null;
 }
 
-/**
-A post as `https://medium.com/p/<id>`, which Medium redirects to the post wherever it is published, so one post
-read on medium.com and on a publication's subdomain is the same address.
-*/
 export function mediumPostUrl(href: string): string | null {
 	const url = parse(href, 'https://medium.com/');
 	const match = onHost(url, 'medium.com', '*.medium.com')
@@ -456,10 +348,6 @@ export function mediumPostUrl(href: string): string | null {
 	return match ? `https://medium.com/p/${match[1]}` : null;
 }
 
-/**
-A post on substack.com or a publication's substack.com subdomain, without its query. A relative link is read
-against `base`, the page it is on.
-*/
 export function substackPostUrl(
 	href: string,
 	base = 'https://substack.com/',
@@ -688,9 +576,6 @@ export const SITE_SOURCES: readonly SiteSource[] = SITES.map((site) => ({
 	column: {...SOURCE_COLUMNS[site.id], id: sourceColumnId(site.id)},
 }));
 
-/**
-The content script every source registers; it picks its adapter from the page's host.
-*/
 export const SITE_SOURCE_SCRIPT = 'site-source.js';
 
 export function siteSourceById(id: unknown): SiteSource | undefined {
@@ -706,26 +591,11 @@ export function siteSourceForUrl(href: unknown): SiteSource | undefined {
 	return SITE_SOURCES.find((source) => onHost(url, ...source.hosts));
 }
 
-/**
-Outside the library, in chrome.storage.local unprefixed: the permission and the registered script belong to the
-browser, not to a library. Two parts:
-
-	sources  per browser, never synced: whether the site runs here, why it went off or stopped saving, and whether
-	         the dashboard already pointed to a site that is on in another browser
-	choices  the user's choices, synced as `source` records (docs/adr/0009-sources-settings-sync.md): one entry per
-	         site that is on, holding its column and save mode. Kept as they arrived, so a site or a field this
-	         version does not know goes back to the server unchanged.
-
-A site runs here only while it has a choice and this browser grants its permission.
-*/
 export const SITE_SOURCES_KEY = 'tablodge.sources';
 
 type SiteSourceLocal = {
 	enabled: boolean;
 	notice?: SiteSourceNotice;
-	/**
-	The dashboard showed that the site is on in another browser.
-	*/
 	pointed?: true;
 };
 export type SiteSourcesState = {
@@ -733,9 +603,6 @@ export type SiteSourcesState = {
 	choices: Record<string, Record<string, unknown>>;
 };
 
-/**
-A site's synced choices as this version reads them. `wanted`: the site is on, in this browser or another.
-*/
 export function sourceChoice(
 	state: SiteSourcesState,
 	source: SiteSource,
@@ -755,12 +622,6 @@ export function sourceChoice(
 	};
 }
 
-/**
-The choice with `field` set to `value`, or removed when `value` is undefined; the other fields stay as they are.
-*/
-/**
-Stores a site's choices as they came. A computed key, so an id such as `__proto__` stays an ordinary key.
-*/
 export function putChoice(
 	state: SiteSourcesState,
 	id: string,
@@ -769,11 +630,6 @@ export function putChoice(
 	state.choices = {...state.choices, [id]: value};
 }
 
-/**
-Applies choices from other devices: `put` adds or replaces, `remove` deletes. A site whose stored value no longer
-equals `was` (what the sync round read) changed here meanwhile, so it keeps this browser's edit, which the round's
-push then sends, and is listed in `kept`. `removed` lists the known sites that went off.
-*/
 export function applySyncedChoices(
 	state: SiteSourcesState,
 	put: ReadonlyArray<{id: string; value: Record<string, unknown>}>,
@@ -818,9 +674,6 @@ export function applySyncedChoices(
 	return {removed, kept};
 }
 
-/**
-Removes a site's choices: the site is off in every browser.
-*/
 export function withoutChoice(state: SiteSourcesState, id: string) {
 	const {[id]: _removed, ...rest} = state.choices;
 	state.choices = rest;
@@ -857,7 +710,6 @@ export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 	});
 	let choices: SiteSourcesState['choices'] = {};
 	if (isRecord(raw) && isRecord(raw.choices)) {
-		// Built with fromEntries, so an id such as `__proto__` stays an ordinary key.
 		choices = Object.fromEntries(
 			Object.entries(raw.choices).filter(
 				(entry): entry is [string, Record<string, unknown>] =>
@@ -865,7 +717,6 @@ export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 			),
 		);
 	} else {
-		// Stored before choices synced: a site that was on, or went off when its access was revoked, keeps them.
 		for (const source of SITE_SOURCES) {
 			const value = saved[source.id];
 			const entry = isRecord(value) ? value : {};
@@ -891,9 +742,6 @@ export function siteSourcesValue(state: SiteSourcesState) {
 	return {version: 1, sources: state.sites, choices: state.choices};
 }
 
-/**
-The local part of a site's entry without its notice.
-*/
 export const withoutNotice = ({
 	notice: _notice,
 	...entry
@@ -909,16 +757,9 @@ export function siteSourceStatuses(
 	}));
 }
 
-/**
-Labels of the Undo steps source saves create; the page may only undo those.
-*/
 export const siteSourceUndoLabel = (source: SiteSource) =>
 	`Save from ${source.column.name}`;
 
-/**
-The site whose saves go into a column, in this browser or another synced one, so deleting that column asks whether to
-stop them too: its source column, while the site is on anywhere and Settings picks no other column that still exists.
-*/
 export function sourceSavingInto(
 	columnId: string,
 	columns: ReadonlyArray<Pick<BookmarkColumn, 'id'>>,

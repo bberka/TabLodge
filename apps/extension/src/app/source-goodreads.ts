@@ -1,9 +1,3 @@
-// Want to Read on Goodreads: notices the user shelving a book as Want to Read, by either of the site's controls:
-//   - on a book's page, the Want to Read button (`button.Button--wtr`). Once the book is on a shelf it is replaced by
-//     a button that edits the shelf, so a `Button--wtr` click is always an add. The arrow beside it
-//     ("…choose a shelf…") only opens the shelf list and saves nothing.
-//   - on older list pages, the Want to Read button of a form posting to `/shelf/add_to_shelf` with `name=to-read`.
-// On a book's page the book is the page; in a list it is the row's title link.
 import {goodreadsBookUrl} from './site-sources';
 import {
 	controlLabel,

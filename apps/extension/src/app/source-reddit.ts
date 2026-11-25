@@ -1,11 +1,3 @@
-// Reddit saved: notices the user clicking Save on a post or a comment.
-//   - www.reddit.com: Save in a post's or comment's overflow menu. Posts and comments are <shreddit-post> and
-//     <shreddit-comment> elements carrying their permalink. A saved item's menu says "Remove from saved" instead.
-//   - old.reddit.com: the "save" link of a .thing, which turns to "unsave" once saved.
-// The new interface is found by the English "Save" label; the old one by its markup.
-// The saved page (/user/<name>/saved/) is read for catch-up (#377): new Reddit's loaded <shreddit-post> cards, and
-// old Reddit's .thing rows, posts and comments. New Reddit's saved comments are not read: their card was not
-// available on a real page to check that it gives the address a click-save stores.
 import type {SavedPageReader} from './source-catch-up';
 import {redditPermalinkUrl} from './site-sources';
 import {
@@ -18,7 +10,6 @@ import {
 } from './source-reader';
 
 const NEW_ITEM = 'shreddit-post, shreddit-comment';
-// Where a new interface Save sits: an item's overflow menu or action row, or a menu opened from one.
 const NEW_MENU =
 	'shreddit-post-overflow-menu, shreddit-overflow-menu, shreddit-comment-action-row, [role="menu"]';
 const CONTROL =
@@ -79,7 +70,6 @@ export const readRedditSavedPage: SavedPageReader = (document) => {
 };
 
 export function createRedditReader(now = () => Date.now()): SourceReader {
-	// The post or comment whose overflow menu is open, for a menu Reddit draws outside the item.
 	const lastItem = rememberLast<SourceLink | undefined>(now);
 	return (event) => {
 		const path = eventElements(event);

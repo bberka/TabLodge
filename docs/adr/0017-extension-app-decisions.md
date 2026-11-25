@@ -514,3 +514,139 @@ Status: accepted, 2026-11-23. Issue #442.
 ### Private lock settings
 
 * **Regular windows only point to the lock.** The lock settings panel in a regular window shows the status and sends the user to a private window, because the key lives with the private worker (`private-lock-dialogs.tsx:JoinServerForm`).
+
+### Site sources
+
+* **Each site is a save hook.** The user saves a link on the site and it lands in that site's bookmark column. Each site is off until added in Settings, which asks for one optional host permission for that site only; its content script runs only while that permission is granted (`site-sources.ts:SITES`).
+* **A new site is two edits.** An entry here plus its adapter in `shell/site-source.ts`; Settings lists it in Add a site by itself (`site-sources.ts:SITES`).
+* **The manifest matches this list.** `optional_host_permissions` must list exactly the origins here, and `tests/site-sources.test.ts` checks it (`site-sources.ts:SITES`).
+* **Some items link to a discussion page.** It is kept in the bookmark's note as `<name>: <address>` (`site-sources.ts:SiteSource`).
+* **A save that loads another page is kept for the next page.** Hacker News' favorite link loads a page, so the result is shown there (`site-sources.ts:SiteSource`).
+* **Save to TabLodge only is offered where the adapter can tell a save early.** The content script stops the site's own click for that site only (`site-sources.ts:SiteSource`; the listener is in source-keep-off.ts).
+* **Playlist, index and time parameters are dropped.** So the same video saved from anywhere matches (`site-sources.ts:youtubeVideoUrl`).
+* **Old and new Reddit match.** `old.reddit.com` and `www.reddit.com` saves give the same address (`site-sources.ts:redditPermalinkUrl`).
+* **Reels and posts share one address.** Instagram opens a reel at either address, and the saved page lists reels at `/p/` (`site-sources.ts:instagramPostUrl`).
+* **Medium posts match across hosts.** Medium redirects `/p/<id>` to the post wherever it is published, so a publication's own domain gives the same address (`site-sources.ts:mediumPostUrl`).
+* **Site choices are stored outside the library.** The permission and the registered script belong to the browser, not to a library; the choices sync (`site-sources.ts:SITE_SOURCES_KEY`).
+* **The dashboard remembers a site is on elsewhere.** It was shown once (`site-sources.ts:SiteSourcesState`).
+* **Keys are computed.** An id such as `__proto__` stays an ordinary key (`site-sources.ts:putChoice`).
+* **Synced choices from other devices only apply if unchanged.** A site whose stored value no longer equals what the sync round read is left alone (`site-sources.ts:applySyncedChoices`).
+* **Built with fromEntries.** So `__proto__` stays an ordinary key (`site-sources.ts:parseSiteSourcesState`).
+* **Old stored choices are kept.** A site that was on, or went off when its access was revoked, keeps them (`site-sources.ts:parseSiteSourcesState`).
+* **Only these Undo steps are allowed.** Labels of the Undo steps that source saves create; the page may undo only those (`site-sources.ts:siteSourceUndoLabel`).
+* **A column delete can stop its source saves.** The site saving into a column, here or in another synced browser, is asked about (`site-sources.ts:sourceSavingInto`).
+
+### Bluesky
+
+* **Bluesky saves are read from its markup.** The bookmark button in the post's action row, or the item in its "..." menu. The save state is in the label only, and only the English label counts (`source-bluesky.ts:createBlueskyReader`).
+* **A menu is matched to the post clicked last.** It opens away from the post (`source-reader.ts:rememberLast`).
+* **A reply's own link is the first in the header.** A reply in a thread links to itself before its text; a later link to another post is not the item (`source-bluesky.ts:postUrl`).
+* **Document order decides.** Links before the post's text come first, and the text ends the header (`source-bluesky.ts:postIn`).
+
+### Catch-up
+
+* **Catch-up reads the saved page and only reads.** It asks the worker how many items TabLodge lacks, and a toast reports it. It clicks nothing and sends no request beyond that; one page load shows at most one message (`source-catch-up-page.ts:watchSavedPage`).
+* **Sites load saved pages in place.** So the page is watched, not read once (`source-catch-up-page.ts:watchSavedPage`).
+* **The page is read at most once a second.** Reddit's pages change all the time (`source-catch-up-page.ts:READ_EVERY_MS`).
+* **A count the worker could not answer is retried.** An update can restart the worker; retries are three in a row (`source-catch-up-page.ts:RETRIES`).
+* **Addresses asked about are remembered.** The toast's own insertion and unrelated page changes do not ask again (`source-catch-up-page.ts:watchSavedPage`).
+* **Only the newest answer shows.** Answers can come back out of order (`source-catch-up-page.ts:watchSavedPage`).
+* **Leaving the saved page drops an answer on its way.** Sites like YouTube and X change pages in place; coming back asks again (`source-catch-up-page.ts:watchSavedPage`).
+* **Settings changes re-count.** A site removed and added again forgets its Not now answers, so the page is counted again (`source-catch-up-page.ts:watchSavedPage`).
+* **Catch-up follows click-save rules.** Reading the saved page and adding the missing items use the same rules as a click-save, so an address in the library or the trash never counts as missing (`source-catch-up.ts:missingSourceLinks`).
+* **The per-page limit is high on purpose.** Old Reddit lists 25 to 100 per page, and new Reddit keeps adding while scrolling (`source-catch-up.ts:CATCH_UP_MAX_LINKS`).
+* **Not now is per device.** The dismissed addresses stay outside the library and never sync, so the toast returns only for an address the user did not answer (`source-catch-up.ts:SOURCE_CATCH_UP_KEY`).
+* **Not now keeps the longest page.** The dismissed list is at least a whole page (`source-catch-up.ts:DISMISSED_MAX`).
+
+### Dev.to
+
+* **Dev.to saves come from two controls.** The article's reading list button in the reactions bar, or a feed card's Save button. Both are found by markup, so every interface language works (`source-devto.ts:createDevtoReader`).
+* **Saved state is read from attributes.** `aria-pressed` or the `selected` class; a click on a saved article un-saves, which saves nothing (`source-devto.ts:createDevtoReader`).
+* **The article is the card's title link.** On the article's own page it is the page's address (`source-devto.ts:createDevtoReader`).
+* **The canonical link can name another site.** The article was first published there (`source-devto.ts:createDevtoReader`).
+
+### GitHub
+
+* **GitHub stars come from two markups.** A Star button in a form posting to `/<owner>/<repo>/star` (the Unstar form posts to `/unstar`), or a React-drawn repository page with one `star-button` reading Star or Starred (`source-github.ts:createGithubReader`).
+* **The form names the repository in every language.** (`source-github.ts:STAR_FORM`).
+* **The title is the repository.** `<owner>/<repo>`, with the description from the About box or the list row (`source-github.ts:description`).
+* **Only the user's own stars are saves.** Stars pages are read for catch-up; another person's public stars are not the user's saves, so a page whose user is not the signed-in login reads as nothing (`source-github.ts:starsOwner`).
+* **A Star button is found by label too.** For a page that no longer wraps it in the form (`source-github.ts:STAR_LABEL`).
+* **A Star button outside its form.** On a repository's own page the page is the repository; anywhere else it cannot be told (`source-github.ts:starWithoutForm`).
+* **An unstarred row stays listed.** It shows with its star control turned off (`source-github.ts:readGithubSavedPage`).
+* **An Unstar or a topic star saves nothing.** Only a repository star counts (`source-github.ts:readGithubSavedPage`).
+
+### Goodreads
+
+* **Want to Read saves come from two controls.** The book page's Want to Read button, or the form on older list pages posting to `/shelf/add_to_shelf` with `name=to-read` (`source-goodreads.ts:createGoodreadsReader`).
+* **A Button--wtr click is always an add.** Once on a shelf the button edits the shelf instead, so the class is only on add (`source-goodreads.ts:PAGE_SAVE`).
+* **The shelf arrow saves nothing.** It only opens the shelf list (`source-goodreads.ts:CHOOSE_SHELF`).
+* **The book is the page or the row's title.** On a book's page the page is the book; in a list it is the title link (`source-goodreads.ts:createGoodreadsReader`).
+
+### Hacker News
+
+* **Favorites come from the story's subtext row.** The `fave?id=` link; once favorited it reads un-favorite and carries `un=t` (`source-hackernews.ts:FAVE`).
+* **A favorite on a comment saves nothing.** Only story rows count (`source-hackernews.ts:createHackerNewsReader`).
+
+### IMDb
+
+* **Watchlist saves come from the poster ribbon or the title page button.** `aria-pressed="true"` means on the list, and a click then removes it, which saves nothing; the attribute is the same in every language (`source-imdb.ts:createImdbReader`).
+* **A ribbon outside a card is the page's title.** (`source-imdb.ts:createImdbReader`).
+
+### Instagram
+
+* **Instagram saves are found by the English Save label.** The icon button reads Remove once saved. A feed post is an article whose timestamp links to it; a post or reel on its own page is at the page's address (`source-instagram.ts:createInstagramReader`).
+* **The saved page is read for catch-up.** Only its owner can open it; it lists saved posts and reels, each with its caption as the image's alt (`source-instagram.ts:readInstagramSavedPage`).
+* **The caption is the longest non-link line.** The author's name is a link, so it is skipped (`source-instagram.ts:caption`).
+* **The grid marks reels.** A reel links at `/p/` and carries a Clip icon (`source-instagram.ts:readInstagramSavedPage`).
+* **A post page holds one post.** The post at the page's address, not a feed of them (`source-instagram.ts:createInstagramReader`).
+
+### Save to TabLodge only
+
+* **A save can be kept from the site (#296).** When the user chose it for the site, a click the adapter reads as a save is stopped before the site's own handlers see it, and the link goes to TabLodge alone (`source-keep-off.ts:listenForSaves`).
+* **Every doubt lets the click through.** A broken adapter costs a normal site save, never a lost one (`source-keep-off.ts:listenForSaves`).
+* **Unreadable clicks, unloaded choices and Shift all reach the site.** (`source-keep-off.ts:listenForSaves`).
+* **A kept save can be replayed.** `replay` clicks the control again, and the listener lets that click through (`source-keep-off.ts:KeptSave`).
+* **Replays use the clickable element.** An icon inside a button has no click method, and the browser marks a script's click untrusted, so the replay goes to the nearest one (`source-keep-off.ts:replayClick`).
+* **Listening is in the capture phase.** The adapter reads a control before the site changes it, so a save can be stopped before the site acts (`source-keep-off.ts:listenForSaves`).
+* **A failed save is replayed.** When the save failed or the source is off here, the click is replayed so the site saves it after all (`source-keep-off.ts:settleKeptSave`).
+
+### Letterboxd
+
+* **Watchlist saves come from the film page or a poster's menu.** Removing reads "This film is in your watchlist" or "Remove from watchlist" and saves nothing. Letterboxd is English only (`source-letterboxd.ts:createLetterboxdReader`).
+* **A poster's menu is matched to the last poster clicked.** The menu opens away from the poster, which names its film in `data-item-link` (`source-letterboxd.ts:createLetterboxdReader`).
+
+### Lobsters
+
+* **Lobsters saves come from the save form.** The submit input in `form.saver` inside the story; its value turns to "unsave" once saved. The site sends the form with a script, so the page stays (`source-lobsters.ts:createLobstersReader`).
+* **A text post's link is its own page.** The title link can point to the story's page instead of the article (`source-lobsters.ts:createLobstersReader`).
+* **A story page holds merged stories.** Each has its own details block and its own save (`source-lobsters.ts:createLobstersReader`).
+
+### Medium
+
+* **Medium saves are reading list clicks.** The bookmark button on a story, on its page or on a card. Every click counts as a save, since it never removes one; the label is fixed English (`source-medium.ts:createMediumReader`).
+* **A click on a saved story is a duplicate.** The worker skips it (`source-medium.ts:createMediumReader`).
+* **The label is on the icon.** A click on the button around it is found by the icon inside (`source-medium.ts:SAVE_ICON`).
+* **The story page has its own bookmark.** It is told apart by its test id, since the story is in an article too (`source-medium.ts:PAGE_SAVE`).
+* **The canonical link can name a publication's domain.** The address rule does not take it, so the canonical link is checked (`source-medium.ts:createMediumReader`).
+
+### Source readers
+
+* **Adapters only read the DOM.** Each looks at a click before the site handles it, and says whether it was a save and which link (`source-reader.ts:SourceRead`).
+* **Unreadable is not a failure.** The user saved something but the page did not give what the adapter needs, so nothing is saved (`source-reader.ts:SourceRead`).
+* **A menu's click is only matched for a minute.** An older click is too unsure to say which item the menu belongs to (`source-reader.ts:CONTEXT_TTL_MS`).
+* **Shadow roots are searched.** The click path includes elements inside open shadow roots (`source-reader.ts:eventElements`).
+
+### Reddit
+
+* **Reddit saves come from two interfaces.** New Reddit's Save in a post's or comment's overflow menu (found by the English label); old Reddit's "save" link, which turns to "unsave" once saved (`source-reddit.ts:createRedditReader`).
+* **The saved page is read for catch-up.** New Reddit's loaded cards and old Reddit's rows, posts and comments (`source-reddit.ts:readRedditSavedPage`).
+* **New Reddit's saved comments are not read.** Their card was not available on a real page to check that it gives the address a click-save stores (`source-reddit.ts:readRedditSavedPage`).
+* **New Reddit's Save sits in two places.** An item's overflow menu or action row, or a menu opened from one (`source-reddit.ts:NEW_MENU`).
+* **A menu Reddit draws outside the item is matched to the last item.** (`source-reddit.ts:createRedditReader`).
+
+### SoundCloud
+
+* **Likes come from the Like button.** A liked item carries `.sc-button-selected`, and a click on it unlikes, which saves nothing; both are classes, so every interface language works (`source-soundcloud.ts:createSoundcloudReader`).
+* **The item is the row's or player bar's title link.** On a track's or playlist's own page it is the page (`source-soundcloud.ts:createSoundcloudReader`).
+* **The page header is the page's own title.** List rows above it have titles of their own (`source-soundcloud.ts:PAGE_TITLE`).

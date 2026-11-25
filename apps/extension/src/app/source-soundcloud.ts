@@ -1,7 +1,3 @@
-// Likes on SoundCloud: notices the user clicking Like (`.sc-button-like`) on a track or playlist. A liked one carries
-// `.sc-button-selected`, and a click on it unlikes, which saves nothing; both are classes, so this works in every
-// interface language. The item is the title link of the list row or player bar the button is in, or else the page
-// itself on a track's or playlist's own page.
 import {soundcloudItemUrl} from './site-sources';
 import {
 	eventElements,
@@ -19,7 +15,6 @@ const ITEMS = [
 		'a.soundTitle__title, a.soundBadge__title',
 	],
 ] as const;
-// The page's own header; list rows above it have titles of their own.
 const PAGE_TITLE = 'h1';
 
 export function createSoundcloudReader(document: Document): SourceReader {
