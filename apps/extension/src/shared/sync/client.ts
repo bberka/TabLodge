@@ -1,12 +1,3 @@
-/*
-The sync client the service worker runs: it connects to a self hosted server, runs sync rounds, and keeps a live
-socket open so changes from other devices arrive within a moment. Everything it touches (storage, the network,
-the library) comes in through `SyncHost`, so the tests drive it against the reference server in memory.
-
-A round: stamp local edits, pull and apply the server's changes page by page, then push the outbox. Each library
-read and write happens inside the worker's mutation queue (`host.mutate`); the network calls happen between them,
-so a slow server never holds up the app. Rounds never overlap: a request during a round runs one more after it.
-*/
 import type {Store} from '../types';
 import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
@@ -44,27 +35,13 @@ import {
 export const SYNC_CONFIG_KEY = 'tablodge.sync.config';
 const SYNC_STATE_KEY = 'tablodge.sync.state';
 export const SYNC_STATUS_KEY = 'tablodge.sync.status';
-/**
-Whether this browser syncs its settings. Missing means yes; only an explicit `false` turns it off.
-*/
 export const SYNC_SETTINGS_KEY = 'tablodge.sync.settings';
 export const SYNC_ALARM = 'tablodge-sync';
-/**
-Written by a private window's worker after it saves to the shared library, so the regular worker, which runs sync,
-sends the change right away. Split workers cannot message each other, but they share local storage.
-*/
 export const SYNC_NUDGE_KEY = 'tablodge.sync.nudge';
-/**
-Minutes between fallback rounds, which also reopen a closed live socket.
-*/
 export const SYNC_ALARM_MINUTES = 5;
 export const MIN_TOKEN_LENGTH = 32;
-// How long a server's account of itself (protocol, version, features) is trusted.
 const FEATURE_CHECK_MS = 10 * 60 * 1000;
 
-/**
-A new server token: 32 random bytes as 64 hex characters, which paste cleanly into any form.
-*/
 export function createSyncToken(): string {
 	return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
 		byte.toString(16).padStart(2, '0'),
@@ -72,14 +49,12 @@ export function createSyncToken(): string {
 }
 
 const PULL_LIMIT = 500;
-// Record kinds that sync only when the server and the host support them.
 const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source', 'setting'] as const;
 type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 2500;
 const LOCAL_CHANGE_MAX_WAIT_MS = 10_000;
 const PUSH_CHECKPOINT_MS = 3000;
-// Chrome keeps an extension service worker alive while its WebSocket exchanges messages within 30 seconds.
 const PING_MS = 20_000;
 const RECONNECT_MIN_MS = 5000;
 const RECONNECT_MAX_MS = 5 * 60 * 1000;
@@ -99,22 +74,10 @@ export type SyncStatus = {
 	live: boolean;
 	lastSyncAt: number | null;
 	pending: number;
-	/**
-	Changes the server refused because they could bring back a deleted record or had a wrong clock.
-	*/
 	refused: number;
 	error: string | null;
-	/**
-	The library on the server is encrypted and this device needs the password to read it.
-	*/
 	needsKey?: boolean;
-	/**
-	What the server last said about itself at /v1/status. Missing until a round has asked, or when it did not answer.
-	*/
 	server?: ServerInfo;
-	/**
-	Sync stopped because the server speaks another protocol, and this side needs updating to fix it.
-	*/
 	incompatible?: 'server' | 'app';
 };
 
@@ -131,22 +94,11 @@ export type SyncSocket = {
 	): void;
 };
 
-/**
-Encrypts record values before they leave this device and opens them as they arrive. Used for the private windows'
-library; the regular library has none.
-*/
 export type SyncCodec = {
-	/**
-	Runs before each round with a way to call this server, so the codec can fetch or store its wrapped key. Throws a
-	SyncError to stop the round.
-	*/
 	prepare(
 		call: (path: string, init?: RequestInit) => Promise<unknown>,
 	): Promise<void>;
 	seal(change: SyncChange): Promise<SyncChange>;
-	/**
-	`reseal` is true for a value that arrived unencrypted, which this device then sends again encrypted.
-	*/
 	open(change: SyncChange): Promise<{change: SyncChange; reseal: boolean}>;
 };
 
@@ -158,51 +110,21 @@ export type SyncHost = {
 	openSocket?: (url: string) => SyncSocket;
 	mutate<T>(work: () => Promise<T>): Promise<T>;
 	readLibrary(): Promise<Store>;
-	/**
-	The trash of this library, which syncs with a server that supports it. Without it the trash stays on the device.
-	*/
 	trash?: {
 		read(): Promise<TrashEntry[]>;
-		/**
-		Adds or replaces `put`, removes the entries named in `remove`, and keeps the rest, so a delete made while the
-		round runs is not lost. The host drops what is past its retention.
-		*/
 		apply(put: TrashEntry[], remove: string[]): Promise<void>;
 	};
-	/**
-	The extension's Sources choices, one per site that is on, which sync with a server that supports them. They live
-	outside the library and belong to the regular library's sync only. Without it they stay on the device.
-	*/
 	sources?: {
 		read(): Promise<SyncedSource[]>;
-		/**
-		Adds or replaces `put` and removes the sites named in `remove`, keeping the rest. `was` holds each of those sites'
-		values as `read` gave them this round (undefined for none): a site whose value changed since was edited in
-		Settings meanwhile, so the host keeps that edit, and this round's push sends it. Values are stored as they came,
-		so they go back unchanged.
-		*/
 		apply(
 			put: SyncedSource[],
 			remove: string[],
 			was: ReadonlyMap<string, unknown>,
 		): Promise<void>;
 	};
-	/**
-	Settings this host keeps outside the library, such as the extension's theme and accents, which sync as `setting`
-	records with a server that supports them and while Sync settings is on. Only the regular library's sync carries
-	them. A host without it holds such records in the library like any setting it does not know.
-	*/
 	outsideSettings?: {
-		/**
-		Each setting's value before anyone chose one, which is not sent until a pull has taken the setting once.
-		*/
 		defaults: Readonly<Record<string, unknown>>;
 		read(): Promise<Record<string, unknown>>;
-		/**
-		Stores `put`, values from other devices the host checks itself. `was` holds each one's value as `read` gave it
-		this round: a setting whose value changed since was edited meanwhile, so the host keeps that edit, and this
-		round's push sends it.
-		*/
 		apply(
 			put: Record<string, unknown>,
 			was: Readonly<Record<string, unknown>>,
@@ -212,16 +134,9 @@ export type SyncHost = {
 		target: SyncConfig,
 		server: ServerInfo | undefined,
 	) => void | Promise<void>;
-	/**
-	Writes a library assembled from synced records; the host normalizes it like any untrusted input.
-	*/
 	writeLibrary(store: Store): Promise<void>;
 	backup(store: Store, reason: string): Promise<void>;
 	codec?: SyncCodec;
-	/**
-	This device only reads: it pulls and applies the server's records and never sends one, not even after a server
-	reset or a restore that would otherwise send everything again. For a library shown read only.
-	*/
 	readOnly?: boolean;
 	randomId(): string;
 	now(): number;
@@ -229,10 +144,6 @@ export type SyncHost = {
 
 export class SyncError extends Error {
 	constructor(
-		/**
-		`key`: the library is encrypted and this device does not have its key. `incompatible`: the server speaks
-		another protocol.
-		*/
 		readonly kind:
 			'config' | 'offline' | 'auth' | 'server' | 'key' | 'incompatible',
 		message: string,
@@ -244,10 +155,6 @@ export class SyncError extends Error {
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
-/**
-The server address in a canonical form. HTTPS is required, because the token and the library travel with every
-request; plain HTTP is allowed only for a server on this computer.
-*/
 export function parseServerUrl(text: string): string {
 	let url: URL;
 	try {
@@ -297,7 +204,6 @@ function parseState(value: unknown): SyncState | undefined {
 		? ({
 				purged: 0,
 				...value,
-				// Anything but a list of kinds counts as none pulled yet, which only costs one pull from the start.
 				pulled: Array.isArray(value.pulled)
 					? value.pulled.filter((kind): kind is OptionalKind =>
 							(OPTIONAL_KINDS as readonly unknown[]).includes(kind),
@@ -336,7 +242,6 @@ function parsePull(body: unknown): PullPage {
 
 	return {
 		resync: false,
-		// A malformed change is skipped rather than applied.
 		changes: body.changes.flatMap((change) => parseChange(change) ?? []),
 		cursor: body.cursor as number,
 		more: body.more,
@@ -373,10 +278,6 @@ export const SYNC_OFF: SyncStatus = {
 	error: null,
 };
 
-/**
-One request to a sync server with the token. Throws SyncError for an unreachable server or a refused token, and
-leaves every other status to the caller.
-*/
 export async function callServer(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
@@ -410,11 +311,6 @@ export async function callServer(
 	return {status: response.status, body};
 }
 
-/**
-Stamps local edits to everything but the `left` kinds, which keep what was last agreed with the server. Records that
-are not looked at here (the settings of a device that does not sync them, the trash of a server that cannot hold it)
-would otherwise look deleted.
-*/
 function captureExcept(
 	state: SyncState,
 	records: Records,
@@ -462,34 +358,22 @@ export function createSyncClient(host: SyncHost) {
 	let again = false;
 	let applying = false;
 	let localTimer: ReturnType<typeof setTimeout> | undefined;
-	// A local change is waiting for its delayed round.
 	let localPending = false;
 	let localSince = 0;
 	let socket: SyncSocket | undefined;
 	let pingTimer: ReturnType<typeof setInterval> | undefined;
 	let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	let reconnectDelay = RECONNECT_MIN_MS;
-	/*
-	The highest server cursor this device has pulled or pushed up to, and the highest one a live notice announced.
-	A notice only means something new while it is ahead of what this device has seen. A notice for this device's
-	own push can arrive before the push's answer does, so the two are compared once a round ends, not on arrival.
-	*/
 	let seenCursor = 0;
 	let noticeCursor = 0;
-	// Whether this round syncs the trash: the host has one and the server lists the `trash` feature.
 	let trashOn = false;
-	// Whether this round syncs bookmark notes: the server lists the `notes` feature.
 	let notesOn = false;
-	// Whether this round syncs bookmark tags: the server lists the `tags` feature.
 	let tagsOn = false;
-	// Whether this round syncs Sources choices: the host has them and the server lists the `sources` feature.
 	let sourcesOn = false;
-	// Whether this round syncs the settings added since 0.3.0: the server lists the `settings` feature.
 	let settingKindOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
 	let stateEpoch = 0;
-	// What the last /v1/status answer said, for the status the round ends with.
 	let serverInfo: ServerInfo | undefined;
 	const ready = load();
 
@@ -560,12 +444,6 @@ export function createSyncClient(host: SyncHost) {
 		return (await host.get(SYNC_SETTINGS_KEY)) !== false;
 	}
 
-	/**
-	Asks the server about itself, at most every few minutes, and returns the optional record kinds it lists. An old
-	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes and
-	tags, Sources choices, and newer settings wait until the server says it can hold them. A server that speaks another protocol stops
-	the round; that answer is not kept, so the round after the server's update goes ahead.
-	*/
 	async function serverFeatures(
 		target: SyncConfig,
 	): Promise<ReadonlySet<string>> {
@@ -574,10 +452,6 @@ export function createSyncClient(host: SyncHost) {
 			return featureCheck.features;
 		}
 
-		/*
-		A status request that fails ends the round, like any other request. Taken as "no features", it would make the pull
-		skip the trash, notes, and tags while the cursor moves past them, so this device would never get them.
-		*/
 		const info = parseServerInfo(await request(target, '/v1/status'));
 		const side = info && updateSide(info.protocol);
 		if (side) {
@@ -592,7 +466,6 @@ export function createSyncClient(host: SyncHost) {
 		return features;
 	}
 
-	// The kinds this round leaves alone because the server cannot hold them: they stay on the device, unsent.
 	const unsupported = (kind: TombstoneKind | undefined) =>
 		(kind === 'trash' && !trashOn) ||
 		(kind === 'note' && !notesOn) ||
@@ -600,10 +473,6 @@ export function createSyncClient(host: SyncHost) {
 		(kind === 'source' && !sourcesOn) ||
 		(kind === 'setting' && !settingKindOn);
 
-	/**
-	Starts a resync that never counts a record of an unsupported kind as deleted: the pull skips those kinds, so they
-	would all look unseen at the end and be removed from the library.
-	*/
 	const resyncSupported = (state: SyncState): SyncState => {
 		const started = startResync(state);
 		return {
@@ -614,10 +483,6 @@ export function createSyncClient(host: SyncHost) {
 		};
 	};
 
-	/**
-	The changes to push. The trash, notes, tags, Sources choices, and newer settings stay queued while the server cannot
-	hold them.
-	*/
 	const queued = (state: SyncState, records: Records) =>
 		outgoing(
 			{
@@ -630,12 +495,6 @@ export function createSyncClient(host: SyncHost) {
 			PUSH_LIMIT,
 		);
 
-	/*
-	`setting` records are left alone until a pull has taken them once. Most of these settings existed in 0.3.0 without
-	syncing, so every browser already holds its own values, and the phone holds every default. Captured first, each
-	would carry a stamp from now and overwrite what the server has; this way the server's value wins over one that
-	never synced, and only the settings the server lacks go out after the pull.
-	*/
 	const leftAlone = async (
 		state: SyncState,
 	): Promise<ReadonlySet<TombstoneKind>> =>
@@ -664,10 +523,6 @@ export function createSyncClient(host: SyncHost) {
 			: captureExcept(state, records, host.now(), left);
 	}
 
-	/**
-	Writes the library from `records` and, when they changed, the trash entries, Sources choices, and outside settings
-	that differ from `before`.
-	*/
 	async function write(
 		records: Records,
 		before: Records,
@@ -749,9 +604,6 @@ export function createSyncClient(host: SyncHost) {
 		}
 	}
 
-	/**
-	Reads the library, stamps local edits, runs `work`, and saves the state, all inside the mutation queue.
-	*/
 	function stepWithSnapshot<T>(
 		work: (
 			state: SyncState,
@@ -797,7 +649,6 @@ export function createSyncClient(host: SyncHost) {
 
 	async function round(target: SyncConfig) {
 		await setStatus({phase: 'syncing'});
-		// Before anything else, so a server that speaks another protocol gets no key, pull, or push request.
 		const features = await serverFeatures(target);
 		const {codec} = host;
 		await codec?.prepare(async (path, init) => request(target, path, init));
@@ -806,21 +657,7 @@ export function createSyncClient(host: SyncHost) {
 		tagsOn = features.has('tags');
 		sourcesOn = host.sources !== undefined && features.has('sources');
 		settingKindOn = features.has('settings');
-		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();
-		/*
-		The whole pull is collected before any of it is applied. Records arrive in the order the server last changed
-		them, so a tab can come pages before its session, or a bookmark before its column. Applied page by page, the
-		library would drop such a tab or move such a bookmark, and the next capture would send that loss to every
-		device.
-		*/
-		/*
-		The optional kinds this round pulls. A kind skipped by earlier pulls (the server lacked it, or this device ran a
-		version without it, such as 0.3.0 before Sources) was left behind the cursor, so a round that takes it for the
-		first time pulls from the start. Stamps decide record by record, so nothing newer here is lost. It runs as a
-		resync: the server checks for purged deletes only against a cursor past 0, so a record deleted elsewhere whose
-		delete was purged since would otherwise stay. A record not seen again is removed, unless it waits to be sent.
-		*/
 		const kinds = OPTIONAL_KINDS.filter((kind) => !unsupported(kind));
 		const start = await step(async (state) => ({
 			state,
@@ -851,8 +688,6 @@ export function createSyncClient(host: SyncHost) {
 				continue;
 			}
 
-			// The server is behind this device: it was restored from an older backup or replaced. Start over. Only the
-			// last page says where the server is; an earlier one of a pull from the start ends wherever its page does.
 			if (
 				!serverReset &&
 				!page.more &&
@@ -898,7 +733,6 @@ export function createSyncClient(host: SyncHost) {
 			);
 			const finished = finishResync(applied.state, applied.records);
 			if (applied.changed || finished.changed) {
-				// A library that never synced gets a safety backup before the server's copy is written over it.
 				if (!state.joined) {
 					await host.backup(store, 'Before the first sync');
 				}
@@ -908,8 +742,6 @@ export function createSyncClient(host: SyncHost) {
 
 			let next = finished.state;
 			if (reseal.size > 0) {
-				// A shadow entry that matches nothing makes the next capture stamp the record again, so it goes out
-				// encrypted. The entry stays, so a setting back at its default still counts as synced.
 				const shadow = Object.fromEntries(
 					Object.entries(next.shadow).map(([key, entry]) => [
 						key,
@@ -976,8 +808,6 @@ export function createSyncClient(host: SyncHost) {
 
 				const {state: current, records: library} = held;
 				const sent = host.readOnly ? [] : queued(current, library);
-				// A record that changed again while it was being sent goes out in the next round, so a value that keeps
-				// changing can never keep one round pushing.
 				if (
 					sent.length === 0 ||
 					sent.some((change) => sentKeys.has(recordKey(change)))
@@ -1032,8 +862,6 @@ export function createSyncClient(host: SyncHost) {
 				}
 
 				seenCursor = Math.max(seenCursor, body.cursor as number);
-				// The server took more changes than this round applied since its pull: another device pushed in between,
-				// and its live notice may already have been dismissed as this device's own echo. Pull again.
 				if ((body.cursor as number) > pulledCursor + appliedThisRound) {
 					again = true;
 				}
@@ -1057,9 +885,6 @@ export function createSyncClient(host: SyncHost) {
 		});
 	}
 
-	/**
-	Runs a round now, or once more after the one in progress.
-	*/
 	async function syncNow(): Promise<void> {
 		await ready;
 		if (!config) {
@@ -1074,9 +899,6 @@ export function createSyncClient(host: SyncHost) {
 		return startRound(config);
 	}
 
-	/**
-	A live notice: runs a round when it announces changes this device has not seen.
-	*/
 	function noticed(cursor: number) {
 		noticeCursor = Math.max(noticeCursor, cursor);
 		if (!running && noticeCursor > seenCursor) {
@@ -1115,7 +937,6 @@ export function createSyncClient(host: SyncHost) {
 						phase: failure.kind === 'offline' ? 'offline' : 'error',
 						error: failure.message,
 						needsKey: failure.kind === 'key',
-						// Offline says nothing new about the server, so what was known stays.
 						incompatible:
 							failure.kind === 'offline'
 								? status.incompatible
@@ -1169,7 +990,6 @@ export function createSyncClient(host: SyncHost) {
 
 			if (message.type === 'ready') {
 				reconnectDelay = RECONNECT_MIN_MS;
-				// The server may have been updated while the socket was closed, so the round asks it again.
 				featureCheck = undefined;
 				void setStatus({live: true});
 				void syncNow();
@@ -1204,9 +1024,6 @@ export function createSyncClient(host: SyncHost) {
 			return {...status, pending: state?.outbox.length ?? 0};
 		},
 
-		/**
-		Checks the server and token, then starts syncing this library with it.
-		*/
 		async connect(urlText: string, tokenText: string): Promise<SyncStatus> {
 			await ready;
 			const url = parseServerUrl(urlText);
@@ -1254,9 +1071,6 @@ export function createSyncClient(host: SyncHost) {
 			return this.status();
 		},
 
-		/**
-		Sends every record again with a new stamp, as after the library became encrypted.
-		*/
 		async resendAll(): Promise<void> {
 			await ready;
 			if (!config) {
@@ -1265,8 +1079,6 @@ export function createSyncClient(host: SyncHost) {
 
 			await host.mutate(async () => {
 				const state = await loadState();
-				// Every entry matches nothing, so the next capture stamps every record again. Entries stay, so a setting
-				// back at its default still counts as synced and is sent too.
 				const shadow = Object.fromEntries(
 					Object.entries(state.shadow).map(([key, entry]) => [
 						key,
@@ -1278,10 +1090,6 @@ export function createSyncClient(host: SyncHost) {
 			await syncNow();
 		},
 
-		/**
-		Closes the live socket and forgets the server until the next load, keeping everything stored. For a library
-		that cannot be read for now, such as a locked private one.
-		*/
 		stop() {
 			config = undefined;
 			clearTimeout(localTimer);
@@ -1289,9 +1097,6 @@ export function createSyncClient(host: SyncHost) {
 			closeSocket();
 		},
 
-		/**
-		Stops syncing. The library on this device stays as it is.
-		*/
 		async disconnect(): Promise<SyncStatus> {
 			await ready;
 			config = undefined;
@@ -1315,9 +1120,6 @@ export function createSyncClient(host: SyncHost) {
 
 		syncNow,
 
-		/**
-		Called after every library write; a write made by sync itself is ignored.
-		*/
 		localChanged() {
 			if (applying || !config) {
 				return;
@@ -1340,10 +1142,6 @@ export function createSyncClient(host: SyncHost) {
 			}, wait);
 		},
 
-		/**
-		For a device that goes to the background: sends a change that was still waiting, then closes the live socket and
-		its timers so nothing wakes the radio. The server stays configured; `wake` starts it again.
-		*/
 		async pause() {
 			await ready;
 			if (!config) {
@@ -1353,7 +1151,6 @@ export function createSyncClient(host: SyncHost) {
 			clearTimeout(localTimer);
 			closeSocket();
 			void setStatus({live: false});
-			// A change waiting for its delay, or one a failed or offline round left unsent, goes out before the pause.
 			const waiting =
 				localPending ||
 				(!host.readOnly && (await loadState()).outbox.length > 0);
@@ -1363,9 +1160,6 @@ export function createSyncClient(host: SyncHost) {
 			}
 		},
 
-		/**
-		Worker start and the fallback alarm: reopen the live socket and catch up.
-		*/
 		async wake() {
 			await ready;
 			if (!config) {

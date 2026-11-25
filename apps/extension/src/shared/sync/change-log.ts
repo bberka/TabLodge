@@ -1,32 +1,8 @@
-/*
-The server side of the protocol for one library, kept in memory. It is the reference the Durable Object and the
-Docker server implement over their own storage, and the fake server the client tests sync against.
-
-Every accepted change gets the next sequence number. A device pulls the changes after the last number it saw
-(its cursor), and only the newest change per record is kept, so a pull after a long time offline returns one
-change per record instead of a replay. Tombstones are kept for a retention window and then purged.
-
-Each pull answer carries `purged`, the highest sequence number among purged tombstones, and the device sends back
-the value it last saw. When a purge since then removed tombstones after the device's cursor, the device missed
-deletes it can no longer be told about, so it must pull everything again from cursor 0 (`resync`). A device paging
-through a fresh pull is not sent back to the start: purges older than its first page took nothing it had.
-*/
 import {MAX_CLOCK_DRIFT_MS, parseStamp, type Stamp, stampAt} from './clock';
 import {recordKey, supersedes, type SyncChange} from './changes';
 
-/**
-The version of this protocol. A server and a device that disagree on it do not sync; bump it only for a change older
-devices cannot follow.
-*/
 export const PROTOCOL_VERSION = 1;
 
-/**
-- `applied`: the change is now the record's current version.
-- `superseded`: the server already has a newer version, which the device gets on its next pull.
-- `stale`: the change is about a record the server has no trace of and is older than the purge horizon, so the
-  record may have been deleted and purged. Accepting it could bring a deleted record back.
-- `clock`: the stamp is too far in the future.
-*/
 export type PushResult = 'applied' | 'superseded' | 'stale' | 'clock';
 
 export type PullResponse =
@@ -39,44 +15,19 @@ export type PullResponse =
 	  }
 	| {resync: true};
 
-/**
-True when tombstones after `cursor` were purged since the device last saw the purge marker (`seen`).
-*/
 export const mustResync = (cursor: number, seen: number, purgedSeq: number) =>
 	cursor > 0 && cursor < purgedSeq && seen < purgedSeq;
 
-/**
-What every server storage implements, with the rules of `ChangeLog`.
-*/
 export type SyncLog = {
 	readonly cursor: number;
-	/**
-	Stored records, tombstones included.
-	*/
 	readonly size: number;
 	push(changes: readonly SyncChange[], now: number): PushResult[];
-	/**
-	`seen` is the `purged` value of the device's previous pull.
-	*/
 	pull(cursor: number, limit: number, seen?: number): PullResponse;
-	/**
-	Drops tombstones written before `before` (a wall time in milliseconds).
-	*/
 	purge(before: number): void;
-	/**
-	The library's wrapped encryption key, stored for the devices but never read by the server. Null when the
-	library is not encrypted.
-	*/
 	readonly key: string | null;
-	/**
-	Replaces the key only while it is still `expected`, so two devices cannot overwrite each other's key.
-	*/
 	replaceKey(next: string, expected: string | null): boolean;
 };
 
-/**
-The outcome of pushing `change` when the server holds `current` for its record.
-*/
 export function pushResult(
 	change: SyncChange,
 	current: Stamp | undefined,
@@ -99,13 +50,7 @@ type Entry = {change: SyncChange; seq: number};
 export class ChangeLog implements SyncLog {
 	private readonly entries = new Map<string, Entry>();
 	private seq = 0;
-	/**
-	Highest sequence number among purged tombstones. A cursor below it has missed a delete.
-	*/
 	private purgedSeq = 0;
-	/**
-	Newest stamp among purged tombstones.
-	*/
 	private purgedH = '';
 	private storedKey: string | null = null;
 
@@ -160,8 +105,6 @@ export class ChangeLog implements SyncLog {
 		return {
 			resync: false,
 			changes: page.map((entry) => entry.change),
-			// The server's own cursor, even when it is behind the device's: that is how a device notices a server
-			// restored from an older backup.
 			cursor: page.at(-1)?.seq ?? this.seq,
 			more: after.length > limit,
 			purged: this.purgedSeq,
