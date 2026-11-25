@@ -6,9 +6,6 @@ async function readTabs() {
 	return chrome.tabs.query({windowType: 'normal'});
 }
 
-/**
-Reopens closed duplicates in their window and position (a new tab in the same window if it is gone) and rejoins their tab group when it still exists. Returns how many came back.
-*/
 async function reopen(closed: readonly ClosedTab[]) {
 	const windows = new Set<number>();
 	try {
@@ -19,9 +16,7 @@ async function reopen(closed: readonly ClosedTab[]) {
 				windows.add(window.id);
 			}
 		}
-	} catch {
-		// Every tab then opens in the current window.
-	}
+	} catch {}
 
 	let count = 0;
 	for (const entry of reopenOrder(closed)) {
@@ -38,17 +33,12 @@ async function reopen(closed: readonly ClosedTab[]) {
 					.group({tabIds: created.id, groupId: entry.groupId})
 					.catch(() => undefined);
 			}
-		} catch {
-			// Skip a tab the browser would not reopen and carry on with the rest.
-		}
+		} catch {}
 	}
 
 	return count;
 }
 
-/**
-Closes the duplicate tabs (see `findDuplicateTabs`) and offers Undo, which reopens them.
-*/
 export async function closeDuplicateTabs(showStatus: ShowStatus) {
 	try {
 		const {close} = findDuplicateTabs(await readTabs());
@@ -62,9 +52,7 @@ export async function closeDuplicateTabs(showStatus: ShowStatus) {
 			try {
 				await chrome.tabs.remove(entry.id);
 				closed.push(entry);
-			} catch {
-				// A tab that closed already is not a failure.
-			}
+			} catch {}
 		}
 
 		showStatus(
@@ -96,9 +84,6 @@ export async function closeDuplicateTabs(showStatus: ShowStatus) {
 	}
 }
 
-/**
-How many tabs "Close duplicate tabs" would close right now. Updates live.
-*/
 export function useDuplicateTabCount() {
 	const [count, setCount] = useState(0);
 	const read = useCallback(async () => {

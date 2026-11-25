@@ -1,6 +1,3 @@
-// The finder's commands, one list for every place the finder opens: the dashboard and new tab page (newtab.tsx), and
-// the palette window or overlay the browser shortcut opens over any page (palette.tsx). A page supplies how to run
-// each command, and leaves out only what cannot work there, with the reason next to it.
 import {
 	ArchiveRestore,
 	BookmarkPlus,
@@ -34,14 +31,10 @@ type CommandSpec = {
 	title: string;
 	keywords: readonly string[];
 	icon: LucideIcon;
-	/**
-	A page of the extension the command opens, the same from everywhere.
-	*/
 	opens?: string;
 };
 
 const COMMANDS = [
-	// The first eight are what the finder lists before anything is typed.
 	{
 		id: 'save-window',
 		title: 'Save this window',
@@ -210,20 +203,12 @@ const COMMANDS = [
 
 type Command = (typeof COMMANDS)[number];
 export type FinderCommandId = Command['id'];
-/**
-The commands a page runs itself, as opposed to the ones that open a page of the extension.
-*/
 export type PageCommandId = Exclude<Command, {opens: string}>['id'];
 type Run = () => void | Promise<void>;
 
-/**
-How a page runs each of its commands. `undefined` leaves the command out of that page's finder; every page names
-every command, so a new one cannot be forgotten.
-*/
 export type CommandHandlers = Record<PageCommandId, Run | undefined>;
 
 const NOT_ON_FIREFOX = new Set<FinderCommandId>([
-	// Firefox keeps the add-on out of private windows, so there is no private library to manage.
 	'lock-private',
 	'change-private-password',
 	'send-to-private-help',

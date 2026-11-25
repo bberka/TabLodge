@@ -8,9 +8,6 @@ import {
 } from './icon-registry';
 import {cn} from '@/lib/utils';
 
-/**
-An icon before a name, for select items and menu rows. Inside a `SelectItem` it also shows in the closed trigger.
-*/
 export function IconLabel({
 	icon: Icon,
 	children,
@@ -18,9 +15,6 @@ export function IconLabel({
 }: {
 	icon: LucideIcon;
 	children: ReactNode;
-	/**
-	A column color; the icon and the name take it instead of the neutral gray.
-	*/
 	color?: string;
 }) {
 	const vars = columnColorVars(color);

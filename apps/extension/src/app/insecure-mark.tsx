@@ -5,9 +5,6 @@ import {showsInsecureMark} from '../shared/url-display';
 const REASON =
 	'Not secure: this page uses http, so what you send or see on it can be read or changed by others on the network. Your browser will also mark it Not secure.';
 
-/**
-A small amber open lock before an http address, with an explanation on hover or keyboard focus.
-*/
 function InsecureMark({className = ''}: {className?: string}) {
 	return (
 		<IconTooltip
@@ -17,8 +14,7 @@ function InsecureMark({className = ''}: {className?: string}) {
 		>
 			<span
 				role="img"
-				// Focusable so keyboard users can read the explanation; it sits inside links, so it cannot be a button.
-				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
+				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex -- focusable so keyboard users can read the explanation; it sits inside links, so it cannot be a button
 				tabIndex={0}
 				aria-label={REASON}
 				className={`inline-block rounded-xs text-amber-600 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400 ${className}`}
@@ -29,9 +25,6 @@ function InsecureMark({className = ''}: {className?: string}) {
 	);
 }
 
-/**
-The marker for `url` when the settings call for one, else nothing.
-*/
 export function InsecureMarkFor({
 	url,
 	settings,

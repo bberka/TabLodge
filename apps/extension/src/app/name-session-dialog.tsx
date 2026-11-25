@@ -23,10 +23,6 @@ import type {SaveScope, Settings} from '../shared/types';
 import {send} from './common';
 import {SESSION_NAME_MAX, typedSessionName} from './session-name';
 
-/**
-The "Name this session" form: one input, Cancel and Save. Used inside the in-page dialog and as the whole page of
-the name prompt window the service worker opens for saves that started without a page.
-*/
 export function NameSessionForm({
 	initialName = '',
 	placeholder,
@@ -43,13 +39,7 @@ export function NameSessionForm({
 	busy?: boolean;
 	submitLabel?: string;
 	selectOnFocus?: boolean;
-	/**
-	Render as a page of its own (the prompt window) instead of inside a dialog.
-	*/
 	plain?: boolean;
-	/**
-	The raw typed text; the caller applies the empty-means-default rule.
-	*/
 	onSubmit: (typed: string) => void;
 	onCancel: () => void;
 	children?: ReactNode;
@@ -141,12 +131,6 @@ type Pending = {
 	resolve: (answer: {name?: string} | null) => void;
 };
 
-/**
-Asks for a session name before a save started from a TabLodge page, when Settings says "Ask each time".
-`ask(request)` resolves `{name}` (undefined when left empty: the worker then uses the fallback name), or `null`
-when the dialog was cancelled, in which case nothing may be saved. Without the `ask` style it resolves at once.
-Render `dialog` once in the page.
-*/
 export function useSessionNameAsk(settings: Partial<Settings> | undefined) {
 	const [pending, setPending] = useState<Pending | null>(null);
 	const pendingRef = useRef<Pending | null>(null);
@@ -161,7 +145,6 @@ export function useSessionNameAsk(settings: Partial<Settings> | undefined) {
 			}
 
 			const preview = await send('PREVIEW_SESSION_NAME', request);
-			// A stale setting in this page: the worker says whether to ask.
 			if (preview?.ok && !preview.asks) {
 				return {};
 			}

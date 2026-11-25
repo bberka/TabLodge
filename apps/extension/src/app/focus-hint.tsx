@@ -5,7 +5,6 @@ import {plural} from './plural';
 import {FOCUS_HINT_KEY} from './focus-hint-rule';
 import {cn} from '@/lib/utils';
 
-// Remembered per browser profile, not synced: another device may have a different screen.
 export function readFocusHintDismissed(key = FOCUS_HINT_KEY) {
 	try {
 		return localStorage.getItem(key) === '1';
@@ -17,15 +16,9 @@ export function readFocusHintDismissed(key = FOCUS_HINT_KEY) {
 function rememberFocusHintDismissed(key: string) {
 	try {
 		localStorage.setItem(key, '1');
-	} catch {
-		// Without storage the hint can come back on the next visit.
-	}
+	} catch {}
 }
 
-/**
-"You have N columns. Focus view shows one at a time." shown above a crowded Board. The Sessions page reuses it
-for a crowded row of folder chips, with its own copy and its own dismissal key.
-*/
 export function FocusViewHint({
 	count,
 	noun = 'column',

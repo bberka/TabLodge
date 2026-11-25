@@ -1,8 +1,5 @@
 import {plural} from './plural';
 
-/**
-What an import that merges into the library reports back (the worker's IMPORT_GROUPS answer).
-*/
 export type MergeResult = {
 	groups: number;
 	count: number;
@@ -12,10 +9,6 @@ export type MergeResult = {
 	updatedTitles: number;
 };
 
-/**
-One line for the toast after adding a backup's sessions and bookmarks to the library: what was added, then what was
-skipped because it was already there.
-*/
 export function mergeSummary(result: MergeResult): string {
 	const added: string[] = [];
 	if (result.groups > 0) {
