@@ -1,37 +1,3 @@
-/*
-The library's stored layout: sessions and bookmarks live in their own storage keys, with a small index
-under `tablodge.state` that says which key versions make up the library right now.
-
-Why: `tablodge.state` used to hold every session and bookmark in one value, so saving one tab rewrote the whole
-library. Now a save writes the changed sessions and the index.
-
-Keys (all in the same storage area, under the same private prefix, as the logical key `tablodge.state`):
-  tablodge.state                  the index (`layout: 'records'`, schema 10): folders, columns, settings, an entry per session
-  tablodge.session.<id>.<rev>     one session with its tabs; never edited in place, an edit writes a new key
-  tablodge.bookmarks.<rev>        all bookmarks as one array
-  tablodge.migration              progress marker, present only while a migration is unfinished
-  tablodge.state.premigration     exact copy of the old single entry, kept for a few days after a verified migration
-
-A commit writes new record keys first, then the index. The index write is the commit point, so a crash leaves
-either the previous library or the new one, never a mix. Keys a commit replaces are listed in the index as
-`garbage` and removed by the next commit, so a reader that fetched the previous index can still finish.
-
-Sync-ready metadata. Record level sync (issue #3) needs a stable id, a revision stamp, a tombstone, and an order key
-per record. Ids already exist on every record and are checked when the library is migrated. The rest is reserved
-here as optional fields that the app never sees (they are not part of the app's data model, so imports cannot
-inject them and exports cannot leak them) and that every write carries along:
-  index `sessions[i].sync`, `folderSync`, `columnSync`, `preferenceSync`   stamp and order key by record id
-  index `tombstones`                       deleted records with `deletedAt` and `purgeAfter`, dropped once expired
-  index `device`                           this library copy's device id, assigned when sync is switched on
-  session record `$sync.tabs`              stamp and order key by saved tab id (flagged by `sessions[i].tabSync`)
-  bookmarks record `$sync`                 the same for bookmarks (flagged by `bookmarks.sync`)
-Nothing writes stamps, tombstones, or order keys yet. A missing stamp means "never stamped": its implied stamp is the
-record's own `updatedAt` (or `createdAt`) with no device. A missing order key means "position in the stored array".
-So switching sync on needs no storage migration; the sync engine stamps and orders on first sync.
-
-This module knows nothing about the browser: it takes a key/value backend, so tests can make any call fail.
-*/
-
 import {
 	BATCH_COUNT,
 	batches,
@@ -111,9 +77,7 @@ export type KeyValueBackend = {
 	getBytesInUse?(keys: string[]): Promise<number>;
 };
 
-// The recovery copy outlives a verified migration by this long.
 export const PREMIGRATION_KEEP_MS = 7 * 86_400_000;
-// Serialized characters per `set`, and tabs per `get`, so one call never holds a huge value.
 const WRITE_BATCH_CHARS = 2_000_000;
 const READ_BATCH_TABS = 5000;
 const MAX_READ_RETRIES = 4;
@@ -142,10 +106,6 @@ export type MigrationOutcome =
 
 export type LibraryProblem = {key: string; problem: string};
 
-/**
-What Undo keeps of the library: the index as it was and only the records the action replaced. Records are never
-edited in place, so everything else is still where the index says.
-*/
 export type UndoDelta = {
 	undoDelta: 1 | 2 | 3;
 	index: Raw;
@@ -168,9 +128,6 @@ type Collector = {
 	complete: boolean;
 };
 
-/**
-An open checkpoint: hand it back to `endCheckpoint`.
-*/
 export type Checkpoint = {readonly collector: Collector};
 
 export type LibraryState = ReturnType<typeof createLibraryState>;
@@ -184,9 +141,6 @@ export function createLibraryState(
 		layoutVersion: maxLayout = LAYOUT_VERSION,
 	}: {
 		now?: () => number;
-		/**
-		The newest layout this instance understands. Tests pin it to 10 to be the version before layout 11.
-		*/
 		layoutVersion?: number;
 		writeBatchChars?: number;
 		writeBatchCount?: number;
@@ -197,10 +151,6 @@ export function createLibraryState(
 
 	const collectors = new Set<Collector>();
 
-	/**
-	Before a commit replaces records, open checkpoints take a copy of the ones they still need. A failure here
-	only costs the checkpoint (no Undo); it never fails the save.
-	*/
 	const captureReplaced = async (keys: readonly string[]) => {
 		for (const collector of collectors) {
 			const wanted = keys.filter(
@@ -355,9 +305,6 @@ export function createLibraryState(
 		return {problems, items: pieces.flat()};
 	}
 
-	/**
-	Reads and checks the records an index points at. Returns what was wrong instead of throwing, so the caller can retry.
-	*/
 	async function loadRecords(index: LibraryIndex) {
 		const problems: LibraryProblem[] = [];
 		const groups: Raw[] = [];
@@ -407,10 +354,6 @@ export function createLibraryState(
 		};
 	}
 
-	/**
-	The whole library in the old single entry's shape (`groups`, `bookmarks`, ...), or null when nothing is stored.
-	An entry in the old layout, or one saved by a newer version, comes back as stored.
-	*/
 	async function read(): Promise<Raw | null> {
 		for (let attempt = 0; ; attempt += 1) {
 			const entry = await getOne(STATE_KEY);
@@ -440,7 +383,6 @@ export function createLibraryState(
 				problem = error.detail;
 			}
 
-			// A commit that finished while this read was in flight removed keys this index pointed at: read again.
 			const again = await getOne(STATE_KEY);
 			if (
 				attempt < MAX_READ_RETRIES &&
@@ -454,10 +396,6 @@ export function createLibraryState(
 		}
 	}
 
-	/**
-	Settings and schema version without reading any session. In the old layout this still reads the whole entry.
-	`upgradable` is true while the index is still in layout 10, which `upgrade` moves to layout 11.
-	*/
 	async function readMeta(): Promise<{
 		layout: 'none' | 'legacy' | 'records';
 		schemaVersion: number;
@@ -491,11 +429,6 @@ export function createLibraryState(
 			.filter((part) => !part.unchanged)
 			.map((part) => ({key: part.ref.key, value: part.value, json: part.json}));
 
-	/**
-	Stores the library. Writes only the sessions, pages, and bookmark chunks that changed, and the index. While the
-	library is still in the old layout (a migration that could not finish) it writes the old single entry, so the app
-	keeps working; a layout 10 index is written as layout 10 until `upgrade` has moved it.
-	*/
 	async function write(raw: Raw): Promise<void> {
 		const current = await getOne(STATE_KEY);
 		if (isRecord(current) && tooNew(current)) {
@@ -534,7 +467,6 @@ export function createLibraryState(
 			? referencedKeys(previous).filter((key) => !next.has(key))
 			: [];
 		await captureReplaced(replaced);
-		// Nothing reads the previous commit's garbage any more; a failed cleanup is carried over, not fatal.
 		let leftover: string[] = [];
 		if (previous && previous.garbage.length > 0) {
 			try {
@@ -554,10 +486,6 @@ export function createLibraryState(
 		});
 	}
 
-	/**
-	A rewritten record keeps its sync sidecar (minus entries for tabs or bookmarks that are gone), so an app edit
-	never erases stamps. Only records flagged in the index cost an extra read.
-	*/
 	async function carrySidecars(plan: Plan, previous: LibraryIndex | null) {
 		if (!previous) {
 			return;
@@ -652,7 +580,6 @@ export function createLibraryState(
 			garbage: [],
 			migratedFrom: note ?? previous?.migratedFrom,
 			device: previous?.device,
-			// Expired tombstones stop being carried; a record deleted that long ago can no longer come back.
 			tombstones: (previous?.tombstones ?? []).filter(
 				(tombstone) => tombstone.purgeAfter > now(),
 			),
@@ -662,10 +589,6 @@ export function createLibraryState(
 		};
 	}
 
-	/**
-	Removes the stored library (the logical key `tablodge.state` disappears). The record keys go after the
-	index, so a crash in between leaves unreferenced keys, never an index that points at nothing.
-	*/
 	async function remove(): Promise<void> {
 		const current = await getOne(STATE_KEY);
 		const index = known(current)
@@ -688,9 +611,6 @@ export function createLibraryState(
 		]);
 	}
 
-	/**
-	Re-reads every record the index lists and compares it with the index. An empty list means the stored library is whole.
-	*/
 	async function verify(): Promise<LibraryProblem[]> {
 		const entry = await getOne(STATE_KEY);
 		if (!known(entry)) {
@@ -778,10 +698,6 @@ export function createLibraryState(
 		};
 	}
 
-	/**
-	Keeps the old entry as it was, in its own key, until a migration has been verified and a week has passed.
-	An existing copy of the same entry (an earlier attempt) is reused.
-	*/
 	async function writeRecoveryCopy(entry: Raw, sourceHash: string) {
 		const existing = await getOne(PREMIGRATION_KEY);
 		if (isRecord(existing) && existing.hash === sourceHash) {
@@ -806,12 +722,6 @@ export function createLibraryState(
 		}
 	}
 
-	/**
-	Moves the library from the old single entry to records. Safe to call at any time and to call again after a
-	crash: the old entry stays the only authority until the final index write, and each step can be repeated.
-	`normalize` is the app's own loader for the old entry, so the records hold exactly what the app showed before.
-	Throws when a step fails; the old entry is untouched.
-	*/
 	async function migrate(
 		normalize: (raw: Raw) => Raw,
 	): Promise<MigrationOutcome> {
@@ -825,7 +735,6 @@ export function createLibraryState(
 				return {status: 'newer'};
 			}
 
-			// A crash after the commit left only the marker to remove.
 			if ((await getOne(MIGRATION_KEY)) !== undefined) {
 				await backend.remove([MIGRATION_KEY]);
 			}
@@ -833,13 +742,11 @@ export function createLibraryState(
 			return {status: 'current'};
 		}
 
-		// Dev tools write the app's own state shape (stamped with the current schema) without an index: that is the old layout too.
 		if (tooNew(entry)) {
 			return {status: 'newer'};
 		}
 
 		const sourceHash = hashText(canonicalJson(entry));
-		// Anything the records cannot hold is found before the first byte is written.
 		const store = normalize(entry);
 		const raw = Array.isArray(store.bookmarks) ? store.bookmarks : [];
 		const format = maxLayout >= LAYOUT_VERSION ? 11 : 10;
@@ -854,7 +761,6 @@ export function createLibraryState(
 			sourceHash,
 			startedAt: resumed ? previousMarker.startedAt : now(),
 			attempts: (previousMarker?.attempts ?? 0) + 1,
-			// Keys from an attempt on a different source are still ours to clean up.
 			written: previousMarker?.written ?? [],
 		};
 		await backend.set({[MIGRATION_KEY]: marker});
@@ -887,9 +793,7 @@ export function createLibraryState(
 					}
 				}
 
-				// The marker names the keys before they are written, so a crash mid-batch leaves nothing untracked.
 				await backend.set({[MIGRATION_KEY]: marker});
-				// A resumed attempt skips records that an earlier attempt already wrote correctly.
 				const stored = resumed ? await backend.get(keys) : {};
 				await writeAll(
 					run.filter(
@@ -921,7 +825,6 @@ export function createLibraryState(
 
 			const referenced = new Set(referencedKeys(index));
 			index.garbage = marker.written.filter((key) => !referenced.has(key));
-			// The commit: until this write the old entry is the library, after it the records are.
 			await backend.set({[STATE_KEY]: storedIndex(index, index.garbage)});
 			await backend.remove([MIGRATION_KEY]);
 			return {
@@ -932,7 +835,6 @@ export function createLibraryState(
 				resumed,
 			};
 		} catch (error) {
-			// What went wrong stays in the marker, for a bug report.
 			await backend
 				.set({
 					[MIGRATION_KEY]: {
@@ -945,9 +847,6 @@ export function createLibraryState(
 		}
 	}
 
-	/**
-	Drops the recovery copies once their week is over. Returns true when it removed something.
-	*/
 	async function pruneRecoveryCopy(): Promise<boolean> {
 		const entry = await getOne(STATE_KEY);
 		if (!known(entry)) {
@@ -978,9 +877,6 @@ export function createLibraryState(
 		return true;
 	}
 
-	/**
-	Storage used by the library, recovery copy and marker included.
-	*/
 	async function bytesInUse(): Promise<number> {
 		if (!backend.getBytesInUse) {
 			return 0;
@@ -1000,10 +896,6 @@ export function createLibraryState(
 		return backend.getBytesInUse(keys);
 	}
 
-	/**
-	Marks the library as it is now. Call `endCheckpoint` after the action: it returns just enough to put the
-	library back. Returns null when the library is not in the record layout (use a full copy then).
-	*/
 	async function beginCheckpoint(): Promise<Checkpoint | null> {
 		const entry = await getOne(STATE_KEY);
 		if (!known(entry)) {
@@ -1032,9 +924,6 @@ export function createLibraryState(
 		return {collector};
 	}
 
-	/**
-	Closes a checkpoint. Null when a copy it needed could not be taken.
-	*/
 	async function endCheckpoint(
 		checkpoint: Checkpoint,
 	): Promise<UndoDelta | null> {
@@ -1082,10 +971,6 @@ export function createLibraryState(
 		}
 	}
 
-	/**
-	Identifies the stored library's current state, or undefined when it is not in the record layout. It changes
-	with every commit, from any worker.
-	*/
 	async function fingerprint(): Promise<string | undefined> {
 		const entry = await getOne(STATE_KEY);
 		return known(entry) ? `rev:${Number(entry.rev)}` : undefined;
@@ -1094,9 +979,6 @@ export function createLibraryState(
 	const missingForUndo = (key: string) =>
 		new LibraryDamagedError(`${key} is missing, so Undo cannot run`);
 
-	/**
-	Puts the library back as a checkpoint saw it, as a new commit that rewrites only what differs.
-	*/
 	async function restoreCheckpoint(delta: UndoDelta): Promise<void> {
 		let index: LibraryIndex;
 		let bookmarks: unknown[];

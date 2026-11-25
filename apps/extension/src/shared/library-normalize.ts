@@ -1,8 +1,3 @@
-/*
-Reads untrusted stored data (the library, an import, a message) into the shapes the app works with: every field is
-checked, unknown values fall back to defaults, and limits are enforced. The service worker runs it on every read and
-write; the pages and the Android app reuse its limits and field checks.
-*/
 import {isAccent} from './accent-colors';
 import {
 	BOOKMARK_UNFILED_ID,
@@ -31,10 +26,8 @@ import type {
 
 export const ARCHIVED_FOLDER_NAME = 'Archived';
 
-// The same code runs in Chromium (a service worker) and in Firefox (an event page); the address of the extension's
-// own pages tells them apart. False anywhere without extension APIs.
 type ChromeGlobal = {
-	// eslint-disable-next-line @typescript-eslint/naming-convention
+	// eslint-disable-next-line @typescript-eslint/naming-convention -- `chrome` is the browser's global name, which the code does not choose
 	chrome?: {runtime?: {getURL?: (path: string) => string}};
 };
 
@@ -43,14 +36,8 @@ const isFirefox = () =>
 		?.getURL?.('')
 		?.startsWith('moz-extension:') ?? false;
 
-/**
-Untrusted object (stored state or import file): every field is checked before use.
-*/
 export type Raw = Record<string, unknown>;
 
-/**
-Settings as stored or patched; unknown values are normalized.
-*/
 export type RawSettings = {[K in keyof Settings]?: unknown} & {
 	duplicateHandling?: unknown;
 	sidePanelEnabled?: unknown;
@@ -61,26 +48,17 @@ export type RawSettings = {[K in keyof Settings]?: unknown} & {
 	showSessionDeleteQuickAction?: unknown;
 };
 
-/**
-`Array.isArray` narrows to `any[]`; this keeps the elements `unknown`.
-*/
 export const arrayOf = (value: unknown): unknown[] =>
 	Array.isArray(value) ? (value as unknown[]) : [];
 
 export const isInteger = (value: unknown): value is number =>
 	Number.isSafeInteger(value);
 
-/**
-The number when it is finite and above zero (a usable timestamp), otherwise `fallback`.
-*/
 export const positiveOr = (value: unknown, fallback: number) => {
 	const number = Number(value);
 	return Number.isFinite(number) && number > 0 ? number : fallback;
 };
 
-/**
-A web address as typed, when it is a valid http(s) URL; otherwise an empty string.
-*/
 export function httpUrlOrEmpty(value: unknown): string {
 	if (typeof value !== 'string') {
 		return '';
@@ -102,8 +80,6 @@ export function isOneOf<T extends string>(
 	return (values as readonly unknown[]).includes(value);
 }
 
-// 10: sessions and bookmarks live in their own storage keys (src/shared/library-state.ts); the data model is unchanged from 9.
-
 export const DEFAULT_FOLDER_ID = 'unfiled';
 
 export const ARCHIVED_FOLDER_ID = 'archived-sessions';
@@ -113,11 +89,6 @@ export const MAX_FOLDERS = 200;
 export const isArchivedFolderName = (name: string) =>
 	name.toLocaleLowerCase() === ARCHIVED_FOLDER_NAME.toLocaleLowerCase();
 
-/*
-Limits the write paths enforce: a save, merge or import that would go past one is refused with a message. Loading never
-drops anything above them (a library can arrive larger through sync or a backup), because dropping on load deleted
-the rest on the next write.
-*/
 export const MAX_SESSIONS = 20_000;
 
 export const MAX_TABS_PER_SESSION = 20_000;
@@ -331,9 +302,6 @@ export function normalizeTab(
 	};
 }
 
-/**
-Shape check only; whether the pair is complete is decided per session by pairSplits.
-*/
 export function normalizeSplit(value: unknown): SplitInfo | undefined {
 	if (
 		!isRecord(value) ||
@@ -347,7 +315,6 @@ export function normalizeSplit(value: unknown): SplitInfo | undefined {
 	return id ? {id, position: value.position} : undefined;
 }
 
-// Spread into a tab so a missing split leaves no `split: undefined` key behind.
 export const splitField = (
 	split: SplitInfo | undefined,
 ): {split?: SplitInfo} => (split ? {split} : {});
@@ -357,12 +324,6 @@ export const groupKeyOf = (tab: SavedTab) =>
 		? tab.nativeGroup.key || tab.nativeGroup.title || 'default'
 		: null;
 
-/**
- Keeps split info only on complete pairs: two neighboring tabs with the same pair key, one at each position,
- and matching pinned and tab-group state (the browser's own split constraints). The left tab (position 0) is
- moved first if the two were stored the other way around. Orphans (a deleted, skipped, or filtered partner),
- reused keys, and mismatched pairs lose their split info; the tabs themselves are kept.
- */
 export function pairSplits(tabs: SavedTab[]): SavedTab[] {
 	const usedKeys = new Set<string>();
 	for (let index = 0; index < tabs.length; index += 1) {
@@ -395,19 +356,12 @@ export function pairSplits(tabs: SavedTab[]): SavedTab[] {
 	return tabs;
 }
 
-/**
-The `icon` property for a stored column or folder: only a registry id is kept, anything else is dropped.
-*/
 export function iconField(value: unknown): {icon?: string} {
 	return typeof value === 'string' && ICON_ID_SET.has(value)
 		? {icon: value}
 		: {};
 }
 
-/**
-The `color` property for a stored column: a preset accent id or `#rrggbb`. "default", "system", and anything else are dropped,
-so a column without a color stores no field.
-*/
 export function colorField(value: unknown): {color?: string} {
 	return typeof value === 'string' &&
 		value !== 'default' &&
@@ -515,9 +469,6 @@ export function normalizeFolders(rawFolders: unknown): Folder[] {
 	return folders;
 }
 
-/**
-The longest note a saved tab or a bookmark keeps.
-*/
 export const NOTES_MAX = 10_000;
 
 export function normalizeNotes(value: unknown) {
@@ -526,15 +477,10 @@ export function normalizeNotes(value: unknown) {
 		: '';
 }
 
-/**
-A bookmark's note as it is stored: cleaned like a saved tab's notes and trimmed, or undefined when nothing is left.
-*/
 export function bookmarkNotes(value: unknown): string | undefined {
 	return normalizeNotes(value).trim() || undefined;
 }
 
-// Sessions used to have a short description plus separate notes; one field now holds both.
-// Room for the old 500-character description, a blank line, and the old 10,000-character notes.
 export const SESSION_TEXT_MAX = 10_502;
 
 export function normalizeSessionText(value: unknown) {
@@ -641,9 +587,6 @@ export function cleanBookmarkTitle(value: unknown, url: string) {
 				.trim();
 }
 
-/**
-The saving device of a stored session or bookmark, kept only when it has a name.
-*/
 const storedDevice = (raw: Record<string, unknown>) =>
 	deviceStamp(
 		cleanText(
@@ -842,17 +785,10 @@ export function normalizeSessionQuickActions(
 	return selected.slice(0, 5);
 }
 
-/**
-Room for the Android app's preferences to grow: each synced one takes two keys, its value and the time it changed. The
-app tests that its keys stay under this. An extension older than this limit still cuts the setting at 20 keys.
-*/
 export const MOBILE_APP_KEYS_MAX = 80;
 
 export const MOBILE_APP_TEXT_MAX = 40;
 
-/**
-The Android app's preferences, kept as they are so they sync between phones: a few short keys with plain values.
-*/
 export function normalizeMobileApp(value: unknown): Settings['mobileApp'] {
 	const kept: Array<[string, string | number | boolean]> = [];
 	for (const [key, item] of isRecord(value) ? Object.entries(value) : []) {
@@ -868,18 +804,11 @@ export function normalizeMobileApp(value: unknown): Settings['mobileApp'] {
 	return Object.fromEntries(kept.slice(0, MOBILE_APP_KEYS_MAX));
 }
 
-/**
-How many settings from a newer version are held, and how long each value may be as JSON. Generous: a value cut here
-looks deleted and that delete syncs.
-*/
 export const HELD_SETTINGS_MAX = 200;
 const HELD_VALUE_MAX = 20_000;
 
 const isSettingKey = (key: string) => Object.hasOwn(DEFAULT_SETTINGS, key);
 
-/**
-Synced settings this version does not know, kept as plain JSON values.
-*/
 export function normalizeHeldSettings(
 	value: unknown,
 ): Settings['heldSettings'] {
@@ -900,9 +829,7 @@ export function normalizeHeldSettings(
 }
 
 export function normalizeSettings(input: RawSettings | null = {}): Settings {
-	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
 	const saved: RawSettings = isRecord(input) ? input : {};
-	// A setting held while this version was older, which it now knows: the held value stands in for a missing one.
 	const raw: RawSettings = {
 		...Object.fromEntries(
 			Object.entries(
@@ -940,8 +867,6 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		openDashboardOnStartup: Boolean(raw.openDashboardOnStartup),
 		startupBehavior:
 			raw.startupBehavior === 'last-session' ? 'last-session' : 'dashboard',
-		// Firefox opens a new tab as a blank page before the add-on's page loads, so the worker cannot tell it from the
-		// dashboard being opened and cannot hand it on.
 		newTabEnabled: isFirefox() || raw.newTabEnabled !== false,
 		newTabFallback: isOneOf(['browser', 'blank', 'custom'], raw.newTabFallback)
 			? raw.newTabFallback
@@ -1118,9 +1043,6 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 	return settings;
 }
 
-/**
-A number from a fixed list (numeric strings count); anything else gives the fallback.
-*/
 export function oneOfNumbers(
 	allowed: readonly number[],
 	value: unknown,
@@ -1132,9 +1054,6 @@ export function oneOfNumbers(
 		: fallback;
 }
 
-/**
-A whole number within [min, max]; fractions are truncated, anything that is not a number gives the fallback.
-*/
 export function clampInteger(
 	value: unknown,
 	min: number,
@@ -1147,9 +1066,6 @@ export function clampInteger(
 		: Math.min(max, Math.max(min, Math.trunc(number_)));
 }
 
-/**
-The lower-case host of a URL without a trailing dot, so "bank.com." and "bank.com" match; null when it does not parse. The one place hosts are read for comparisons.
-*/
 export function urlHost(url: string): string | null {
 	try {
 		return new URL(url).hostname.toLowerCase().replace(/\.$/, '');
@@ -1158,11 +1074,6 @@ export function urlHost(url: string): string | null {
 	}
 }
 
-/**
-An excluded-site entry as a bare lower-case host name, or null when it is not a usable web host. Accepts
-"google.com", "*.google.com", "https://google.com:8080/path" and old stored origins; a leading "www." is dropped.
-Entries cover the host and all its subdomains. (Duplicated in src/shared/excluded-sites.ts for the pages and the phone.)
-*/
 export function normalizeExcludedHost(value: unknown): string | null {
 	if (typeof value !== 'string') {
 		return null;
@@ -1194,10 +1105,6 @@ export function normalizeExcludedHost(value: unknown): string | null {
 	}
 }
 
-/**
-Normalizes the stored list: hosts only, duplicates removed. A child such as "mail.google.com" next to "google.com"
-is kept, since it is harmless and shows what the user added.
-*/
 export function normalizeExcludedOrigins(raw: unknown): string[] {
 	const hosts = new Set<string>();
 	for (const value of Array.isArray(raw) ? raw : []) {
@@ -1210,17 +1117,11 @@ export function normalizeExcludedOrigins(raw: unknown): string[] {
 	return [...hosts].slice(0, MAX_EXCLUDED_ORIGINS);
 }
 
-/**
-Finds the "Archived" folder by name or adds it. Old builds had an Archived view; sessions that were archived
-without a folder land here now. The auto-archive setting uses the same folder.
-*/
 export function findOrAddArchivedFolder(folders: Folder[]): Folder {
 	let folder = folders.find((entry) => isArchivedFolderName(entry.name));
 	if (folder) {
 		folder.name = ARCHIVED_FOLDER_NAME;
 	} else {
-		// Every read normalizes the library, so the added folder must come out the same each time: sync would
-		// otherwise see a new folder on every read and send it forever.
 		const taken = new Set(folders.map((entry) => entry.id));
 		let id = ARCHIVED_FOLDER_ID;
 		for (let suffix = 2; taken.has(id); suffix += 1) {
@@ -1241,14 +1142,11 @@ export function findOrAddArchivedFolder(folders: Folder[]): Folder {
 }
 
 export function normalizeStore(raw: Raw | null | undefined): Store {
-	// NormalizeSettings treats a missing, null or non-object `settings` value as defaults.
 	const settings = normalizeSettings(
 		raw?.settings as RawSettings | null | undefined,
 	);
 	const sourceGroups = Array.isArray(raw?.groups) ? raw.groups : [];
 	const seenIds = new Set<string>();
-	// Pinned tabs that were deliberately saved stay stored even if the save preference is later switched off.
-	// Sessions archived by older builds (the Archived view is gone): they become normal sessions.
 	const wasArchived = new WeakSet<Session>();
 	const groups = sourceGroups
 		.map((entry: unknown) => {
@@ -1287,7 +1185,6 @@ export function normalizeStore(raw: Raw | null | undefined): Store {
 		}
 	}
 
-	// Archived sessions without a folder move into an "Archived" folder, created once and reused by name.
 	const stranded = groups.filter(
 		(group) => wasArchived.has(group) && group.folderId === DEFAULT_FOLDER_ID,
 	);

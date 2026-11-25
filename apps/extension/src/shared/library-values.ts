@@ -1,17 +1,9 @@
-/*
-Small value helpers shared by the library storage modules.
-*/
-
 export type Raw = Record<string, unknown>;
 
 export const isRecord = (value: unknown): value is Raw =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/**
-A short non-cryptographic hash (cyrb53) used to spot a record, snapshot, or backup identical to a previous one.
-*/
 /* eslint-disable no-bitwise -- a hash is bit arithmetic */
-// A local binding: inside a worker sandbox a global `Math.imul` lookup per character is far slower than the loop itself.
 const {imul} = Math;
 export function hashText(text: string): string {
 	let h1 = 0xde_ad_be_ef ^ text.length;
@@ -36,10 +28,6 @@ export function hashText(text: string): string {
 
 /* eslint-enable no-bitwise */
 
-/**
-JSON with object keys in sorted order. `chrome.storage` hands objects back with their keys sorted, so a record
-read back would otherwise serialize differently from the one that was written, and every checksum would fail.
-*/
 export function canonicalJson(value: unknown): string {
 	if (value === null || typeof value !== 'object') {
 		return JSON.stringify(value) ?? 'null';

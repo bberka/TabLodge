@@ -1,16 +1,3 @@
-/*
-Encryption for syncing the private windows' library (the separate, saved private storage).
-
-When a device that has a private password turns private sync on, it makes a random sync key, wraps it in the
-same credential envelope as the private lock, and stores the wrapped copy on the server with POST /v1/key. Every
-record value it sends is then sealed with that key, with the record's key as authenticated data, so the server sees
-which records exist and when they change but not what they hold. Another device joins by entering the same
-password once; it keeps the unwrapped key in its own private storage, which the local lock seals in turn.
-
-Changing the password rewraps the same key, so nothing has to be encrypted again and the other devices keep
-syncing. A library synced before any device had a lock holds plain values; a device with the key sends each one
-again sealed as it pulls it (`reseal`).
-*/
 import {recordKey, type SyncChange} from './sync/changes';
 import {SyncError, type SyncCodec} from './sync/client';
 import {isRecord} from './library-values';
@@ -27,14 +14,8 @@ import {
 	wrapDataKey,
 } from './private-lock';
 
-/**
-The sync key as this device keeps it: `raw` is the key itself (base64), `wrapped` the copy on the server.
-*/
 export type PrivateSyncKey = {id: string; raw: string; wrapped: string};
 
-/**
-The query a regular window adds when it opens Settings in a private window to turn private sync on there.
-*/
 export const PRIVATE_SYNC_ASK = 'privateSync=ask';
 
 type ServerKey = {v: 1; id: string; wrapped: string};
@@ -66,9 +47,6 @@ export function parseServerKey(value: unknown): ServerKey | undefined {
 		: undefined;
 }
 
-/**
-The connection the private library syncs over: the regular server address with `/private` added, and the same token.
-*/
 export const privateSyncTarget = (regular: {url: string; token: string}) => ({
 	url: `${regular.url}/private`,
 	token: regular.token,
@@ -88,9 +66,6 @@ export function parsePrivateSyncKey(
 		: undefined;
 }
 
-/**
-A new sync key, wrapped with the credential.
-*/
 export async function createSyncKey(
 	credential: Credential,
 ): Promise<PrivateSyncKey> {
@@ -102,9 +77,6 @@ export async function createSyncKey(
 	};
 }
 
-/**
-The server's sync key, unwrapped with the credential. Throws PrivateLockError('wrong-credential') for a wrong one.
-*/
 export async function joinSyncKey(
 	server: ServerKey,
 	credential: string,
@@ -113,9 +85,6 @@ export async function joinSyncKey(
 	return {id: server.id, raw: toBase64(raw), wrapped: server.wrapped};
 }
 
-/**
-The same key wrapped with a new credential.
-*/
 export async function rewrapSyncKey(
 	key: PrivateSyncKey,
 	credential: Credential,
@@ -154,7 +123,6 @@ export function createPrivateCodec(store: {
 				throw new SyncError('key', NEEDS_KEY_MESSAGE);
 			}
 
-			// Another device changed its password and rewrapped the same key.
 			if (local.wrapped !== server.wrapped) {
 				await store.save({...local, wrapped: server.wrapped});
 			}
