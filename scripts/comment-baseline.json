@@ -1,7 +1,7 @@
 {
 	"apps/extension/shell/add-bookmark-preload.ts": 1,
 	"apps/extension/shell/page-copy-capture.ts": 4,
-	"apps/extension/shell/service-worker.ts": 426,
+	"apps/extension/shell/service-worker.ts": 259,
 	"apps/extension/shell/site-source.ts": 24,
 	"apps/extension/shell/theme-boot.ts": 5
 }
