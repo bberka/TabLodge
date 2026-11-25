@@ -256,7 +256,7 @@ Status: accepted, 2026-11-23. Issue #442.
 * **Large batches get an Undo that closes them.** More than ten tabs at once (`newtab.tsx:NewTab`).
 * **Command handlers read the latest settings.** The finder's command list stays stable between renders (`newtab.tsx:NewTab`).
 * **This tab is no web page.** Its other tabs offer Keep a copy, so this one does not (`newtab.tsx:NewTab`).
-* **Private windows sync from their own Settings.** Sync now in a private window uses its separate library (`newtab.tsx:NewTab`).
+* **Private windows have no Sync now command.** The finder's Sync now is disabled there (`newtab.tsx:NewTab`); private sync is managed in Settings.
 * **Private windows keep no snapshots.** Recent snapshots are not offered there (`newtab.tsx:NewTab`).
 * **Only a private window has a private library to lock.** (`newtab.tsx:NewTab`).
 * **`?command=` runs commands here.** The palette window passes a command that needs this page (`newtab.tsx:NewTab`).
@@ -298,7 +298,7 @@ Status: accepted, 2026-11-23. Issue #442.
 * **Copies live in the worker.** This module reads and opens them; the worker keeps them (`page-copies.ts:readerUrl`).
 * **One storage listener for every row.** Always empty in a private window, which keeps no copies (`page-copies.ts:usePageCopyUrls`).
 * **Injected functions are source text.** Each is a plain function declaration, since a method shorthand does not survive `chrome.scripting.executeScript` (`page-copy-inject.ts:takeCapturedCopy`).
-* **The page note cannot be styled by the page.** It is built in a closed shadow root, so the page's styles and scripts do not reach it (`page-copy-inject.ts:showPageNote`).
+* **The note's elements are built in a closed shadow root.** Page styles and scripts cannot reach those elements directly, but the page can still hide the `#tablodge-page-note` host with CSS or remove it with script (`page-copy-inject.ts:showPageNote`).
 
 ### Address bar
 
