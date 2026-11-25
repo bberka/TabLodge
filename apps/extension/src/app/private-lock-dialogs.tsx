@@ -147,7 +147,7 @@ export function EnableDialog({
 				>
 					<DialogBody className="grid gap-4">
 						<PasscodeSetup draft={draft} disabled={busy} onChange={setDraft} />
-						<ul className="grid list-disc gap-1 pl-5 text-xs leading-5 text-muted-foreground">
+						<ul className="grid list-disc gap-1 pl-5 text-xs leading-[1.6667] text-muted-foreground">
 							<li>
 								The lock protects files at rest. Exports and backups you make
 								from private windows are plain text unless you protect a full

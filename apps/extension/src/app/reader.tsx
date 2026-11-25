@@ -75,7 +75,7 @@ function renderBlocks(blocks: readonly CopyBlock[]) {
 				out.push(
 					<pre
 						key={index}
-						className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-sm leading-6"
+						className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-sm leading-[1.7143]"
 					>
 						<code>{block.text}</code>
 					</pre>,
@@ -173,7 +173,7 @@ function Reader() {
 			{copy === undefined ? (
 				<LoadingLine />
 			) : copy ? (
-				<article className="text-base leading-7">
+				<article className="text-base leading-[1.75]">
 					<h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
 						{copy.title}
 					</h1>

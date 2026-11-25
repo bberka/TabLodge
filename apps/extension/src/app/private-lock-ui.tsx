@@ -298,7 +298,7 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 							<div className="flex items-start justify-between gap-3">
 								<div className="grid gap-1">
 									<Label htmlFor={syncId}>Sync private windows</Label>
-									<p className="text-xs leading-5 text-muted-foreground">
+									<p className="text-xs leading-[1.6667] text-muted-foreground">
 										{syncNew
 											? 'This library goes to your sync server, encrypted, and your other browsers and phone can join it with this password.'
 											: 'Kept only on this device. It will not match your other devices until you turn on Sync private windows in Settings.'}
@@ -505,7 +505,7 @@ export function PrivateLockSettings({
 					<Lock className="h-4 w-4" aria-hidden="true" />
 					Lock with a password
 				</h3>
-				<p className="text-xs leading-5 text-muted-foreground">
+				<p className="text-xs leading-[1.6667] text-muted-foreground">
 					Encrypts the separate saved library on this device and shows a lock
 					screen in private windows until you enter it. Only a separate saved
 					library can be locked.
@@ -532,7 +532,7 @@ export function PrivateLockSettings({
 							? `On, with a ${label}. ${info.locked ? 'Currently locked.' : 'Currently unlocked.'}`
 							: 'Off.'}
 					</p>
-					<p className="text-xs leading-5 text-muted-foreground">
+					<p className="text-xs leading-[1.6667] text-muted-foreground">
 						To turn the lock on or off, or to change it, open Settings in a
 						private window.
 					</p>

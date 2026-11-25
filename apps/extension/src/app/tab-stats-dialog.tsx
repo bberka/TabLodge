@@ -137,7 +137,7 @@ export function TabStatsDialog({
 										value={memoryEstimateText(memory)}
 									/>
 								</dl>
-								<p className="text-xs leading-5 text-muted-foreground">
+								<p className="text-xs leading-[1.6667] text-muted-foreground">
 									The memory figure assumes about 100 MB for each loaded tab and
 									5 MB for each unloaded one. The browser does not share exact
 									numbers with extensions. Open its Task Manager (Shift+Esc) for

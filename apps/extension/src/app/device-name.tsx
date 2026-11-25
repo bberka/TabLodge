@@ -82,7 +82,7 @@ export function DeviceNameField() {
 					}
 				}}
 			/>
-			<p id={helpId} className="text-xs leading-5 text-muted-foreground">
+			<p id={helpId} className="text-xs leading-[1.6667] text-muted-foreground">
 				Sessions you save here say they came from this device, for example
 				“Berkay’s MacBook”. It starts as the browser and system, is kept on this
 				browser only, and clearing it goes back to “{fallback}”. Sessions

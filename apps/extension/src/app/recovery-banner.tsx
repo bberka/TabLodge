@@ -98,7 +98,7 @@ export function RecoveryBanner({
 					<p className="text-sm font-semibold">
 						Restore your last browsing session?
 					</p>
-					<p className="text-xs leading-5 text-muted-foreground">
+					<p className="text-xs leading-[1.6667] text-muted-foreground">
 						{plural(recovery.windows, 'window')} ·{' '}
 						{plural(recovery.tabs, 'tab')} · {whenText(recovery.at)}. The
 						browser seems to have closed unexpectedly.

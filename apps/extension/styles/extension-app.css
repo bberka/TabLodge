@@ -142,7 +142,6 @@
 		box-sizing: border-box;
 	}
 	html {
-		min-width: 320px;
 		min-height: 100%;
 		background: rgb(var(--background));
 	}
@@ -251,7 +250,7 @@ body {
 		BlinkMacSystemFont,
 		'Segoe UI',
 		sans-serif;
-	font-size: 14px;
+	font-size: 0.875rem;
 	-webkit-font-smoothing: antialiased;
 }
 

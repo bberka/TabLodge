@@ -219,7 +219,7 @@ export const Favicon = memo(
 				<span
 					ref={observe}
 					aria-hidden="true"
-					className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[10px] font-semibold text-muted-foreground ${className}`}
+					className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[0.625rem] font-semibold text-muted-foreground ${className}`}
 				>
 					{(String(label || hostOf(url)).trim()[0] || '↗').toUpperCase()}
 				</span>
@@ -319,14 +319,14 @@ export function LinkSummary({
 			<span className="min-w-0 flex-1">
 				{title && title !== url && (
 					<strong
-						className="block truncate text-[13px] font-semibold text-foreground"
+						className="block truncate text-[0.8125rem] font-semibold text-foreground"
 						title={title}
 					>
 						{title}
 					</strong>
 				)}
 				<small
-					className="block text-[11px] leading-4 text-muted-foreground wrap-anywhere"
+					className="block text-[0.6875rem] leading-[1.4545] text-muted-foreground wrap-anywhere"
 					title={url}
 				>
 					<InsecureMarkFor url={url} settings={settings} />
