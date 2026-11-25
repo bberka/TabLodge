@@ -1,8 +1,3 @@
-/*
-The right-click menu tree: which entries exist for the current settings, columns, and sessions, and the ids the
-service worker answers clicks with. Pure, so the whole tree can be checked without a browser; the worker creates
-the entries and handles the clicks.
-*/
 import {
 	arrayOf,
 	archivedFolderIds,
@@ -13,11 +8,6 @@ import {
 import {isRecord} from './library-values';
 import type {BookmarkColumn, SaveScope, Settings} from './types';
 
-// One parent item per context, named after the extension, keeps the browser menu short. The toolbar
-// icon's menu is already the extension's own, so its items are top level (Chrome shows at most
-// ACTION_MENU_TOP_LEVEL_LIMIT = 6). In Firefox and Chromium 150 or newer the page items also appear when you
-// right-click a tab in the tab strip (the `tab` context, see `hasTabMenu`).
-// Menu ids keep the "tablodge-" prefix (see the note at STORAGE_KEY); column items append the column id.
 export type MenuItemProperties = chrome.contextMenus.CreateProperties;
 
 export const MENU = {
@@ -47,42 +37,23 @@ export const MENU = {
 	actionSettings: 'tablodge-action-settings',
 } as const;
 
-/**
-The "Bookmark this page to" item is shared with the tab strip, so the worker retitles it when a menu opens. Only
-Firefox reports which menu opened; Chromium keeps the page title in both.
-*/
 export const PAGE_BOOKMARK_TITLE = {
 	page: 'Bookmark this page to',
 	tab: 'Bookmark this tab to',
 } as const;
 
-/**
-"Send this tab to session" items are `${PAGE_SEND_PREFIX}${sessionId}`.
-*/
 export const PAGE_SEND_PREFIX = 'tablodge-page-send:';
 
-/**
-Column items are `${prefix}${columnId}`; the Unfiled pseudo-column uses BOOKMARK_UNFILED_ID.
-*/
 export const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
 
 export const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
 
 export const IMAGE_COLUMN_PREFIX = 'tablodge-image-bookmark:';
 
-/**
-Video and audio share one menu: a video player and an audio player are both media elements.
-*/
 export const MEDIA_COLUMN_PREFIX = 'tablodge-media-bookmark:';
 
-/**
-How many sessions the "Send this tab to session" submenu lists, most recently changed first.
-*/
 export const MENU_SESSION_LIMIT = 10;
 
-/**
-The page menu's save actions, reusing the SAVE_TABS scopes.
-*/
 export const PAGE_SAVE_ITEMS: ReadonlyArray<
 	readonly [id: string, title: string, scope: SaveScope]
 > = [
@@ -97,17 +68,8 @@ export const PAGE_SAVE_ITEMS: ReadonlyArray<
 
 export const WEB_URL_PATTERNS = ['http://*/*', 'https://*/*'];
 
-/**
-The first Chromium whose tab strip menu shows extension items. Chromium 149 already lists the `tab` context and
-accepts items in it, but its tab strip menu shows none of them. The fixes that make them show, and that stop a
-crash once an extension has more than one, landed in 150 (crbug.com/514442561).
-*/
 export const CHROMIUM_TAB_MENU_VERSION = 150;
 
-/**
-Whether the page items can join the tab strip's menu: the API must list the `tab` context, and in Chromium the
-version must be at least CHROMIUM_TAB_MENU_VERSION, read from the `Chrome/<major>` part of the user agent.
-*/
 export function hasTabMenu(browser: {
 	listsTabContext: boolean;
 	isFirefox: boolean;
@@ -124,9 +86,6 @@ export function hasTabMenu(browser: {
 	);
 }
 
-/**
-Everything the menu tree depends on: the switches, the enabled systems, and the column names and order.
-*/
 export function contextMenuSignature(
 	settings: Settings,
 	columns: BookmarkColumn[],
@@ -147,10 +106,6 @@ export function contextMenuSignature(
 
 export type MenuSession = {id: string; name: string};
 
-/**
-The sessions the page menu offers: the most recently changed ones, leaving out the Archived folder.
-Takes stored data, so every entry is checked.
-*/
 export function menuSessions(
 	rawGroups: unknown,
 	rawFolders: unknown,
@@ -176,13 +131,6 @@ export function menuSessions(
 		}));
 }
 
-/**
- The full menu tree for these settings and columns, in creation order (parents first).
- `excludeState` sets the toolbar menu's "Exclude this site" checkbox for the active tab.
- `hasTabContext` adds the page items to the tab strip's menu (see `hasTabMenu`).
- `hasAmpersandAccessKeys` doubles every `&` in the titles: Firefox reads a single `&` as an access key marker and
- hides it, so "R&D" would show as "RD". Chrome shows `&` as written.
- */
 export function contextMenuPlan(
 	settings: Settings,
 	columns: BookmarkColumn[],
@@ -220,7 +168,6 @@ export function contextMenuPlan(
 			});
 		}
 
-		// Unfiled is not offered: it only holds bookmarks left over from a deleted column.
 		if (columns.length > 0) {
 			items.push({
 				id: `${parentId}-separator`,
@@ -262,7 +209,6 @@ export function contextMenuPlan(
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
 
-		// An image saves its own address, so only web images get the menu.
 		const image = {
 			contexts: ['image'],
 			targetUrlPatterns: WEB_URL_PATTERNS,
@@ -284,7 +230,6 @@ export function contextMenuPlan(
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
 
-		// A streamed video has a blob: source and falls back to the page, so the page must be a web page.
 		const media = {
 			contexts: ['video', 'audio'],
 			documentUrlPatterns: WEB_URL_PATTERNS,
@@ -387,14 +332,12 @@ export function contextMenuPlan(
 		} satisfies Partial<MenuItemProperties>;
 		items.push(
 			{id: MENU.selectionRoot, title: env.appName, ...selection},
-			// Chrome substitutes %s with the selected text (shortened for long selections).
 			{
 				id: MENU.selectionSearch,
 				title: 'Search saved tabs & bookmarks for “%s”',
 				parentId: MENU.selectionRoot,
 				...selection,
 			},
-			// A quote is saved on the page's bookmark, so only web pages offer it.
 			{
 				id: MENU.selectionQuote,
 				title: 'Save quote',

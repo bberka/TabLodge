@@ -1,17 +1,8 @@
-// The column site matcher and the checks on a column's site entries, used by the pages, the service worker, and the
-// Android app, with no browser APIs. A column's `domains` entries are a host ("github.com", which also covers its
-// subdomains) or a host with a path prefix ("github.com/bberka"). The longest path wins, then the longest host, then
-// the earlier column.
-
 import {normalizeExcludedHost} from './excluded-sites';
 import type {BookmarkColumn} from './types';
 
 export const MAX_COLUMN_DOMAINS = 50;
 
-/**
-A column site entry: a bare host ("github.com"), or a host with a path prefix ("github.com/bberka"). Query and fragment
-are dropped and a trailing slash is ignored. Null when the host is not usable.
-*/
 export function normalizeColumnSite(value: unknown): string | null {
 	const host = normalizeExcludedHost(value);
 	if (!host || typeof value !== 'string') {
@@ -31,9 +22,6 @@ export function normalizeColumnSite(value: unknown): string | null {
 	return `${host}${path}`;
 }
 
-/**
-A column's sites as distinct entries, or `{}` when none remain, so a column without sites stores no field.
-*/
 export function domainsField(value: unknown): {domains?: string[]} {
 	const sites = new Set<string>();
 	for (const entry of Array.isArray(value) ? value : []) {
@@ -50,10 +38,6 @@ export function domainsField(value: unknown): {domains?: string[]} {
 
 export type ColumnSiteCheck = {site: string} | {error: string};
 
-/**
-Checks one typed site against a column's current list: its normalized entry, or the reason it cannot be added. A column
-holds at most `MAX_COLUMN_DOMAINS` sites, the same limit the extension enforces when it saves.
-*/
 export function checkColumnSite(
 	sites: readonly string[],
 	text: string,
