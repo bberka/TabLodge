@@ -71,6 +71,5 @@
 	"apps/extension/src/shared/ui.tsx": 7,
 	"apps/extension/src/shared/url-display.ts": 4,
 	"apps/extension/src/shared/use-stable.ts": 1,
-	"apps/extension/src/shared/web-url.ts": 5,
-	"apps/extension/tests/service-worker.test.ts": 202
+	"apps/extension/src/shared/web-url.ts": 5
 }
