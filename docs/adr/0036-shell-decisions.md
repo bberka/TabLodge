@@ -52,7 +52,7 @@ This is the last of the code comments in `apps/extension/shell/`. [ADR 34](0034-
 * **An address in the library or the trash counts as saved** for a source save, the same rule as an import (`service-worker.ts:saveFromSource`).
 * **The items of a saved page that the library lacks** are the ones not in any column and not in the trash, as a click-save counts them (`service-worker.ts:missingFromSource`).
 * **Catch-up adds are applied in the page's order,** one after another, as the site lists them (`service-worker.ts:addSourceCatchUp`).
-* **Catch-up runs in the sources queue as a whole** (`service-worker.ts:addSourceCatchUp`).
+* **Adding catch-up sites runs through the library's mutation queue, with Undo** (`service-worker.ts:addSourceCatchUp`). **Dismissing a catch-up runs in the sources queue** (`service-worker.ts:dismissSourceCatchUp`).
 * **A source save's result waits for the next page in its tab for a short time.** A click on a favorite link can load another page before the first one can show the result (`service-worker.ts:PENDING_SOURCE_MS`, `service-worker.ts:pendingSourceSaves`).
 * **The last source save of each tab is kept from the moment it starts,** so a page that loads while the save still runs waits for it (`service-worker.ts:pendingSourceSaves`).
 * **Toast Undo acts only on what that page's toast reported.** The undo ids of each toast are tied to its tab (`service-worker.ts:bindToastUndo`, `service-worker.ts:claimToastUndo`).
@@ -108,7 +108,7 @@ This is the last of the code comments in `apps/extension/shell/`. [ADR 34](0034-
 * **The clicked link's title** is its text, a short selection, the open tab's title, or then the host (`service-worker.ts:menuLinkTitle`).
 * **A readable host label** is used for a link without text (`service-worker.ts:linkHost`).
 * **"Bookmark image to" and "Bookmark video to"** save the media's own address, or the page for a stream, into the chosen column or a new one (`service-worker.ts:bookmarkMedia`, [ADR 31](0031-shared-search-save-capture-decisions.md)).
-* **"New column" opens the add-bookmark dialog** prefilled, and `BookmarkColumn=new` asks it to start a new column. Pages that do not support it ignore the parameter (`service-worker.ts:openPrefilledBookmarkDialog`).
+* **"New column" opens the add-bookmark dialog** prefilled, and `bookmarkColumn=new` asks it to start a new column. Pages that do not support it ignore the parameter (`service-worker.ts:openPrefilledBookmarkDialog`).
 * **A selection search** is sent to the dashboard as written. Text that looks like an operator becomes a quoted phrase (`service-worker.ts:dashboardSearchQuery`, [ADR 31](0031-shared-search-save-capture-decisions.md)).
 * **"Save quote"** saves the selection and confirms it in a page toast, with Undo. The click grants `activeTab`, so no site access is needed. Where the page cannot be scripted, the badge says so instead (`service-worker.ts:quoteFromMenu`).
 * **Toggling the site in the excluded list** goes through the same handlers as Settings (`service-worker.ts:toggleExcludedSite`).
