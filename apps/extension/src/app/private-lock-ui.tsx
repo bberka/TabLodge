@@ -1,6 +1,3 @@
-// The password lock of private windows, on the page side: the lock screen that replaces a private page
-// until it is unlocked, the Lock button, and the Settings panel to turn it on, change it, or remove it.
-// All state lives in the worker (see src/shared/private-lock.ts); the credential only passes through form state.
 import {
 	useCallback,
 	useEffect,
@@ -45,9 +42,6 @@ import {PROJECT} from './project';
 const privateWindow = () =>
 	Boolean(globalThis.chrome?.extension?.inIncognitoContext);
 
-/**
-The lock state from the worker, kept current: it reloads when the lock record or the key changes, and when the idle time runs out.
-*/
 export function usePrivateLockInfo() {
 	const [info, setInfo] = useState<PrivateLockInfo>();
 	const [error, setError] = useState('');
@@ -74,7 +68,6 @@ export function usePrivateLockInfo() {
 				return;
 			}
 
-			// Use elsewhere moves the idle deadline, which the page can work out without asking.
 			const activity =
 				area === 'session' ? changes[LOCK_ACTIVITY_KEY]?.newValue : undefined;
 			if (typeof activity === 'number') {
@@ -95,7 +88,6 @@ export function usePrivateLockInfo() {
 			return;
 		}
 
-		// The worker locks when asked after the deadline, so asking is what locks the page.
 		const timer = setTimeout(
 			() => void refresh(),
 			Math.max(1000, expiresAt - Date.now() + 500),
@@ -107,9 +99,6 @@ export function usePrivateLockInfo() {
 
 const ACTIVITY_TOUCH_MS = 20_000;
 
-/**
-Counts using the page as activity, so reading without saving anything does not run into the idle timeout.
-*/
 function useActivityTouch(active: boolean) {
 	useEffect(() => {
 		if (!active) {
@@ -243,11 +232,6 @@ function LockScreen({
 	);
 }
 
-/**
-Asks for a first password before the saved separate library opens. When the sync server already holds a private
-library, the first choice is its password, so every browser ends up with one. The only other ways past are to
-keep the library on this device with its own password, or to stop using a separate saved library.
-*/
 function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 	const headingId = useId();
 	const syncId = useId();
@@ -370,22 +354,15 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 	);
 }
 
-/**
-Shows the lock screen in place of its children while the private library is locked, and the children once it is open.
-Regular windows pass straight through. The children unmount on lock, so nothing they showed stays in the page.
-*/
 export function PrivateLockGate({children}: {children: ReactNode}) {
 	const inPrivate = privateWindow();
 	const {info, error, refresh, setInfo} = usePrivateLockInfo();
-	// The set-a-password screen replaces the page like the lock screen, so focus returns the same way when it goes.
 	const locked = Boolean((info?.enabled && info.locked) || info?.needsLock);
 	const wasLockedRef = useRef(false);
 	useActivityTouch(inPrivate && info?.enabled === true && !locked);
 	useEffect(() => {
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		if (wasLockedRef.current && !locked) {
-			// The lock screen's field is gone, so focus would fall to the body. The page loads its content
-			// after it mounts, so wait for its main area, unless the page already took focus itself.
 			let attempts = 0;
 			const focusMain = () => {
 				if (
@@ -397,7 +374,6 @@ export function PrivateLockGate({children}: {children: ReactNode}) {
 
 				const target =
 					document.querySelector<HTMLElement>('#main-content') ??
-					// The popup and side panel have no main anchor: after a second, take their first control.
 					(attempts >= 10
 						? document.querySelector<HTMLElement>(
 								'button:not([disabled]), a[href], input:not([disabled])',
@@ -482,9 +458,6 @@ export function PrivateLockSettings({
 	lock,
 }: {
 	showStatus: ShowStatus;
-	/**
-	The page's lock state, shared with the storage mode form so the two always agree.
-	*/
 	lock: ReturnType<typeof usePrivateLockInfo>;
 }) {
 	const {info} = lock;
@@ -657,9 +630,6 @@ export function PrivateLockSettings({
 	);
 }
 
-/**
-Why the storage mode cannot change right now, or null when it can.
-*/
 export function modeLockedReason(info: PrivateLockInfo | undefined) {
 	return info?.enabled
 		? 'The separate library has a lock, so this choice is fixed. To change it, remove the lock from Settings in a private window first, so nothing is left encrypted.'

@@ -33,17 +33,12 @@ const UNAVAILABLE: Record<
 	locked: 'Unlock private windows to change how they sync.',
 };
 
-/**
-Settings › Sync in a private window: whether the separate private library syncs too.
-*/
 export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [info, setInfo] = useState<PrivateSyncInfo>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
-	// The question the worker asked for a password, while the dialog is open.
 	const [ask, setAsk] = useState<string>();
 	const [credentialError, setCredentialError] = useState('');
-	// A library kept on this device can have a password of its own: the server's is then asked for as well.
 	const [serverAsk, setServerAsk] = useState<string>();
 	const [serverError, setServerError] = useState('');
 	const localCredentialRef = useRef('');
@@ -60,7 +55,6 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			});
 		};
 
-		// The private client keeps its status under the private library's prefix.
 		const onChanged = (changes: Record<string, unknown>) => {
 			if (Object.keys(changes).some((key) => key.endsWith(SYNC_STATUS_KEY))) {
 				refresh();
@@ -108,8 +102,6 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		}
 	};
 
-	// A regular window opened this page to turn private sync on (see PrivateSyncPrompt). Starts it as if the
-	// switch were turned on, so a password is asked for here.
 	const askedRef = useRef(false);
 	useEffect(() => {
 		if (!info || askedRef.current) {
@@ -121,7 +113,6 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			return;
 		}
 
-		// Dropped from the address, so a reload does not start it again.
 		history.replaceState(null, '', `${location.pathname}${location.hash}`);
 		if (info.availability === 'ready' && !info.status.connected) {
 			void enable();
@@ -225,7 +216,6 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				</p>
 			)}
 			<CredentialDialog
-				// A fresh dialog each time it opens, so nothing typed before is kept.
 				key={ask ?? 'closed'}
 				question={ask}
 				busy={busy}
@@ -267,9 +257,6 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	);
 }
 
-/**
-Asks for the password the worker needs to turn private sync on. Open while `question` is set.
-*/
 function CredentialDialog({
 	title = 'Encrypt private sync',
 	submitLabel = 'Turn on',
@@ -298,7 +285,6 @@ function CredentialDialog({
 	const errorId = useId();
 	const message = empty ? 'Enter the password.' : error;
 
-	// A wrong entry comes back after the check; focus goes back to the field for the next try.
 	useEffect(() => {
 		if (error) {
 			inputRef.current?.focus();
@@ -351,7 +337,6 @@ function CredentialDialog({
 								autoComplete="off"
 								spellCheck={false}
 								value={credential}
-								// Read only rather than disabled while checking, so focus stays here for a wrong entry.
 								readOnly={busy}
 								aria-invalid={Boolean(message)}
 								aria-describedby={message ? errorId : undefined}

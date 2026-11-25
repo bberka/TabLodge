@@ -1,8 +1,5 @@
 import type {Bookmark, Session} from '../shared/types';
 
-/**
-Every URL stored in a bookmark or session, for constant-time "already saved" checks. Matching is exact, the same rule saving uses to detect duplicates.
-*/
 export function savedUrlSet(
 	bookmarks: readonly Bookmark[],
 	sessions: readonly Session[],

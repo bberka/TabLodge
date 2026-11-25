@@ -9,9 +9,6 @@ import {
 	whenText,
 } from './recovery-core';
 
-/**
-"Restore your last browsing session? N windows · M tabs" shown on the dashboard after an unclean exit.
-*/
 export function RecoveryBanner({
 	showStatus,
 	onReview,

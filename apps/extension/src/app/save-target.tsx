@@ -14,9 +14,6 @@ export type SaveTarget = 'bookmark' | 'session';
 
 type SessionOption = {id: string; name: string};
 
-/**
-The session picker's value for "create a new session", like the new column choice in the column picker.
-*/
 export const NEW_SESSION = '__new-session__';
 
 const ICONS = {bookmark: Bookmark, session: PanelsTopLeft} as const;
@@ -26,10 +23,6 @@ const CHOICES = SAVE_TARGET_CHOICES.map((choice) => ({
 	icon: ICONS[choice.value],
 }));
 
-/**
-The "Save to" switch between a bookmark column and an existing session. Renders nothing when there is no session to
-choose, so the dialog keeps its plain column field.
-*/
 export function SaveTargetChoice({
 	target,
 	onTargetChange,
@@ -39,9 +32,6 @@ export function SaveTargetChoice({
 	target: SaveTarget;
 	onTargetChange: (target: SaveTarget) => void;
 	sessions: readonly SessionOption[];
-	/**
-	Offer the Session choice even with no saved session, since the picker can create one.
-	*/
 	allowNewSession?: boolean;
 }) {
 	if (sessions.length === 0 && !allowNewSession) {
@@ -58,9 +48,6 @@ export function SaveTargetChoice({
 	);
 }
 
-/**
-The session picker shown in place of the column field while the target is a session.
-*/
 export function SaveTargetSessionField({
 	id,
 	sessions,

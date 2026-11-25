@@ -17,15 +17,8 @@ export function Kbd({children}: {children: string}) {
 	);
 }
 
-/**
-A key or key combination, and what it does.
-*/
 export type KeyTip = {keys: readonly string[]; meaning: string};
 
-/**
-A help button for a search field that lists the search operators, and the keys when given, in a popover. Nothing
-shows until it is pressed.
-*/
 const NO_KEYS: readonly KeyTip[] = [];
 
 export function SearchTipsButton({keys = NO_KEYS}: {keys?: readonly KeyTip[]}) {
@@ -47,12 +40,10 @@ export function SearchTipsButton({keys = NO_KEYS}: {keys?: readonly KeyTip[]}) {
 				align="end"
 				aria-label="Search tips"
 				className="flex max-h-(--radix-popover-content-available-height) w-auto flex-col p-0"
-				// Escape closes the tips only, not the palette around them.
 				onEscapeKeyDown={(event) => {
 					event.stopPropagation();
 				}}
 			>
-				{/* The operators and keys are taller than a short palette window, so the list scrolls. */}
 				<ScrollArea className="min-h-0" viewportClassName="p-3">
 					<p className="mb-2 text-xs font-semibold">Search tips</p>
 					<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">

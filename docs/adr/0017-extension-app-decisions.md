@@ -319,3 +319,198 @@ Status: accepted, 2026-11-23. Issue #442.
 * **A private library syncs from its own Settings.** (`palette.tsx:PalettePage`).
 * **Private windows keep no snapshots.** (`palette.tsx:PalettePage`).
 * **Only a private window has a private library to lock.** (`palette.tsx:PalettePage`).
+
+### Private lock
+
+* **Passcode forms keep the value in the caller.** Both forms keep the typed password in the caller's state, never in storage (`passcode-fields.tsx:PasscodeSetup`).
+* **The first problem wins.** The draft shows problems in a fixed order, and the first one is the one reported (`passcode-fields.tsx:passcodeDraftProblem`).
+* **The problem line is always in the page.** A screen reader announces what it later says, so it cannot appear and disappear (`passcode-fields.tsx:PasscodeSetup`).
+* **Checks wait for typing.** Quiet until something is typed (`passcode-fields.tsx:PasscodeSetup`).
+* **Unlock does not check length.** A short password from an older version still opens (`passcode-fields.tsx:PasscodeEntry`).
+* **Lock dialogs cover on, change and remove.** Turn the lock on, change its password, or remove it (`private-lock-dialogs.tsx:SetLockForm`).
+* **Without a password the library stays shut.** The form shows in place of a private page until one is set (`private-lock-dialogs.tsx:SetLockForm`).
+* **Sync can start with the password.** Private sync turns on with the same password (`private-lock-dialogs.tsx:SetLockForm`).
+* **A server password becomes the lock.** The sync server's private library password is this library's lock (`private-lock-dialogs.tsx:JoinServerForm`).
+* **The lock is a page-side screen.** It replaces a private page until unlocked; the Lock button and the Settings panel live here too (`private-lock-ui.tsx:PrivateLockGate`).
+* **State lives in the worker.** The credential only passes through form state (ADR 0013, `shared/private-lock.ts`).
+* **The lock state is kept current.** It reloads when the lock record or key changes, and when the idle time runs out (`private-lock-ui.tsx:usePrivateLockInfo`).
+* **Other pages move the idle deadline.** Use elsewhere moves it, which the page can work out without asking (`private-lock-ui.tsx:usePrivateLockInfo`).
+* **Asking locks the page.** The worker locks when asked after the deadline (`private-lock-ui.tsx:usePrivateLockInfo`).
+* **Reading counts as activity.** Reading without saving does not run into the idle timeout (`private-lock-ui.tsx:useActivityTouch`).
+* **The first password matches the server's.** When the sync server already holds a private library, its password is the first choice, so every browser ends up with one (`private-lock-ui.tsx:SetLockScreen`).
+* **Regular windows pass straight through.** The children unmount on lock and remount on unlock (`private-lock-ui.tsx:PrivateLockGate`).
+* **Focus returns after the lock screen.** The set-a-password screen replaces the page the same way (`private-lock-ui.tsx:PrivateLockGate`).
+* **Focus waits for the page.** The lock screen's field is gone, so focus would fall to the body; the page mounts its content after, so focus waits for its main area (`private-lock-ui.tsx:PrivateLockGate`).
+* **Popup and side panel have no main area.** After a second, focus takes their first control (`private-lock-ui.tsx:PrivateLockGate`).
+* **Lock state is shared with the storage form.** The two always agree (`private-lock-ui.tsx:PrivateLockGate`).
+* **Mode changes wait for the lock.** `modeLockedReason` says why the storage mode cannot change right now (`private-lock-ui.tsx:modeLockedReason`).
+* **A lock blocks the storage mode.** While a lock protects the library the mode cannot change, and the reason is shown (`private-storage.tsx:PrivateStorage`).
+
+### Popup
+
+* **The column picker loads late.** Its icon registry loads right after the popup paints, before anyone can click Bookmark (`popup.tsx:loadColumnPicker`).
+* **Stable fallback.** Memoized values do not see a new array on every render (`popup.tsx:NO_SESSIONS`).
+* **Firefox opens its sidebar instead.** Older Chromium builds and some forks lack the side panel API (`popup.tsx:hasSidePanel`).
+* **Tabs always have ids here.** `chrome.tabs.query` carries an id for tabs in normal windows (`popup.tsx:WebTab`).
+* **Columns are read as the popup opens.** The dialog never waits for the library (`popup.tsx:Popup`).
+* **The side panel opens inside the gesture.** `sidePanel.open` must run inside the user gesture, so its window id is read ahead of the click (`popup.tsx:Popup`).
+* **Unsavable pages start as unknown-safe.** False on pages that cannot be saved (new tab, browser pages); it stays true until the active tab is read (`popup.tsx:Popup`).
+* **A split view is one tab-strip slot.** Its two halves can both be highlighted, but they are one slot, not a selection (`popup.tsx:Popup`).
+* **The tab list reloads on two inputs only.** `ShowStatus` is recreated every render, so the list reloads only when its two inputs change (`popup.tsx:Popup`).
+* **Quick buttons ask for no title.** The Choose tabs and title dialog already has a title field (`popup.tsx:Popup`).
+* **Bookmark falls back to the full library.** When the columns have not loaded, the click opens the full library (`popup.tsx:Popup`).
+* **A column that claims the site takes the page.** A click before either read lands asks for the columns itself (`popup.tsx:Popup`).
+* **Modifier keys set the restore target.** Ctrl/Cmd keeps the saved tabs, Shift opens a new window, as on the dashboard (`popup.tsx:restoreSession`).
+* **Info reuses the Help tab.** It switches to it when it is already open (`popup.tsx:openHelp`).
+* **Help opens fresh when switching fails.** When the Help tab cannot be switched to, a new one opens instead; the error is not shown (`popup.tsx:openHelp`).
+* **Firefox needs no window id.** It opens the sidebar in the current window (`popup.tsx:Popup`).
+* **The popup has a fixed size.** Chrome sizes a popup to its content (max 800x600), and 100vh is circular there, so the header and footer are stable and the body scrolls (`popup.tsx:Popup`).
+* **The private banner shortens the frame.** It uses part of the height limit (`popup.tsx:Popup`).
+* **The frame holds while the state loads.** (`popup.tsx:Popup`).
+
+### Private library
+
+* **Only a mode or setup change reloads.** The redirect and accent apply live (`private-config.ts:privateConfigNeedsReload`).
+* **Snapshots never run in private windows.** Their entry points are hidden there (`private-config.ts:inPrivateWindow`).
+
+### Private sync
+
+* **Private sync is a Settings choice.** Whether the separate private library syncs too (`private-sync-settings.tsx:PrivateSyncSettings`).
+* **The server's password is asked too.** A library kept on this device can have its own password, so the server's is asked for as well (`private-sync-settings.tsx:PrivateSyncSettings`).
+* **Private status has its own prefix.** The private client keeps its status under the private library's prefix (`private-sync-settings.tsx:PrivateSyncSettings`).
+* **A regular window can start private sync.** It opens this page to turn private sync on, and the switch is treated as turned on so a password is asked here (`private-sync-settings.tsx:PrivateSyncSettings`).
+* **The start flag leaves the address.** It is removed so a reload does not start it again (`private-sync-settings.tsx:PrivateSyncSettings`).
+* **Each dialog is fresh.** Nothing typed before is kept (`private-sync-settings.tsx:PrivateSyncSettings`).
+* **The credential dialog is open while asked.** It shows while the worker needs a password to turn private sync on (`private-sync-settings.tsx:CredentialDialog`).
+* **A wrong entry returns focus.** Focus goes back to the field for the next try (`private-sync-settings.tsx:CredentialDialog`).
+* **Read only, not disabled, while checking.** Focus stays on the field for a wrong entry (`private-sync-settings.tsx:CredentialDialog`).
+
+### Project metadata
+
+* **Name and repository come from the manifest and package.** The repository URL comes from `package.json`, the single source of truth, and the build copies `homepage` into the manifest (`project.ts:PROJECT`, scripts/vite-shared.ts).
+* **The name and version come from the manifest.** `shell/manifest.json` supplies `short_name` and `version`, which is also what the browser shows; the service worker reads the same field (`project.ts:PROJECT`).
+
+### Page toast
+
+* **Toasts are injected by the worker.** The worker passes this function to `chrome.scripting.executeScript` (`quote-toast.ts:showQuoteToast`).
+* **Edges and timing are sent as values.** `chrome.scripting` drops null and undefined arguments, so an absent duration means never (`quote-toast.ts:showQuoteToast`).
+* **Messages stay until dismissed.** A toast with no timeout has a button that closes it (`quote-toast.ts:showQuoteToast`).
+* **Live regions announce late.** Text that changes after it is on the page is announced when it is set a moment later (`quote-toast.ts:showQuoteToast`).
+
+### Reader
+
+* **The reader renders text only.** Blocks are React text nodes, so nothing from the page can run (`reader.tsx:Reader`).
+* **A kept copy has stable keys.** It never changes, so its position is a stable key (`reader.tsx:renderBlocks`).
+* **One copy per page.** It is named in its own address (`reader.tsx:Reader`).
+
+### Recovery
+
+* **Recovery helpers are light.** Heavy dialogs live in `recovery.tsx` and load only when opened (`recovery.tsx`).
+* **The restore toast reports skipped tabs.** With Remove restored tabs on, what was removed goes to the trash and Undo brings it back, failures and skipped tabs included (`recovery-core.ts:reportSessionRestore`).
+* **`undo` can replace the trash Undo.** A delete that also changed something the trash does not hold passes its own undo; `trashId` still decides the trash path (`recovery-core.ts:offerTrashUndo`).
+* **Closed tabs are closed one by one.** Some were already closed, so the rest are closed one at a time (`recovery-core.ts:offerCloseTabsUndo`).
+* **Recovery UI sends messages only.** Every action is a message to the service worker, which keeps the data in local extension storage (`recovery.tsx:SnapshotsDialog`).
+* **Badge text is short.** The full explanation shows on hover (`recovery.tsx:REASON_LABELS`).
+* **Destructive confirms are per page.** The Settings page asks before deleting a snapshot; other pages use Undo alone (`recovery.tsx:SnapshotsDialog`).
+* **Edge lines mark scroll edges.** Dialogs whose list scrolls between a fixed title and fixed buttons (`recovery.tsx:SCROLL_HEADER`).
+* **Destructive confirms are per page.** The Settings page asks before deleting or emptying the trash; other pages use Undo alone (`recovery.tsx:TrashDialog`).
+* **Deleting keeps the item while fading.** The text does not change on Cancel (`recovery.tsx:TrashDialog`).
+* **Only the list scrolls.** The title and buttons stay in view (`recovery.tsx:TrashDialog`).
+* **Recovery keys trigger refreshes.** Storage keys that change the usage line or backup list, for regular and private libraries (`recovery.tsx:RECOVERY_KEY`).
+* **Backup help sits behind a button.** The dialog shows no standing paragraph about Add versus Restore (`recovery.tsx:BackupsHelpButton`).
+* **Escape closes the help only.** It does not close the dialog around it (`recovery.tsx:BackupsHelpButton`).
+* **Backups feedback shows inside the modal.** The page toast sits behind it (`recovery.tsx:RecoveryTools`).
+* **Undo survives closing.** A still-offered Undo stays as a page toast (`recovery.tsx:RecoveryTools`).
+* **A running action is not replaced.** A newer one would replace its notice (`recovery.tsx:RecoveryTools`).
+* **Focus moves to Undo after a delete.** A deleted row takes focus with it (`recovery.tsx:RecoveryTools`).
+* **Undo waits for the delete.** Undo is disabled until the delete finishes (`recovery.tsx:RecoveryTools`).
+* **The confirmation keeps its text.** It stays set while the dialog fades out (`recovery.tsx:RecoveryTools`).
+* **Confirmed deletes wait for focus.** They cannot take focus from Undo afterwards (`recovery.tsx:RecoveryTools`).
+* **Overlapping reads keep the newest.** An older read must not undo a newer one (`recovery.tsx:RecoveryTools`).
+* **Storage is watched, not each action.** The trash and snapshot dialogs change these lists too (`recovery.tsx:RecoveryTools`).
+* **Restores merge.** A backup's sessions and bookmarks are added to what is there, as importing its file does, not replaced (`recovery.tsx:RecoveryTools`).
+* **Ctrl/Cmd+Z runs the notice's Undo.** Unless a confirmation is on top (`recovery.tsx:RecoveryTools`).
+* **The status region adds no gap.** An empty region adds no space above the list (`recovery.tsx:RecoveryTools`).
+* **A short window keeps a row in view.** The floor keeps the list visible where the dialog itself scrolls (`recovery.tsx:RecoveryTools`).
+
+### Reorder
+
+* **Keyboard reorder uses menu items.** Move up and Move down are the keyboard path (`reorder.ts:neighborId`).
+* **Focus is restored after a move.** A DOM move drops focus to the body, so focus goes back to the moved element, found by selector after the redraw (`reorder.ts:focusAfterMove`).
+
+### Save target
+
+* **"New session" is a fixed value.** It is the session picker's create-new choice, like the new column choice (`save-target.tsx:NEW_SESSION`).
+* **No switch without sessions.** Renders nothing when there is no session to choose, so the dialog keeps its plain column field (`save-target.tsx:SaveTargetChoice`).
+* **The session choice can create one.** It is offered even with no saved session (`save-target.tsx:SaveTargetChoice`).
+
+### Saved URLs
+
+* **"Already saved" is exact.** Matching is exact, the same rule saving uses to detect duplicates (`saved-urls.ts:savedUrlSet`).
+
+### Search tips
+
+* **Escape closes the tips only.** It does not close the palette around them (`search-tips.tsx:SearchTips`).
+* **The tips list scrolls.** Operators and keys can be taller than a short palette window (`search-tips.tsx:SearchTips`).
+
+### Session folders
+
+* **Folder list layout is a rule.** When folders no longer fit as a row of chips, the Sessions page lists them vertically; the rule lives here so tests run without a browser (`session-folder-list-rule.ts:isFolderListShown`).
+* **Auto turns the list on past a minimum.** `folderCount` counts folders in the selector, not All (`session-folder-list-rule.ts:isFolderListShown`).
+* **The list is suggested near its size.** When there are nearly as many folders as the list would take over the chips (`session-folder-list-rule.ts:suggestsFolderList`).
+
+### Session naming
+
+* **Naming helpers are pure.** The empty-means-default rule and the prompt window's handling of several sessions live here, apart from React (`session-name.ts:typedSessionName`).
+* **An empty name is left to the worker.** `undefined` when left empty, so the worker uses the setting's fallback name (`session-name.ts:typedSessionName`).
+* **Several sessions are numbered.** A single session keeps its name; several become "Name (1/3)", "Name (2/3)" in save order (`session-name.ts:numberedSessionNames`).
+* **The numbering is stripped for the base.** (`session-name.ts:baseSessionName`).
+* **The prompt window takes the session ids from its address.** (`session-name.ts:promptGroupIds`).
+
+### Settings sections
+
+* **The finder's section list is checked.** The a11y check fails when a rendered section is missing or an entry points at none, so a new section must be added here (`settings-sections.ts:settingsSections`, scripts/a11y/settings.ts).
+* **The file imports nothing.** The a11y check imports it in Node, so it imports no browser APIs (`settings-sections.ts:settingsSections`).
+* **Firefox has no private library section.** It keeps the add-on out of private windows (`settings-sections.ts:settingsSections`).
+* **Anchors come from the target.** The Settings page scrolls to `target ?? id` (`settings-sections.ts:settingsSections`).
+
+### Shared pages
+
+* **Shared pages are asked on open.** The server answer is asked each time the dialog opens, and is always `none` in a private window, which has no library on the server (`shared-pages.tsx:useSharedPages`).
+* **Delete asks first.** The server cannot bring a shared page back (`shared-pages.tsx:SharedPagesList`).
+
+### Side panel
+
+* **The panel never navigates.** "This tab" means the active tab of the panel's window, not the page navigation `openLink` does (`sidepanel.tsx:openSavedLink`).
+* **Reading the tab needs a grant.** Opening the panel grants nothing; access comes from the toolbar button, the right-click menu, or a shortcut used on that tab (`sidepanel.tsx:useReadableTab`).
+* **One row, two ways to open its menu.** The same actions open on the ⋯ button and on right-click (`sidepanel.tsx:ActionRow`).
+* **The row passes its menu opener.** A function child receives `openMenu` (`sidepanel.tsx:ActionRow`).
+* **Large libraries load on demand.** A library can hold thousands of rows, so the first 30 per section are drawn and the rest load later (`sidepanel.tsx:ROW_PAGE`).
+* **Rows draw by limit.** The first `limit` rows draw (`sidepanel.tsx:ROW_PAGE`).
+* **Modified clicks keep browser behavior.** New tab or new window (`sidepanel.tsx:openSavedLink`).
+* **Only the open tab can be read.** And only while TabLodge may read it (`sidepanel.tsx:useReadableTab`).
+
+### Site sources
+
+* **One prompt asks for every site.** The sites' permissions are requested together, before any await so the prompt comes from the click (`site-source-access.ts:turnOnSiteSources`).
+* **Removing gives the permission back.** The site is switched off in every browser and this browser's site permission is returned (`site-source-access.ts:removeSiteSource`).
+* **Other browsers' sites are pointed to once.** When sites are on in another browser but not here, the dashboard says so once, with one Turn on (`site-source-pointer.ts:useSourcesElsewherePointer`).
+* **The latest show function is used.** It is recreated every render (`site-source-pointer.ts:useSourcesElsewherePointer`).
+* **Choices can arrive while open.** From another browser, while the dashboard is open (`site-source-pointer.ts:useSourcesElsewherePointer`).
+* **The own column has a non-empty value.** Radix Select needs a non-empty value (`site-sources-settings.tsx:SITE_COLUMN`).
+* **A site stays listed while it is on or was taken away.** So the notice can say so (`site-sources-settings.tsx:isListed`).
+* **What Save to TabLodge does and does not do.** It sits behind a help button so the row shows no standing tip (`site-sources-settings.tsx:KeepOffHelpButton`).
+* **The worker writes the notices.** It says when the browser revokes access or a page cannot be read (`site-sources-settings.tsx:useSiteSources`).
+* **The request comes from the click.** Before any await, so the permission prompt is not blocked (`site-sources-settings.tsx:useSiteSources`).
+* **The Add a site button takes focus.** The removed row held focus and the button is the nearest control that stays (`site-sources-settings.tsx:useSiteSources`).
+* **Add a site is a searchable popover.** Arrow keys move through the list, Enter adds the highlighted site (`site-sources-settings.tsx:AddSiteSource`).
+* **The highlighted site stays in view.** (`site-sources-settings.tsx:AddSiteSource`).
+* **The row says two things at a glance.** Whether the site is on, and whether this browser has its access (`site-sources-settings.tsx:siteState`).
+* **One site's options are shown inline or in its dialog.** (`site-sources-settings.tsx:SiteOptions`).
+* **Saves go to the site's source column.** With no choice, or a chosen column that was deleted, the column is made on the first save (`site-sources-settings.tsx:SiteOptions`).
+* **The site stays set while the dialog fades.** Its text does not change on Cancel (`site-sources-settings.tsx:useSiteSources`).
+* **One row is open at a time.** The list stays short however many sites are added (`site-sources-settings.tsx:useSiteSources`).
+
+### Private lock settings
+
+* **Regular windows only point to the lock.** The lock settings panel in a regular window shows the status and sends the user to a private window, because the key lives with the private worker (`private-lock-dialogs.tsx:JoinServerForm`).

@@ -90,9 +90,6 @@ function PrivateStorageForm({
 	onSaved: (config: PrivateConfig) => void;
 	disabled?: boolean;
 	showContinue?: boolean;
-	/**
-	Set while a lock protects the saved library: the mode cannot change, and this says why.
-	*/
 	lockedReason?: string | null;
 }) {
 	const [mode, setMode] = useState(config.mode);

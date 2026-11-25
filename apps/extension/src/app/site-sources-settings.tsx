@@ -70,7 +70,6 @@ export const SOURCES_WORDS = [
 	'Turn on',
 	'sync',
 ];
-// The Save to entry for the site's own column; Radix Select needs a non-empty value.
 const SITE_COLUMN = 'site-column';
 
 function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
@@ -83,10 +82,6 @@ function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
 		: undefined;
 }
 
-/**
-A site stays in the list while it is on here or in another browser, and after this browser took its access away, so
-the notice can say so.
-*/
 const isListed = (status: SiteSourceStatus | undefined) =>
 	status?.wanted === true ||
 	status?.enabled === true ||
@@ -100,9 +95,6 @@ function matches(source: SiteSource, query: string) {
 	return words.every((word) => text.includes(word));
 }
 
-/**
-What Save to TabLodge only does and doesn't do, behind a help button so the row shows no standing tip.
-*/
 function KeepOffHelpButton({site}: {site: string}) {
 	const label = `About saving on ${site}`;
 	return (
@@ -141,9 +133,6 @@ function KeepOffHelpButton({site}: {site: string}) {
 	);
 }
 
-/**
-The state behind Settings › Sources, shared by the Add a site button in the section header and the list below it.
-*/
 export function useSiteSources(showStatus: ShowStatus) {
 	const [sources, setSources] = useState<SiteSourceStatus[]>();
 	const [busy, setBusy] = useState<SiteSourceId>();
@@ -162,7 +151,6 @@ export function useSiteSources(showStatus: ShowStatus) {
 				.catch(() => undefined);
 		};
 
-		// The worker writes a notice when the browser revokes access or a page cannot be read.
 		const onChanged = (
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: string,
@@ -184,7 +172,6 @@ export function useSiteSources(showStatus: ShowStatus) {
 		sources?.find((entry) => entry.id === source.id);
 
 	async function add(source: SiteSource) {
-		// Before any await: the permission request must come straight from the click or key press.
 		const request = turnOnSiteSources([source]);
 		const wasOn = status(source)?.wanted === true;
 		setBusy(source.id);
@@ -216,7 +203,6 @@ export function useSiteSources(showStatus: ShowStatus) {
 			}
 
 			setSources(result.sources);
-			// The removed row held focus; the Add a site button is the nearest control that stays.
 			triggerRef.current?.focus();
 			showStatus(
 				`Removed ${source.label}, also from your other synced browsers. ${PROJECT.name} no longer has access to ${source.hosts[0]} here.`,
@@ -277,10 +263,6 @@ export function useSiteSources(showStatus: ShowStatus) {
 
 export type SiteSourcesController = ReturnType<typeof useSiteSources>;
 
-/**
-The Add a site button: a popover with a search field (a combobox) over the list of supported sites not added yet.
-Arrow keys move through the list, Enter adds the highlighted site, and Escape closes it.
-*/
 export function AddSiteSource({
 	controller,
 }: {
@@ -317,7 +299,6 @@ export function AddSiteSource({
 		if (next !== undefined) {
 			event.preventDefault();
 			setActive(Math.max(next, 0));
-			// The list scrolls once it holds more sites than fit; keep the highlighted one in view.
 			listRef.current?.children[Math.max(next, 0)]?.scrollIntoView({
 				block: 'nearest',
 			});
@@ -449,9 +430,6 @@ type SiteState = {
 	problem?: string;
 };
 
-/**
-What a row says at a glance: whether the site is on, and whether this browser has its access.
-*/
 function siteState(entry: SiteSourceStatus | undefined): SiteState {
 	if (entry?.enabled) {
 		return entry.notice === 'unreadable'
@@ -504,9 +482,6 @@ function SiteSummary({
 	);
 }
 
-/**
-Every option of one site, shown inline in the open row or in the site's dialog.
-*/
 function SiteOptions({
 	source,
 	entry,
@@ -525,8 +500,6 @@ function SiteOptions({
 	const columnFieldId = `site-source-column-${source.id}`;
 	const keepOffLabelId = `site-source-keep-off-${source.id}`;
 	const site = source.column.name;
-	// With no choice, or a chosen column that was deleted, saves go to the site's source column, made on the
-	// first save.
 	const siteColumn = columns.find((column) => column.id === source.column.id);
 	const chosen = columns.some((column) => column.id === entry?.columnId)
 		? entry?.columnId
@@ -668,10 +641,8 @@ export function SiteSourcesSettings({
 	onCatchUpChange: (mode: SourceCatchUpMode) => void;
 }) {
 	const {sources, privateWindow, status, remove} = controller;
-	// The site stays set while the dialog fades out, so its text does not change on Cancel.
 	const [removing, setRemoving] = useState<SiteSource>();
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	// One row is open at a time, so the list stays short however many sites are added.
 	const [openId, setOpenId] = useState<SiteSourceId>();
 	const catchUpLabelId = useId();
 	const panelBaseId = useId();
