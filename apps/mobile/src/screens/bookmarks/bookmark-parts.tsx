@@ -367,6 +367,7 @@ export function MoveSheet({
 					Move {count} to
 				</Text>
 				<Chips
+					scroll
 					items={columns.map((column) => chipLook(column))}
 					selected=""
 					onSelect={onPick}

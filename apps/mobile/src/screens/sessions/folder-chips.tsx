@@ -1,5 +1,5 @@
 import {useCallback} from 'react';
-import {ScrollView, StyleSheet, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 import type {Settings, Store} from '../../../../extension/src/shared/types';
 import {
 	ALL_SESSIONS_ID,
@@ -58,32 +58,31 @@ export function FolderChips({
 	const look = useFolderLook();
 	return (
 		<View style={styles.pad}>
-			<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-				<Chips
-					items={[
-						...folders.map((folder) => look(folder)),
-						{
-							id: NEW_FOLDER_CHIP,
-							name: 'New folder',
-							glyph: 'add' as const,
-							tint: colors.accent,
-						},
-					]}
-					selected={selected}
-					onSelect={(id) => {
-						if (id === NEW_FOLDER_CHIP) {
-							onNewFolder();
-						} else {
-							onSelect(id);
-						}
-					}}
-					onLongPress={(id) => {
-						if (id !== NEW_FOLDER_CHIP) {
-							onMenu(id);
-						}
-					}}
-				/>
-			</ScrollView>
+			<Chips
+				scroll
+				items={[
+					...folders.map((folder) => look(folder)),
+					{
+						id: NEW_FOLDER_CHIP,
+						name: 'New folder',
+						glyph: 'add' as const,
+						tint: colors.accent,
+					},
+				]}
+				selected={selected}
+				onSelect={(id) => {
+					if (id === NEW_FOLDER_CHIP) {
+						onNewFolder();
+					} else {
+						onSelect(id);
+					}
+				}}
+				onLongPress={(id) => {
+					if (id !== NEW_FOLDER_CHIP) {
+						onMenu(id);
+					}
+				}}
+			/>
 		</View>
 	);
 }

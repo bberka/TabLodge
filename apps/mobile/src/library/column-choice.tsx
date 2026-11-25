@@ -78,6 +78,7 @@ export function ColumnChoice({
 			<View style={styles.group}>
 				<Text style={{color: colors.muted}}>Column</Text>
 				<Chips
+					scroll
 					items={[
 						...choice.columns.map((column) => chipLook(column)),
 						{id: NEW_COLUMN, name: 'New column', glyph: 'add'},

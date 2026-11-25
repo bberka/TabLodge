@@ -205,6 +205,7 @@ export function SaveLinksForm({
 					<View style={styles.group}>
 						<Text style={{color: colors.muted}}>Session</Text>
 						<Chips
+							scroll
 							items={[
 								{
 									id: NEW_SESSION,
