@@ -245,14 +245,11 @@ export const devFixtureUrls = [
 	]),
 ];
 
-// Two bookmarks carry a one-line note, so the note line shows on the board and in the phone's rows. They sit in
-// columns shorter than Dev, so the board keeps the height the accessibility checks' drags rely on.
 const bookmarkNotes = new Map([
 	['https://weather.com/', 'Check before the morning run.'],
 	['https://alistapart.com/', 'Accessible forms piece, for Friday.'],
 ]);
 
-// A few typed tags, so the chips and the tag filter have something to show; also in the shorter columns.
 const bookmarkTags = new Map<string, string[]>([
 	['https://weather.com/', ['morning']],
 	['https://www.theatlantic.com/', ['longread']],
@@ -275,9 +272,6 @@ const bookmarks: DevBookmark[] = bookmarkEntries.map(
 	}),
 );
 
-/**
-Build repeatable, synthetic data for local UI work from the worker's default store.
-*/
 export function createDevFixture(base: DevStore): DevStore {
 	return {
 		...base,

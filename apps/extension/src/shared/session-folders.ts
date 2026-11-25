@@ -30,11 +30,6 @@ export function visibleSessionFolders<T extends Pick<Folder, 'id' | 'name'>>(
 
 export {ARCHIVED_FOLDER_NAME} from './library-normalize';
 
-// The folder rules below are shared by the service worker and the Android app, with no browser APIs.
-
-/**
-A folder name as stored: control characters become spaces, the ends are trimmed, and it holds at most 60 characters.
-*/
 export function normalizeFolderName(value: unknown): string {
 	return typeof value === 'string'
 		? value
@@ -44,9 +39,6 @@ export function normalizeFolderName(value: unknown): string {
 		: '';
 }
 
-/**
-Whether a folder other than `exceptId` already has this name, ignoring case.
-*/
 export function folderNameExists(
 	folders: ReadonlyArray<Pick<Folder, 'id' | 'name'>>,
 	name: string,
@@ -62,9 +54,6 @@ export function folderNameExists(
 
 export const FOLDER_LIMIT_MESSAGE = `TabLodge can store up to ${MAX_FOLDERS} folders.`;
 
-/**
-Whether no more folders can be made: 200 folders besides Archived, which does not count.
-*/
 export function folderLimitReached(
 	folders: ReadonlyArray<Pick<Folder, 'name'>>,
 ): boolean {
@@ -74,10 +63,6 @@ export function folderLimitReached(
 	);
 }
 
-/**
-Why a folder cannot take this name, or undefined when it can. Pass `exceptId` for a folder that is being renamed, and
-leave it out for a new folder, which also has to fit under the limit of 200 folders (Archived does not count).
-*/
 export function folderNameProblem(
 	folders: ReadonlyArray<Pick<Folder, 'id' | 'name'>>,
 	name: unknown,
