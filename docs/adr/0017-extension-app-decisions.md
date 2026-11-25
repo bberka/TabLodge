@@ -518,7 +518,7 @@ Status: accepted, 2026-11-23. Issue #442.
 ### Site sources
 
 * **Each site is a save hook.** The user saves a link on the site and it lands in that site's bookmark column. Each site is off until added in Settings, which asks for one optional host permission for that site only; its content script runs only while that permission is granted (`site-sources.ts:SITES`).
-* **A new site is two edits.** An entry here plus its adapter in `shell/site-source.ts`; Settings lists it in Add a site by itself (`site-sources.ts:SITES`).
+* **A new site is three edits.** Add it to `SITES` here, add its adapter in `shell/site-source.ts`, and add its origins to `optional_host_permissions` in `shell/manifest.json`. Settings then lists it in Add a site by itself (`site-sources.ts:SITES`).
 * **The manifest matches this list.** `optional_host_permissions` must list exactly the origins here, and `tests/site-sources.test.ts` checks it (`site-sources.ts:SITES`).
 * **Some items link to a discussion page.** It is kept in the bookmark's note as `<name>: <address>` (`site-sources.ts:SiteSource`).
 * **A save that loads another page is kept for the next page.** Hacker News' favorite link loads a page, so the result is shown there (`site-sources.ts:SiteSource`).
@@ -609,7 +609,7 @@ Status: accepted, 2026-11-23. Issue #442.
 * **A kept save can be replayed.** `replay` clicks the control again, and the listener lets that click through (`source-keep-off.ts:KeptSave`).
 * **Replays use the clickable element.** An icon inside a button has no click method, and the browser marks a script's click untrusted, so the replay goes to the nearest one (`source-keep-off.ts:replayClick`).
 * **Listening is in the capture phase.** The adapter reads a control before the site changes it, so a save can be stopped before the site acts (`source-keep-off.ts:listenForSaves`).
-* **A failed save is replayed.** When the save failed or the source is off here, the click is replayed so the site saves it after all (`source-keep-off.ts:settleKeptSave`).
+* **A failed save is replayed.** When the save failed or the source is off here, the click is replayed so the site saves it after all (`source-keep-off.ts:settleKeptSave`). If the control is no longer connected, `replayClick` cannot click it, so the user must save the item again (`source-keep-off.ts:replayClick`).
 
 ### Letterboxd
 
