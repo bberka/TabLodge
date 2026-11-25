@@ -12,148 +12,14 @@ import {
 	STATE_KEY,
 } from '../src/shared/library-state';
 import {canonicalJson, hashText} from '../src/shared/library-values';
-import {sortKeysDeep} from './library-fixtures';
+import {library, MemoryBackend, normalize, session} from './library-memory';
 
 type Raw = Record<string, unknown>;
 
-class MemoryBackend implements KeyValueBackend {
-	data = new Map<string, unknown>();
-	calls = 0;
-	failAt: number | undefined;
-	tear = false;
-	sets: Array<{keys: string[]}> = [];
-	corruptKey: ((key: string) => boolean) | undefined;
-	rejectKey: ((key: string) => boolean) | undefined;
-	onGet: ((keys: string[]) => Promise<void>) | undefined;
-
-	constructor(initial: Raw = {}) {
-		for (const [key, value] of Object.entries(initial)) {
-			this.data.set(key, structuredClone(value));
-		}
-	}
-
-	private crashNow() {
-		this.calls += 1;
-		return this.failAt !== undefined && this.calls === this.failAt;
-	}
-
-	snapshot() {
-		return structuredClone([...this.data]);
-	}
-
-	async get(keys: string[]) {
-		if (this.crashNow()) {
-			throw new Error('crash');
-		}
-
-		await this.onGet?.(keys);
-		return Object.fromEntries(
-			keys
-				.filter((key) => this.data.has(key))
-				.map((key) => [key, sortKeysDeep(this.data.get(key))]),
-		);
-	}
-
-	async set(values: Raw) {
-		const entries = Object.entries(values);
-		if (this.rejectKey && entries.some(([key]) => this.rejectKey!(key))) {
-			throw new Error('QUOTA_BYTES quota exceeded');
-		}
-
-		if (this.crashNow()) {
-			if (this.tear) {
-				for (const [key, value] of entries.slice(
-					0,
-					Math.ceil(entries.length / 2),
-				)) {
-					this.data.set(key, structuredClone(value));
-				}
-			}
-
-			throw new Error('crash');
-		}
-
-		this.sets.push({
-			keys: entries.map(([key]) => key),
-		});
-		for (const [key, value] of entries) {
-			this.data.set(
-				key,
-				this.corruptKey?.(key)
-					? {...(value as Raw), tabs: []}
-					: structuredClone(value),
-			);
-		}
-	}
-
-	async remove(keys: string[]) {
-		if (this.crashNow()) {
-			if (this.tear) {
-				for (const key of keys.slice(0, Math.ceil(keys.length / 2))) {
-					this.data.delete(key);
-				}
-			}
-
-			throw new Error('crash');
-		}
-
-		for (const key of keys) {
-			this.data.delete(key);
-		}
-	}
-
-	async getBytesInUse(keys: string[]) {
-		return keys.reduce(
-			(total, key) =>
-				total +
-				(this.data.has(key) ? JSON.stringify(this.data.get(key)).length : 0),
-			0,
-		);
-	}
-}
-
-const session = (id: string, tabs: number, extra: Raw = {}): Raw => ({
-	id,
-	name: `Session ${id}`,
-	folderId: 'unfiled',
-	createdAt: 1000,
-	updatedAt: 2000,
-	tabs: Array.from({length: tabs}, (_, index) => ({
-		id: `${id}-t${index}`,
-		url: `https://example.com/${id}/${index}`,
-		title: `Tab ${index} of ${id}`,
-	})),
-	...extra,
-});
-
-const library = (sessions = 7, bookmarks = 6): Raw => ({
-	schemaVersion: 9,
-	groups: Array.from({length: sessions}, (_, index) =>
-		session(`s${index}`, 3 + index),
-	),
-	folders: [{id: 'unfiled', name: 'Unfiled'}],
-	bookmarkColumns: [{id: 'c1', name: 'Reading'}],
-	bookmarks: Array.from({length: bookmarks}, (_, index) => ({
-		id: `b${index}`,
-		columnId: 'c1',
-		url: `https://example.com/b${index}`,
-		title: `Bookmark ${index}`,
-	})),
-	settings: {theme: 'dark'},
-	updatedAt: 5000,
-});
-
-const normalize = (raw: Raw): Raw => ({
-	...raw,
-	schemaVersion: 10,
-	groups: (Array.isArray(raw.groups) ? raw.groups : []).filter(
-		(group: unknown) =>
-			typeof group === 'object' &&
-			group !== null &&
-			typeof (group as Raw).id === 'string',
-	),
-	bookmarks: Array.isArray(raw.bookmarks) ? raw.bookmarks : [],
-});
+const state10 = (
+	backend: KeyValueBackend,
+	options: Parameters<typeof createLibraryState>[1] = {},
+) => createLibraryState(backend, {...options, layoutVersion: 10});
 
 const stateOf = (backend: MemoryBackend) =>
 	backend.data.get(STATE_KEY) as Raw | undefined;
@@ -186,7 +52,7 @@ const leakedKeys = (backend: MemoryBackend) => {
 
 test('a fresh library is stored as an index and one key per session', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	assert.equal(await store.read(), null);
 	await store.write(normalize(library()));
 	const index = stateOf(backend)!;
@@ -205,7 +71,7 @@ test('a fresh library is stored as an index and one key per session', async () =
 
 test('saving one session writes only that session and the index', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const first = normalize(library(20));
 	await store.write(first);
 	backend.sets.length = 0;
@@ -225,7 +91,7 @@ test('saving one session writes only that session and the index', async () => {
 
 test('a settings change writes only the index', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const first = normalize(library(10));
 	await store.write(first);
 	backend.sets.length = 0;
@@ -238,12 +104,13 @@ test('a settings change writes only the index', async () => {
 		layout: 'records',
 		schemaVersion: 10,
 		settings: {theme: 'light'},
+		upgradable: false,
 	});
 });
 
 test('replaced and removed records are cleaned up one commit later, with no leaks', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const first = normalize(library(4));
 	await store.write(first);
 	const groups = (first.groups as Raw[]).slice(1);
@@ -262,7 +129,7 @@ test('replaced and removed records are cleaned up one commit later, with no leak
 
 test('a reader whose index went stale reads again instead of failing', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const first = normalize(library(3));
 	await store.write(first);
 	const groups = (first.groups as Raw[]).slice(1);
@@ -285,7 +152,7 @@ test('a reader whose index went stale reads again instead of failing', async () 
 
 test('a record missing from a stable index is reported, never skipped', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await store.write(normalize(library(3)));
 	backend.data.delete('tablodge.session.s1.1');
 	await assert.rejects(store.read(), LibraryDamagedError);
@@ -305,7 +172,7 @@ test('a record missing from a stable index is reported, never skipped', async ()
 
 test('verify finds a record whose content no longer matches its checksum', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await store.write(normalize(library(3)));
 	assert.deepEqual(await store.verify(), []);
 	const record = backend.data.get('tablodge.session.s2.1') as Raw;
@@ -327,35 +194,35 @@ test('a crash during a save leaves the previous library or the new one, never a 
 	const expectedNew = {...edited, schemaVersion: 10};
 	for (const tear of [false, true]) {
 		const dry = new MemoryBackend();
-		await createLibraryState(dry).write(base);
+		await state10(dry).write(base);
 		const before = dry.calls;
-		await createLibraryState(dry).write(edited);
+		await state10(dry).write(edited);
 		const steps = dry.calls - before;
 		assert.ok(steps >= 3);
 		for (let step = 1; step <= steps; step += 1) {
 			const backend = new MemoryBackend();
-			await createLibraryState(backend).write(base);
+			await state10(backend).write(base);
 			backend.calls = 0;
 			backend.failAt = step;
 			backend.tear = tear;
-			await assert.rejects(createLibraryState(backend).write(edited), /crash/);
+			await assert.rejects(state10(backend).write(edited), /crash/);
 			backend.failAt = undefined;
-			const read = await createLibraryState(backend).read();
+			const read = await state10(backend).read();
 			assert.ok(
 				canonicalJson(read) === canonicalJson(expectedOld) ||
 					canonicalJson(read) === canonicalJson(expectedNew),
 				`step ${step}${tear ? ' torn' : ''}: library is neither the old nor the new one`,
 			);
-			await createLibraryState(backend).write(edited);
-			assert.deepEqual(await createLibraryState(backend).read(), expectedNew);
-			assert.deepEqual(await createLibraryState(backend).verify(), []);
+			await state10(backend).write(edited);
+			assert.deepEqual(await state10(backend).read(), expectedNew);
+			assert.deepEqual(await state10(backend).verify(), []);
 		}
 	}
 });
 
 test('the old layout stays readable and writable until a migration has run', async () => {
 	const backend = new MemoryBackend({[STATE_KEY]: library()});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	assert.deepEqual(await store.read(), library());
 	assert.equal((await store.readMeta()).layout, 'legacy');
 	const next = normalize(library(2));
@@ -369,7 +236,7 @@ test('the old layout stays readable and writable until a migration has run', asy
 test('a library saved by a newer version is returned as is and never overwritten', async () => {
 	const future = {schemaVersion: 11, groups: [], note: 'from the future'};
 	const backend = new MemoryBackend({[STATE_KEY]: future});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	assert.deepEqual(await store.read(), future);
 	await assert.rejects(store.write(normalize(library())), /newer version/);
 	assert.deepEqual(await store.migrate(normalize), {status: 'newer'});
@@ -377,7 +244,7 @@ test('a library saved by a newer version is returned as is and never overwritten
 	const records = new MemoryBackend({
 		[STATE_KEY]: {...future, layout: 'records'},
 	});
-	const recordStore = createLibraryState(records);
+	const recordStore = state10(records);
 	assert.deepEqual(await recordStore.migrate(normalize), {status: 'newer'});
 	await assert.rejects(
 		recordStore.write(normalize(library())),
@@ -388,7 +255,7 @@ test('a library saved by a newer version is returned as is and never overwritten
 test('migration moves every session and bookmark, and keeps an exact copy of the old entry', async () => {
 	const old = library(7, 6);
 	const backend = new MemoryBackend({[STATE_KEY]: old});
-	const store = createLibraryState(backend, {now: () => 1_000_000});
+	const store = state10(backend, {now: () => 1_000_000});
 	const outcome = await store.migrate(normalize);
 	assert.deepEqual(outcome, {
 		status: 'migrated',
@@ -418,7 +285,7 @@ test('migration moves every session and bookmark, and keeps an exact copy of the
 
 test('migrating twice changes nothing the second time', async () => {
 	const backend = new MemoryBackend({[STATE_KEY]: library()});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await store.migrate(normalize);
 	const after = backend.snapshot();
 	assert.deepEqual(await store.migrate(normalize), {status: 'current'});
@@ -426,14 +293,13 @@ test('migrating twice changes nothing the second time', async () => {
 });
 
 test('an empty or missing library has nothing to migrate', async () => {
+	assert.deepEqual(await state10(new MemoryBackend()).migrate(normalize), {
+		status: 'none',
+	});
 	assert.deepEqual(
-		await createLibraryState(new MemoryBackend()).migrate(normalize),
-		{status: 'none'},
-	);
-	assert.deepEqual(
-		await createLibraryState(
-			new MemoryBackend({[STATE_KEY]: 'not an object'}),
-		).migrate(normalize),
+		await state10(new MemoryBackend({[STATE_KEY]: 'not an object'})).migrate(
+			normalize,
+		),
 		{status: 'none'},
 	);
 });
@@ -443,7 +309,7 @@ test('a migration crashed at any step resumes, loses nothing, and leaves no stra
 	const expected = normalize(old);
 	for (const tear of [false, true]) {
 		const dry = new MemoryBackend({[STATE_KEY]: old});
-		await createLibraryState(dry, {writeBatchChars: 700}).migrate(normalize);
+		await state10(dry, {writeBatchChars: 700}).migrate(normalize);
 		const steps = dry.calls;
 		assert.ok(steps > 20, `expected a long migration, got ${steps} calls`);
 		for (let step = 1; step <= steps; step += 1) {
@@ -453,12 +319,12 @@ test('a migration crashed at any step resumes, loses nothing, and leaves no stra
 			backend.tear = tear;
 			const options = {writeBatchChars: 700};
 			await assert.rejects(
-				createLibraryState(backend, options).migrate(normalize),
+				state10(backend, options).migrate(normalize),
 				/crash/,
 				label,
 			);
 			backend.failAt = undefined;
-			const during = await createLibraryState(backend, options).read();
+			const during = await state10(backend, options).read();
 			assert.deepEqual(
 				during,
 				stateOf(backend)?.layout === 'records' ? expected : old,
@@ -472,13 +338,13 @@ test('a migration crashed at any step resumes, loses nothing, and leaves no stra
 				);
 			}
 
-			await createLibraryState(backend, options).migrate(normalize);
+			await state10(backend, options).migrate(normalize);
 			assert.deepEqual(
-				await createLibraryState(backend, options).read(),
+				await state10(backend, options).read(),
 				expected,
 				`${label}: complete after resume`,
 			);
-			assert.deepEqual(await createLibraryState(backend, options).verify(), []);
+			assert.deepEqual(await state10(backend, options).verify(), []);
 			assert.equal(backend.data.has(MIGRATION_KEY), false, `${label}: marker`);
 			assert.deepEqual(leakedKeys(backend), [], `${label}: stray keys`);
 			assert.deepEqual(
@@ -495,21 +361,18 @@ test('a library changed between attempts starts a fresh migration and cleans up 
 	const options = {writeBatchChars: 500};
 	const backend = new MemoryBackend({[STATE_KEY]: old});
 	backend.failAt = 20;
-	await assert.rejects(
-		createLibraryState(backend, options).migrate(normalize),
-		/crash/,
-	);
+	await assert.rejects(state10(backend, options).migrate(normalize), /crash/);
 	backend.failAt = undefined;
 	const edited = normalize(library(6, 3));
 	(edited.groups as Raw[]).splice(2, 1);
 	(edited.groups as Raw[]).push(session('late', 2));
-	await createLibraryState(backend, options).write(edited);
+	await state10(backend, options).write(edited);
 	assert.equal(stateOf(backend)!.layout, undefined);
-	const outcome = await createLibraryState(backend, options).migrate(normalize);
+	const outcome = await state10(backend, options).migrate(normalize);
 	assert.equal(outcome.status, 'migrated');
 	assert.equal((outcome as {resumed: boolean}).resumed, false);
 	assert.deepEqual(
-		(await createLibraryState(backend, options).read())!.groups,
+		(await state10(backend, options).read())!.groups,
 		edited.groups,
 	);
 	assert.deepEqual(leakedKeys(backend), []);
@@ -519,7 +382,7 @@ test('a migration that cannot write keeps the old entry in charge and the app wo
 	const old = library();
 	const backend = new MemoryBackend({[STATE_KEY]: old});
 	backend.rejectKey = (key) => key.startsWith(SESSION_KEY_PREFIX);
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await assert.rejects(store.migrate(normalize), /quota/);
 	assert.deepEqual(stateOf(backend), old);
 	assert.deepEqual(await store.read(), old);
@@ -533,7 +396,7 @@ test('a migration whose records do not match what was planned is not committed',
 	const old = library();
 	const backend = new MemoryBackend({[STATE_KEY]: old});
 	backend.corruptKey = (key) => key === 'tablodge.session.s3.1';
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await assert.rejects(store.migrate(normalize), /Migration check failed/);
 	assert.deepEqual(stateOf(backend), old);
 	assert.deepEqual(await store.read(), old);
@@ -545,7 +408,7 @@ test('a migration whose records do not match what was planned is not committed',
 test('a migration that would produce unusable records is refused before anything is committed', async () => {
 	const old = library();
 	const backend = new MemoryBackend({[STATE_KEY]: old});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const duplicated = (raw: Raw): Raw => {
 		const next = normalize(raw);
 		return {...next, groups: [...(next.groups as Raw[]), session('s0', 1)]};
@@ -570,7 +433,7 @@ test('damaged old entries migrate to whatever the app could already load from th
 		settings: null,
 	};
 	const backend = new MemoryBackend({[STATE_KEY]: junk});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const outcome = await store.migrate(normalize);
 	assert.equal(outcome.status, 'migrated');
 	const read = await store.read();
@@ -589,7 +452,7 @@ test('damaged old entries migrate to whatever the app could already load from th
 test('the recovery copy is kept for a week and then removed', async () => {
 	let clock = 10_000;
 	const backend = new MemoryBackend({[STATE_KEY]: library()});
-	const store = createLibraryState(backend, {now: () => clock});
+	const store = state10(backend, {now: () => clock});
 	await store.migrate(normalize);
 	assert.equal(await store.pruneRecoveryCopy(), false);
 	clock += PREMIGRATION_KEEP_MS - 1;
@@ -604,7 +467,7 @@ test('the recovery copy is kept for a week and then removed', async () => {
 
 test('removing the library removes the index and every record', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const first = normalize(library(3));
 	await store.write(first);
 	await store.write({...first, groups: (first.groups as Raw[]).slice(1)});
@@ -615,7 +478,7 @@ test('removing the library removes the index and every record', async () => {
 
 test('bytes in use counts the index, records, recovery copy, and marker', async () => {
 	const backend = new MemoryBackend({[STATE_KEY]: library()});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const legacy = await store.bytesInUse();
 	assert.equal(legacy, JSON.stringify(library()).length);
 	await store.migrate(normalize);
@@ -628,7 +491,7 @@ test('bytes in use counts the index, records, recovery copy, and marker', async 
 
 test('migrating a new-schema entry returns current without touching it', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await store.write(newer(normalize(library(2))));
 	const before = backend.snapshot();
 	assert.deepEqual(await store.migrate(normalize), {status: 'current'});
@@ -668,7 +531,7 @@ test('a migration refuses records without a stable id before writing anything', 
 	for (const [label, change, message] of cases) {
 		const old = library();
 		const backend = new MemoryBackend({[STATE_KEY]: old});
-		const store = createLibraryState(backend);
+		const store = state10(backend);
 		await assert.rejects(
 			store.migrate((raw) => change(normalize(raw))),
 			message,
@@ -730,7 +593,7 @@ function stampLibrary(backend: MemoryBackend) {
 
 test('reserved sync fields stay out of the app view and out of the checksums', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend, {now: () => 5000});
+	const store = state10(backend, {now: () => 5000});
 	const base = normalize(library(5));
 	await store.write(base);
 	stampLibrary(backend);
@@ -740,7 +603,7 @@ test('reserved sync fields stay out of the app view and out of the checksums', a
 
 test('saving keeps stamps, order keys, tombstones, and the device id, and drops those of removed records', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend, {now: () => 5000});
+	const store = state10(backend, {now: () => 5000});
 	const base = normalize(library(5));
 	await store.write(base);
 	const {tabs} = stampLibrary(backend);
@@ -789,7 +652,7 @@ test('saving keeps stamps, order keys, tombstones, and the device id, and drops 
 
 test('malformed sync data is dropped, not fatal', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const base = normalize(library(3));
 	await store.write(base);
 	const index = stateOf(backend)!;
@@ -808,7 +671,7 @@ test('malformed sync data is dropped, not fatal', async () => {
 
 test('a checkpoint keeps only the replaced records and puts the library back, across several commits', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const base = normalize(library(8));
 	await store.write(base);
 	const expected = {...base, schemaVersion: 10};
@@ -826,17 +689,13 @@ test('a checkpoint keeps only the replaced records and puts the library back, ac
 	second.bookmarks = [];
 	await store.write(second);
 	await store.write({...second, updatedAt: 9999});
-	const delta = store.endCheckpoint(checkpoint);
+	const delta = await store.endCheckpoint(checkpoint);
 	assert.ok(delta);
 	assert.notEqual(await store.fingerprint(), before);
 	assert.deepEqual(
 		Object.keys(delta.records).toSorted(),
-		[
-			`${BOOKMARKS_KEY_PREFIX}1`,
-			'tablodge.session.s1.1',
-			'tablodge.session.s4.1',
-		],
-		'only what the action replaced is copied',
+		['tablodge.session.s1.1', 'tablodge.session.s4.1'],
+		'only the sessions the action replaced are copied; the bookmarks come as a patch',
 	);
 	assert.ok(
 		JSON.stringify(delta).length < JSON.stringify(expected).length,
@@ -849,7 +708,7 @@ test('a checkpoint keeps only the replaced records and puts the library back, ac
 
 test('a checkpoint that could not copy a record gives no delta, and never fails the save', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const base = normalize(library(3));
 	await store.write(base);
 	const checkpoint = await store.beginCheckpoint();
@@ -860,33 +719,36 @@ test('a checkpoint that could not copy a record gives no delta, and never fails 
 		url: 'https://x.example/',
 	});
 	await store.write(edited);
-	assert.equal(store.endCheckpoint(checkpoint!), null);
+	assert.equal(await store.endCheckpoint(checkpoint!), null);
 });
 
 test('a checkpoint on an action that changes nothing keeps the same fingerprint', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await store.write(normalize(library(3)));
 	const before = await store.fingerprint();
 	const checkpoint = await store.beginCheckpoint();
-	assert.deepEqual(Object.keys(store.endCheckpoint(checkpoint!)!.records), []);
+	assert.deepEqual(
+		Object.keys((await store.endCheckpoint(checkpoint!))!.records),
+		[],
+	);
 	assert.equal(await store.fingerprint(), before);
 });
 
 test('checkpoints only exist for the record layout', async () => {
-	const store = createLibraryState(new MemoryBackend({[STATE_KEY]: library()}));
+	const store = state10(new MemoryBackend({[STATE_KEY]: library()}));
 	assert.equal(await store.beginCheckpoint(), null);
 	assert.equal(await store.fingerprint(), undefined);
 });
 
 test('a checkpoint survives the library being removed', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	const base = normalize(library(3));
 	await store.write(base);
 	const checkpoint = await store.beginCheckpoint();
 	await store.remove();
-	const delta = store.endCheckpoint(checkpoint!);
+	const delta = await store.endCheckpoint(checkpoint!);
 	assert.ok(delta);
 	await store.restoreCheckpoint(delta);
 	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
@@ -895,7 +757,7 @@ test('a checkpoint survives the library being removed', async () => {
 test('an entry in the app state shape stamped with the current schema is still the old layout', async () => {
 	const stamped = {...library(), schemaVersion: 10};
 	const backend = new MemoryBackend({[STATE_KEY]: stamped});
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	assert.equal((await store.readMeta()).layout, 'legacy');
 	await store.write(normalize(library(2)));
 	assert.equal(stateOf(backend)!.layout, undefined);
@@ -906,7 +768,7 @@ test('an entry in the app state shape stamped with the current schema is still t
 
 test('dropping garbage deletes only unreferenced record keys', async () => {
 	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
+	const store = state10(backend);
 	await store.write(normalize(library()));
 	await store.write(normalize(library(6)));
 	const index = stateOf(backend)!;
@@ -932,3 +794,90 @@ test('dropping garbage deletes only unreferenced record keys', async () => {
 	);
 	assert.deepEqual(stateOf(backend)!.garbage, []);
 });
+
+test('a checkpoint keeps one changed bookmark of 10,000, not the replaced record, and Undo puts every bookmark back', async () => {
+	const backend = new MemoryBackend();
+	const store = state10(backend);
+	const base = normalize(library(3, 10_000));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	const edited = structuredClone(base);
+	(edited.bookmarks as Raw[])[4321].title = 'Renamed';
+	await store.write(edited);
+	const delta = await store.endCheckpoint(checkpoint!);
+	assert.ok(delta);
+	assert.equal(delta.bookmarks?.middle.length, 1);
+	assert.equal(delta.bookmarks?.head, 4321);
+	assert.ok(
+		JSON.stringify(delta).length < 20_000,
+		String(JSON.stringify(delta).length),
+	);
+	await store.restoreCheckpoint(delta);
+	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
+	assert.deepEqual(await store.verify(), []);
+});
+
+test('a checkpoint over a moved, added and removed bookmark and session restores them in place', async () => {
+	const backend = new MemoryBackend();
+	const store = state10(backend);
+	const base = normalize(library(6, 40));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	const edited = structuredClone(base);
+	const marks = edited.bookmarks as Raw[];
+	marks.splice(30, 0, ...marks.splice(5, 1));
+	marks.splice(10, 1);
+	marks.unshift({id: 'new', columnId: 'c1', url: 'https://new.example/'});
+	const groups = edited.groups as Raw[];
+	groups.splice(1, 1);
+	groups.push(session('late', 2));
+	await store.write(edited);
+	const delta = await store.endCheckpoint(checkpoint!);
+	await store.restoreCheckpoint(delta!);
+	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
+});
+
+test('Undo refuses when the library moved on after the action', async () => {
+	const backend = new MemoryBackend();
+	const store = state10(backend);
+	const base = normalize(library(3, 5));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	await store.write({...base, bookmarks: []});
+	const delta = await store.endCheckpoint(checkpoint!);
+	const later = {id: 'later', columnId: 'c1', url: 'https://later.example/'};
+	await store.write({...base, bookmarks: [later]});
+	await assert.rejects(store.restoreCheckpoint(delta!), LibraryDamagedError);
+	assert.deepEqual((await store.read())!.bookmarks, [later]);
+});
+
+test('an Undo entry stored by the version before still restores', async () => {
+	const backend = new MemoryBackend();
+	const store = state10(backend);
+	const base = normalize(library(4, 5));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	await store.write({...base, bookmarks: []});
+	const delta = (await store.endCheckpoint(checkpoint!))!;
+	const oldKey = `${BOOKMARKS_KEY_PREFIX}1`;
+	const old = {
+		undoDelta: 1 as const,
+		index: {
+			...delta.index,
+			sessions: parseIndexSessions(backend, 1),
+		},
+		records: {
+			...delta.records,
+			[oldKey]: {items: base.bookmarks},
+		},
+	};
+	await store.restoreCheckpoint(old);
+	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
+});
+
+function parseIndexSessions(backend: MemoryBackend, rev: number) {
+	return (stateOf(backend)!.sessions as Raw[]).map((entry) => ({
+		...entry,
+		rev,
+	}));
+}

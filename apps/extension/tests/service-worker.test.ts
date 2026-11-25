@@ -97,6 +97,7 @@ type HarnessOptions = {
 	By default the fixture is stored in the per-record layout.
 	*/
 	legacyLayout?: boolean;
+	layout10?: boolean;
 	incognitoContext?: boolean;
 	failedCreateUrls?: string[];
 	bookmarkTree?: unknown[];
@@ -273,7 +274,8 @@ function createWorkerHarness(
 	let storageFailure: Error | null = null;
 	let storageFailureKey: string | undefined;
 	const extraStorage: Record<string, unknown> = {
-		...(!options.legacyLayout && recordsLayout(structuredClone(initialState))),
+		...(!options.legacyLayout &&
+			recordsLayout(structuredClone(initialState), options.layout10 ? 10 : 11)),
 		...structuredClone(options.storage ?? {}),
 	};
 	extraStorage[storageKey] ??= structuredClone(initialState);
@@ -1389,7 +1391,7 @@ test('private storage modes keep the normal, saved, and browser session librarie
 		assert.equal(library.ok, true, library.error);
 		assert.equal(library.groups?.length, mode === 'shared' ? 1 : 0);
 		assert.deepEqual(
-			library.bookmarks?.map((bookmark) => bookmark.title),
+			structuredClone(library.bookmarks?.map((bookmark) => bookmark.title)),
 			mode === 'shared' ? [] : [mode],
 		);
 	}
@@ -9594,11 +9596,14 @@ test('an old single entry library is moved to per-session records when the worke
 	const index = harness.extraStorage[storageKey] as {
 		layout: string;
 		schemaVersion: number;
-		sessions: unknown[];
+		sessionPages: Array<{count: number}>;
 	};
 	assert.equal(index.layout, 'records');
-	assert.equal(index.schemaVersion, 10);
-	assert.equal(index.sessions.length, 5);
+	assert.equal(index.schemaVersion, 11);
+	assert.equal(
+		index.sessionPages.reduce((sum, page) => sum + page.count, 0),
+		5,
+	);
 	assert.equal(sessionKeysOf(harness.extraStorage).length, 5);
 	assert.equal(harness.extraStorage[MIGRATION_MARKER], undefined);
 	const copy = harness.extraStorage[PREMIGRATION] as {state: unknown};
@@ -9641,7 +9646,7 @@ test('a migration that cannot finish leaves the old library in charge and workin
 	const harness = createWorkerHarness(seed, undefined, {legacyLayout: true});
 	harness.setStorageFailure(
 		new Error('QUOTA_BYTES quota exceeded'),
-		'tablodge.bookmarks.1',
+		'tablodge.sidx.0.1',
 	);
 	await settle();
 	const entry = harness.extraStorage[storageKey] as Record<string, unknown>;
@@ -9670,7 +9675,7 @@ test('a migration that cannot finish leaves the old library in charge and workin
 test('a worker restart after an interrupted migration finishes it without losing or duplicating a session', async () => {
 	const seed = legacyLibrary(6, 4);
 	const first = createWorkerHarness(seed, undefined, {legacyLayout: true});
-	first.setStorageFailure(new Error('worker stopped'), 'tablodge.bookmarks.1');
+	first.setStorageFailure(new Error('worker stopped'), 'tablodge.sidx.0.1');
 	await settle();
 	assert.ok(
 		first.extraStorage[MIGRATION_MARKER],
@@ -9681,13 +9686,12 @@ test('a worker restart after an interrupted migration finishes it without losing
 		storage: structuredClone(first.extraStorage),
 	});
 	await settle();
-	const index = restarted.extraStorage[storageKey] as {
-		layout: string;
-		sessions: Array<{id: string}>;
-	};
+	const index = restarted.extraStorage[storageKey] as {layout: string};
 	assert.equal(index.layout, 'records');
 	assert.deepEqual(
-		structuredClone(index.sessions.map((entry) => entry.id)),
+		structuredClone(
+			logicalState(restarted.extraStorage)?.groups?.map((group) => group.id),
+		),
 		seed.groups.map((group) => group.id),
 	);
 	assert.equal(restarted.extraStorage[MIGRATION_MARKER], undefined);
@@ -9719,6 +9723,88 @@ test('a library written by a dev tool in the current state shape is migrated and
 	});
 	assert.equal(added.ok, true, added.error);
 	assert.equal(harness.state.bookmarks.length, 1);
+});
+
+test('a library in layout 10 is upgraded to pages and chunks when the worker starts, after a safety backup', async () => {
+	const seed = legacyLibrary(5);
+	seed.bookmarks = Array.from({length: 130}, (_unused, index) => ({
+		id: `bm-${index}`,
+		title: `Bookmark ${index}`,
+		url: `https://bm${index}.example/`,
+		columnId: 'bookmark-default',
+		createdAt: 1_700_000_000_000,
+		updatedAt: 1_700_000_000_000,
+	}));
+	const harness = createWorkerHarness(seed, undefined, {layout10: true});
+	assert.equal(
+		(harness.extraStorage[storageKey] as {schemaVersion: number}).schemaVersion,
+		10,
+	);
+	await settle();
+	const index = harness.extraStorage[storageKey] as {
+		schemaVersion: number;
+		sessionPages: Array<{count: number}>;
+		bookmarkChunks: Array<{count: number}>;
+	};
+	assert.equal(index.schemaVersion, 11);
+	assert.equal(index.sessionPages.length, 1);
+	assert.deepEqual(
+		index.bookmarkChunks.map((chunk) => chunk.count),
+		[100, 30],
+	);
+	assert.equal(harness.extraStorage[MIGRATION_MARKER], undefined);
+	assert.ok(harness.extraStorage['tablodge.state.preupgrade']);
+	assert.ok(harness.extraStorage['tablodge.bookmarks.1']);
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(response.groups?.length, 5);
+	assert.equal(response.bookmarks?.length, 130);
+	assert.equal(backupsOf(harness).safety.length, 1);
+	assert.equal(
+		backupsOf(harness).safety[0].reason,
+		'Before upgrading how the library is stored',
+	);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'After', url: 'https://after.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(harness.state.bookmarks.length, 131);
+	assert.equal(backupsOf(harness).safety.length, 1, 'only one backup');
+});
+
+test('a layout 10 upgrade that cannot finish leaves the library in layout 10, reading and writing', async () => {
+	const seed = legacyLibrary(4);
+	const harness = createWorkerHarness(seed, undefined, {layout10: true});
+	harness.setStorageFailure(
+		new Error('QUOTA_BYTES quota exceeded'),
+		'tablodge.sidx.0.2',
+	);
+	await settle();
+	const before = harness.extraStorage[storageKey] as {
+		schemaVersion: number;
+		sessions: unknown[];
+	};
+	assert.equal(before.schemaVersion, 10);
+	assert.equal(before.sessions.length, 4);
+	assert.equal(
+		Object.keys(harness.extraStorage).filter(
+			(key) =>
+				key.startsWith('tablodge.sidx.') || key.startsWith('tablodge.bmchunk.'),
+		).length,
+		0,
+	);
+	const read = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(read.groups?.length, 4);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'While broken', url: 'https://broken.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(
+		(harness.extraStorage[storageKey] as {schemaVersion: number}).schemaVersion,
+		10,
+	);
+	assert.equal(harness.state.bookmarks.at(-1)?.title, 'While broken');
 });
 
 test('a library saved by a newer version is left alone', async () => {

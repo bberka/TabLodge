@@ -35,11 +35,14 @@ This module knows nothing about the browser: it takes a key/value backend, so te
 import {
 	BATCH_COUNT,
 	batches,
-	bookmarksKey,
+	bookmarkCount,
 	assertStableIds,
+	BOOKMARK_CHUNK_KEY_PREFIX,
 	BOOKMARKS_KEY_PREFIX,
+	checkedSessions,
 	contentHash,
 	idsOf,
+	INLINE_LAYOUT_VERSION,
 	isRecordsEntry,
 	LAYOUT_VERSION,
 	LEGACY_SCHEMA_VERSION,
@@ -47,21 +50,42 @@ import {
 	type LibraryIndex,
 	MIGRATION_KEY,
 	type MigrationNote,
+	type PageRef,
 	parseIndex,
+	parseSessionEntry,
 	type Plan,
+	type PlannedPart,
+	planParts,
 	planState,
 	PREMIGRATION_KEY,
+	PREUPGRADE_KEY,
 	referencedKeys,
+	SCHEMA_VERSION,
 	SESSION_KEY_PREFIX,
+	SESSION_PAGE_KEY_PREFIX,
 	SIDECAR,
+	type SessionEntry,
 	sessionContent,
 	sessionKey,
 	STATE_KEY,
+	storedIndex,
 } from './library-index';
-import {carriedSync, keepOnly} from './library-sync';
+import {
+	applyPatch,
+	diffList,
+	type ListPatch,
+	parsePatch,
+} from './library-patch';
+import {
+	carriedSync,
+	keepOnly,
+	parseSyncMap,
+	type SyncMap,
+} from './library-sync';
 import {canonicalJson, hashText, isRecord, type Raw} from './library-values';
 
 export {
+	BOOKMARK_CHUNK_KEY_PREFIX,
 	BOOKMARKS_KEY_PREFIX,
 	bookmarksKey,
 	LAYOUT_VERSION,
@@ -70,7 +94,10 @@ export {
 	type LibraryIndex,
 	MIGRATION_KEY,
 	PREMIGRATION_KEY,
+	PREUPGRADE_KEY,
+	SCHEMA_VERSION,
 	SESSION_KEY_PREFIX,
+	SESSION_PAGE_KEY_PREFIX,
 	type SessionEntry,
 	sessionKey,
 	STATE_KEY,
@@ -120,19 +147,22 @@ What Undo keeps of the library: the index as it was and only the records the act
 edited in place, so everything else is still where the index says.
 */
 export type UndoDelta = {
-	undoDelta: 1;
-	index: LibraryIndex;
+	undoDelta: 1 | 2 | 3;
+	index: Raw;
 	records: Raw;
+	sessions?: ListPatch;
+	bookmarks?: ListPatch;
 };
 
 export const isUndoDelta = (value: unknown): value is UndoDelta =>
 	isRecord(value) &&
-	value.undoDelta === 1 &&
+	([1, 2, 3] as unknown[]).includes(value.undoDelta) &&
 	isRecord(value.index) &&
 	isRecord(value.records);
 
 type Collector = {
 	index: LibraryIndex;
+	entry: Raw;
 	pending: Set<string>;
 	records: Map<string, unknown>;
 	complete: boolean;
@@ -151,11 +181,13 @@ export function createLibraryState(
 		now = Date.now,
 		writeBatchChars = WRITE_BATCH_CHARS,
 		writeBatchCount = BATCH_COUNT,
+		layoutVersion: maxLayout = LAYOUT_VERSION,
 	}: {
 		now?: () => number;
 		/**
-		Serialized characters and records per `set`; tests shrink them to force several batches.
+		The newest layout this instance understands. Tests pin it to 10 to be the version before layout 11.
 		*/
+		layoutVersion?: number;
 		writeBatchChars?: number;
 		writeBatchCount?: number;
 	} = {},
@@ -212,6 +244,117 @@ export function createLibraryState(
 		}
 	};
 
+	const getMany = async (keys: string[], extra?: Raw): Promise<Raw> => {
+		if (!extra) {
+			return backend.get(keys);
+		}
+
+		const missing = keys.filter((key) => !Object.hasOwn(extra, key));
+		const saved = missing.length > 0 ? await backend.get(missing) : {};
+		return {
+			...saved,
+			...Object.fromEntries(
+				keys
+					.filter((key) => Object.hasOwn(extra, key))
+					.map((key) => [key, extra[key]]),
+			),
+		};
+	};
+
+	const known = (entry: unknown): entry is Raw & {layout: 'records'} =>
+		isRecordsEntry(entry) && Number(entry.schemaVersion) <= maxLayout;
+
+	const tooNew = (entry: Raw) =>
+		Number(entry.schemaVersion) >
+		(isRecordsEntry(entry) ? maxLayout : SCHEMA_VERSION);
+
+	const why = (value: unknown) =>
+		value === undefined ? 'missing' : 'does not match the index';
+
+	const pageCache = new Map<string, {hash: string; entries: SessionEntry[]}>();
+
+	async function loadIndex(entry: Raw, extra?: Raw): Promise<LibraryIndex> {
+		const index = parseIndex(entry);
+		if (index.format === 10) {
+			return index;
+		}
+
+		const pages = new Map<string, SessionEntry[]>();
+		const missing = index.sessionPages.filter((page) => {
+			const cached = pageCache.get(page.key);
+			if (cached?.hash === page.hash) {
+				pages.set(page.key, cached.entries);
+				return false;
+			}
+
+			return true;
+		});
+		for (const run of batches(missing, () => 1, 20, 20)) {
+			const saved = await getMany(
+				run.map((page) => page.key),
+				extra,
+			);
+			for (const page of run) {
+				const value = saved[page.key];
+				if (
+					!isRecord(value) ||
+					!Array.isArray(value.items) ||
+					value.items.length !== page.count ||
+					(!extra && contentHash(page.key, value) !== page.hash)
+				) {
+					throw new LibraryDamagedError(`${page.key} ${why(value)}`);
+				}
+
+				const entries = value.items.map((item) => parseSessionEntry(item));
+				pages.set(page.key, entries);
+				if (!extra) {
+					pageCache.set(page.key, {hash: page.hash, entries});
+				}
+			}
+		}
+
+		if (!extra) {
+			for (const key of pageCache.keys()) {
+				if (!pages.has(key)) {
+					pageCache.delete(key);
+				}
+			}
+		}
+
+		return {
+			...index,
+			sessions: checkedSessions(
+				index.sessionPages.flatMap((page) => pages.get(page.key)!),
+			),
+		};
+	}
+
+	async function readSessionEntries(entry: Raw): Promise<SessionEntry[]> {
+		return known(entry) ? (await loadIndex(entry)).sessions : [];
+	}
+
+	async function readParts(parts: readonly PageRef[], extra?: Raw) {
+		const problems: LibraryProblem[] = [];
+		const pieces: unknown[][] = [];
+		for (const run of batches(parts, () => 1, 20, 20)) {
+			const saved = await getMany(
+				run.map((part) => part.key),
+				extra,
+			);
+			for (const part of run) {
+				const value = saved[part.key];
+				const items = isRecord(value) ? value.items : undefined;
+				if (Array.isArray(items) && items.length === part.count) {
+					pieces.push(items);
+				} else {
+					problems.push({key: part.key, problem: why(value)});
+				}
+			}
+		}
+
+		return {problems, items: pieces.flat()};
+	}
+
 	/**
 	Reads and checks the records an index points at. Returns what was wrong instead of throwing, so the caller can retry.
 	*/
@@ -235,8 +378,7 @@ export function createLibraryState(
 				) {
 					problems.push({
 						key: keys[at],
-						problem:
-							value === undefined ? 'missing' : 'does not match the index',
+						problem: why(value),
 					});
 				} else {
 					groups.push(sessionContent(value));
@@ -244,20 +386,9 @@ export function createLibraryState(
 			}
 		}
 
-		const key = bookmarksKey(index.bookmarks.rev);
-		const stored = await getOne(key);
-		const bookmarks = isRecord(stored) ? stored.items : undefined;
-		if (
-			!Array.isArray(bookmarks) ||
-			bookmarks.length !== index.bookmarks.count
-		) {
-			problems.push({
-				key,
-				problem: stored === undefined ? 'missing' : 'does not match the index',
-			});
-		}
-
-		return {problems, groups, bookmarks: bookmarks as unknown[]};
+		const bookmarks = await readParts(index.bookmarkParts);
+		problems.push(...bookmarks.problems);
+		return {problems, groups, bookmarks: bookmarks.items};
 	}
 
 	function assemble(
@@ -266,7 +397,7 @@ export function createLibraryState(
 		bookmarks: unknown[],
 	): Raw {
 		return {
-			schemaVersion: index.schemaVersion,
+			schemaVersion: SCHEMA_VERSION,
 			groups,
 			folders: index.folders,
 			bookmarkColumns: index.bookmarkColumns,
@@ -287,18 +418,26 @@ export function createLibraryState(
 				return null;
 			}
 
-			if (
-				!isRecordsEntry(entry) ||
-				Number(entry.schemaVersion) > LAYOUT_VERSION
-			) {
+			if (!known(entry)) {
 				return entry;
 			}
 
-			const index = parseIndex(entry);
+			let problem: string;
+			try {
+				const index = await loadIndex(entry);
+				const loaded = await loadRecords(index);
+				if (loaded.problems.length === 0) {
+					return assemble(index, loaded.groups, loaded.bookmarks);
+				}
 
-			const loaded = await loadRecords(index);
-			if (loaded.problems.length === 0) {
-				return assemble(index, loaded.groups, loaded.bookmarks);
+				const [first] = loaded.problems;
+				problem = `${first.key} ${first.problem}${loaded.problems.length > 1 ? `, and ${loaded.problems.length - 1} more` : ''}`;
+			} catch (error) {
+				if (!(error instanceof LibraryDamagedError)) {
+					throw error;
+				}
+
+				problem = error.detail;
 			}
 
 			// A commit that finished while this read was in flight removed keys this index pointed at: read again.
@@ -306,45 +445,60 @@ export function createLibraryState(
 			if (
 				attempt < MAX_READ_RETRIES &&
 				isRecordsEntry(again) &&
-				again.rev !== index.rev
+				again.rev !== entry.rev
 			) {
 				continue;
 			}
 
-			const [first] = loaded.problems;
-			throw new LibraryDamagedError(
-				`${first.key} ${first.problem}${loaded.problems.length > 1 ? `, and ${loaded.problems.length - 1} more` : ''}`,
-			);
+			throw new LibraryDamagedError(problem);
 		}
 	}
 
 	/**
 	Settings and schema version without reading any session. In the old layout this still reads the whole entry.
+	`upgradable` is true while the index is still in layout 10, which `upgrade` moves to layout 11.
 	*/
 	async function readMeta(): Promise<{
 		layout: 'none' | 'legacy' | 'records';
 		schemaVersion: number;
 		settings: unknown;
+		upgradable: boolean;
 	}> {
 		const entry = await getOne(STATE_KEY);
 		if (!isRecord(entry)) {
-			return {layout: 'none', schemaVersion: 0, settings: undefined};
+			return {
+				layout: 'none',
+				schemaVersion: 0,
+				settings: undefined,
+				upgradable: false,
+			};
 		}
 
+		const stored = Number(entry.schemaVersion) || 0;
 		return {
 			layout: isRecordsEntry(entry) ? 'records' : 'legacy',
-			schemaVersion: Number(entry.schemaVersion) || 0,
+			schemaVersion: known(entry) ? SCHEMA_VERSION : stored,
 			settings: entry.settings,
+			upgradable:
+				known(entry) &&
+				stored === INLINE_LAYOUT_VERSION &&
+				maxLayout > INLINE_LAYOUT_VERSION,
 		};
 	}
 
+	const writtenParts = (parts: readonly PlannedPart[]) =>
+		parts
+			.filter((part) => !part.unchanged)
+			.map((part) => ({key: part.ref.key, value: part.value, json: part.json}));
+
 	/**
-	Stores the library. Writes only sessions that changed and the index. While the library is still in the old
-	layout (a migration that could not finish) it writes the old single entry, so the app keeps working.
+	Stores the library. Writes only the sessions, pages, and bookmark chunks that changed, and the index. While the
+	library is still in the old layout (a migration that could not finish) it writes the old single entry, so the app
+	keeps working; a layout 10 index is written as layout 10 until `upgrade` has moved it.
 	*/
 	async function write(raw: Raw): Promise<void> {
 		const current = await getOne(STATE_KEY);
-		if (isRecord(current) && Number(current.schemaVersion) > LAYOUT_VERSION) {
+		if (isRecord(current) && tooNew(current)) {
 			throw new Error('This library was saved by a newer version.');
 		}
 
@@ -355,16 +509,26 @@ export function createLibraryState(
 			return;
 		}
 
-		const previous = isRecordsEntry(current) ? parseIndex(current) : null;
+		const previous = isRecordsEntry(current) ? await loadIndex(current) : null;
+		const format = previous?.format ?? (maxLayout >= LAYOUT_VERSION ? 11 : 10);
 		const rev = (previous?.rev ?? 0) + 1;
-		const plan = planState(raw, rev, previous);
+		const plan = planState(raw, rev, previous, format);
 		await carrySidecars(plan, previous);
-		const changed = [
+		if (format === 11) {
+			plan.sessionPages = planParts(
+				plan.sessions.map((session) => session.entry),
+				SESSION_PAGE_KEY_PREFIX,
+				rev,
+				previous?.format === 11 ? previous.sessionPages : [],
+			);
+		}
+
+		await writeAll([
 			...plan.sessions.filter((session) => !session.unchanged),
-			...(plan.bookmarks.unchanged ? [] : [plan.bookmarks]),
-		];
-		await writeAll(changed);
-		const index = buildIndex(raw, plan, rev, previous);
+			...writtenParts(plan.sessionPages),
+			...writtenParts(plan.bookmarks),
+		]);
+		const index = buildIndex(raw, plan, rev, previous, format);
 		const next = new Set(referencedKeys(index));
 		const replaced = previous
 			? referencedKeys(previous).filter((key) => !next.has(key))
@@ -381,12 +545,12 @@ export function createLibraryState(
 		}
 
 		await backend.set({
-			[STATE_KEY]: {
-				...index,
-				garbage: [...new Set([...replaced, ...leftover])].filter(
+			[STATE_KEY]: storedIndex(
+				index,
+				[...new Set([...replaced, ...leftover])].filter(
 					(key) => !next.has(key),
 				),
-			},
+			),
 		});
 	}
 
@@ -430,21 +594,36 @@ export function createLibraryState(
 			}
 		}
 
-		const {bookmarks} = plan;
-		if (bookmarks.unchanged || !bookmarks.entry.sync) {
+		const changed = plan.bookmarks.filter((part) => !part.unchanged);
+		const sidecars = previous.bookmarkParts.filter((part) => part.sync);
+		if (changed.length === 0 || sidecars.length === 0) {
 			return;
 		}
 
-		const old = await getOne(bookmarksKey(previous.bookmarks.rev));
-		const items = carriedSync(
-			isRecord(old) ? old[SIDECAR] : undefined,
-			'items',
-			idsOf(bookmarks.value.items),
-		);
-		if (Object.keys(items).length > 0) {
-			bookmarks.value = {...bookmarks.value, [SIDECAR]: {items}};
-		} else {
-			Reflect.deleteProperty(bookmarks.entry, 'sync');
+		const stamps: SyncMap = {};
+		for (const run of batches(sidecars, () => 1, 20, 20)) {
+			const saved = await backend.get(run.map((part) => part.key));
+			for (const part of run) {
+				const old = saved[part.key];
+				const sidecar = isRecord(old) ? old[SIDECAR] : undefined;
+				Object.assign(
+					stamps,
+					parseSyncMap(isRecord(sidecar) ? sidecar.items : undefined),
+				);
+			}
+		}
+
+		for (const part of changed) {
+			const ids = idsOf(part.value.items);
+			const items = Object.fromEntries(
+				Object.entries(stamps).filter(([id]) => ids.has(id)),
+			);
+			if (Object.keys(items).length === 0) {
+				continue;
+			}
+
+			part.value = {...part.value, [SIDECAR]: {items}};
+			part.ref.sync = true;
 		}
 	}
 
@@ -453,11 +632,12 @@ export function createLibraryState(
 		plan: Plan,
 		rev: number,
 		previous: LibraryIndex | null,
+		format: 10 | 11,
 		note?: MigrationNote,
 	): LibraryIndex {
-		const kept = previous?.migratedFrom;
 		return {
-			schemaVersion: LAYOUT_VERSION,
+			format,
+			schemaVersion: format === 11 ? LAYOUT_VERSION : INLINE_LAYOUT_VERSION,
 			layout: 'records',
 			rev,
 			updatedAt: Number(raw.updatedAt) || now(),
@@ -467,9 +647,10 @@ export function createLibraryState(
 				: [],
 			settings: raw.settings,
 			sessions: plan.sessions.map((session) => session.entry),
-			bookmarks: plan.bookmarks.entry,
+			sessionPages: plan.sessionPages.map((page) => page.ref),
+			bookmarkParts: plan.bookmarks.map((part) => part.ref),
 			garbage: [],
-			migratedFrom: note ?? (kept && kept.keepUntil > now() ? kept : undefined),
+			migratedFrom: note ?? previous?.migratedFrom,
 			device: previous?.device,
 			// Expired tombstones stop being carried; a record deleted that long ago can no longer come back.
 			tombstones: (previous?.tombstones ?? []).filter(
@@ -487,23 +668,24 @@ export function createLibraryState(
 	*/
 	async function remove(): Promise<void> {
 		const current = await getOne(STATE_KEY);
-		if (
-			isRecordsEntry(current) &&
-			Number(current.schemaVersion) <= LAYOUT_VERSION
-		) {
-			await captureReplaced(referencedKeys(parseIndex(current)));
+		const index = known(current)
+			? await loadIndex(current).catch(() => parseIndex(current))
+			: null;
+		if (index) {
+			await captureReplaced(referencedKeys(index));
 		}
 
 		await backend.remove([STATE_KEY]);
-		if (
-			!isRecordsEntry(current) ||
-			Number(current.schemaVersion) > LAYOUT_VERSION
-		) {
+		if (!index) {
 			return;
 		}
 
-		const index = parseIndex(current);
-		await removeKeys([...referencedKeys(index), ...index.garbage]);
+		await removeKeys([
+			...referencedKeys(index),
+			...index.garbage,
+			PREUPGRADE_KEY,
+			...(index.migratedFrom?.kept ?? []),
+		]);
 	}
 
 	/**
@@ -511,13 +693,28 @@ export function createLibraryState(
 	*/
 	async function verify(): Promise<LibraryProblem[]> {
 		const entry = await getOne(STATE_KEY);
-		return isRecordsEntry(entry) ? checkIndex(parseIndex(entry)) : [];
+		if (!known(entry)) {
+			return [];
+		}
+
+		try {
+			return await checkIndex(await loadIndex(entry), true);
+		} catch (error) {
+			if (error instanceof LibraryDamagedError) {
+				return [{key: STATE_KEY, problem: error.detail}];
+			}
+
+			throw error;
+		}
 	}
 
-	async function checkIndex(index: LibraryIndex): Promise<LibraryProblem[]> {
+	async function checkIndex(
+		index: LibraryIndex,
+		withSessions: boolean,
+	): Promise<LibraryProblem[]> {
 		const problems: LibraryProblem[] = [];
 		for (const run of batches(
-			index.sessions,
+			withSessions ? index.sessions : [],
 			(session) => session.tabs + 1,
 			READ_BATCH_TABS,
 		)) {
@@ -536,12 +733,24 @@ export function createLibraryState(
 			}
 		}
 
-		const key = bookmarksKey(index.bookmarks.rev);
-		const bookmarks = await getOne(key);
-		if (bookmarks === undefined) {
-			problems.push({key, problem: 'missing'});
-		} else if (contentHash(key, bookmarks) !== index.bookmarks.hash) {
-			problems.push({key, problem: 'content differs from its checksum'});
+		for (const run of batches(
+			[...index.sessionPages, ...index.bookmarkParts],
+			() => 1,
+			20,
+			20,
+		)) {
+			const saved = await backend.get(run.map((part) => part.key));
+			for (const part of run) {
+				const value = saved[part.key];
+				if (value === undefined) {
+					problems.push({key: part.key, problem: 'missing'});
+				} else if (contentHash(part.key, value) !== part.hash) {
+					problems.push({
+						key: part.key,
+						problem: 'content differs from its checksum',
+					});
+				}
+			}
 		}
 
 		return problems;
@@ -612,7 +821,7 @@ export function createLibraryState(
 		}
 
 		if (isRecordsEntry(entry)) {
-			if (Number(entry.schemaVersion) > LAYOUT_VERSION) {
+			if (Number(entry.schemaVersion) > maxLayout) {
 				return {status: 'newer'};
 			}
 
@@ -625,14 +834,16 @@ export function createLibraryState(
 		}
 
 		// Dev tools write the app's own state shape (stamped with the current schema) without an index: that is the old layout too.
-		if (Number(entry.schemaVersion) > LAYOUT_VERSION) {
+		if (tooNew(entry)) {
 			return {status: 'newer'};
 		}
 
 		const sourceHash = hashText(canonicalJson(entry));
 		// Anything the records cannot hold is found before the first byte is written.
 		const store = normalize(entry);
-		const plan = planState(store, 1, null);
+		const raw = Array.isArray(store.bookmarks) ? store.bookmarks : [];
+		const format = maxLayout >= LAYOUT_VERSION ? 11 : 10;
+		const plan = planState(store, 1, null, format);
 		assertStableIds(store);
 		await writeRecoveryCopy(entry, sourceHash);
 		const previousMarker = await readMarker();
@@ -649,7 +860,20 @@ export function createLibraryState(
 		await backend.set({[MIGRATION_KEY]: marker});
 
 		try {
-			const pending = [...plan.sessions, plan.bookmarks];
+			const pending = [
+				...plan.sessions.map((item) => ({
+					key: item.key,
+					value: item.value,
+					json: item.json,
+					hash: item.entry.hash,
+				})),
+				...[...plan.sessionPages, ...plan.bookmarks].map((part) => ({
+					key: part.ref.key,
+					value: part.value,
+					json: part.json,
+					hash: part.ref.hash,
+				})),
+			];
 			for (const run of batches(
 				pending,
 				(item) => item.json.length,
@@ -671,7 +895,7 @@ export function createLibraryState(
 					run.filter(
 						(item) =>
 							stored[item.key] === undefined ||
-							contentHash(item.key, stored[item.key]) !== item.entry.hash,
+							contentHash(item.key, stored[item.key]) !== item.hash,
 					),
 				);
 			}
@@ -680,15 +904,15 @@ export function createLibraryState(
 				(sum, item) => sum + item.entry.tabs,
 				0,
 			);
-			const index = buildIndex(store, plan, 1, null, {
+			const index = buildIndex(store, plan, 1, null, format, {
 				schemaVersion: marker.from,
 				at: now(),
 				keepUntil: now() + PREMIGRATION_KEEP_MS,
 				sessions: plan.sessions.length,
 				tabs,
-				bookmarks: plan.bookmarks.entry.count,
+				bookmarks: raw.length,
 			});
-			const problems = await checkIndex(index);
+			const problems = await checkIndex(index, true);
 			if (problems.length > 0) {
 				throw new Error(
 					`Migration check failed: ${problems[0].key} ${problems[0].problem}.`,
@@ -698,13 +922,13 @@ export function createLibraryState(
 			const referenced = new Set(referencedKeys(index));
 			index.garbage = marker.written.filter((key) => !referenced.has(key));
 			// The commit: until this write the old entry is the library, after it the records are.
-			await backend.set({[STATE_KEY]: index});
+			await backend.set({[STATE_KEY]: storedIndex(index, index.garbage)});
 			await backend.remove([MIGRATION_KEY]);
 			return {
 				status: 'migrated',
 				sessions: plan.sessions.length,
 				tabs,
-				bookmarks: plan.bookmarks.entry.count,
+				bookmarks: bookmarkCount(index),
 				resumed,
 			};
 		} catch (error) {
@@ -722,27 +946,35 @@ export function createLibraryState(
 	}
 
 	/**
-	Drops the recovery copy once its week is over. Returns true when it removed something.
+	Drops the recovery copies once their week is over. Returns true when it removed something.
 	*/
 	async function pruneRecoveryCopy(): Promise<boolean> {
 		const entry = await getOne(STATE_KEY);
-		if (
-			!isRecordsEntry(entry) ||
-			Number(entry.schemaVersion) > LAYOUT_VERSION
-		) {
+		if (!known(entry)) {
 			return false;
 		}
 
-		const {migratedFrom} = parseIndex(entry);
-		if (
-			!migratedFrom ||
-			migratedFrom.keepUntil > now() ||
-			(await getOne(PREMIGRATION_KEY)) === undefined
-		) {
+		const index = parseIndex(entry);
+		const {migratedFrom} = index;
+		if (!migratedFrom || migratedFrom.keepUntil > now()) {
 			return false;
 		}
 
-		await backend.remove([PREMIGRATION_KEY]);
+		const kept = migratedFrom.kept ?? [];
+		if (kept.length === 0 && (await getOne(PREMIGRATION_KEY)) === undefined) {
+			return false;
+		}
+
+		await removeKeys([PREMIGRATION_KEY, PREUPGRADE_KEY, ...kept]);
+		if (kept.length > 0) {
+			await backend.set({
+				[STATE_KEY]: storedIndex(
+					{...index, migratedFrom: undefined},
+					index.garbage,
+				),
+			});
+		}
+
 		return true;
 	}
 
@@ -755,13 +987,14 @@ export function createLibraryState(
 		}
 
 		const entry = await getOne(STATE_KEY);
-		const keys = [STATE_KEY, MIGRATION_KEY, PREMIGRATION_KEY];
-		if (
-			isRecordsEntry(entry) &&
-			Number(entry.schemaVersion) <= LAYOUT_VERSION
-		) {
-			const index = parseIndex(entry);
-			keys.push(...referencedKeys(index), ...index.garbage);
+		const keys = [STATE_KEY, MIGRATION_KEY, PREMIGRATION_KEY, PREUPGRADE_KEY];
+		if (known(entry)) {
+			const index = await loadIndex(entry).catch(() => parseIndex(entry));
+			keys.push(
+				...referencedKeys(index),
+				...index.garbage,
+				...(index.migratedFrom?.kept ?? []),
+			);
 		}
 
 		return backend.getBytesInUse(keys);
@@ -773,16 +1006,24 @@ export function createLibraryState(
 	*/
 	async function beginCheckpoint(): Promise<Checkpoint | null> {
 		const entry = await getOne(STATE_KEY);
-		if (
-			!isRecordsEntry(entry) ||
-			Number(entry.schemaVersion) > LAYOUT_VERSION
-		) {
+		if (!known(entry)) {
 			return null;
 		}
 
-		const index = parseIndex(entry);
+		let index: LibraryIndex;
+		try {
+			index = await loadIndex(entry);
+		} catch (error) {
+			if (error instanceof LibraryDamagedError) {
+				return null;
+			}
+
+			throw error;
+		}
+
 		const collector: Collector = {
 			index,
+			entry,
 			pending: new Set(referencedKeys(index)),
 			records: new Map(),
 			complete: true,
@@ -794,16 +1035,51 @@ export function createLibraryState(
 	/**
 	Closes a checkpoint. Null when a copy it needed could not be taken.
 	*/
-	function endCheckpoint(checkpoint: Checkpoint): UndoDelta | null {
+	async function endCheckpoint(
+		checkpoint: Checkpoint,
+	): Promise<UndoDelta | null> {
 		const {collector} = checkpoint;
 		collectors.delete(collector);
-		return collector.complete
-			? {
-					undoDelta: 1,
-					index: collector.index,
-					records: Object.fromEntries(collector.records),
+		if (!collector.complete) {
+			return null;
+		}
+
+		const {index, entry: started} = collector;
+		if (index.format === 11) {
+			return {
+				undoDelta: 3,
+				index: started,
+				records: Object.fromEntries(collector.records),
+			};
+		}
+
+		try {
+			const entry = await getOne(STATE_KEY);
+			const current = known(entry) ? await loadIndex(entry) : null;
+			const records = new Map(collector.records);
+			const oldKey = index.bookmarkParts[0].key;
+			const old = records.get(oldKey);
+			let bookmarks: ListPatch | undefined;
+			if (isRecord(old) && Array.isArray(old.items)) {
+				const latest = current
+					? await readParts(current.bookmarkParts)
+					: {problems: [], items: []};
+				if (latest.problems.length === 0) {
+					bookmarks = diffList(old.items, latest.items);
+					records.delete(oldKey);
 				}
-			: null;
+			}
+
+			return {
+				undoDelta: 2,
+				index: {...started, sessions: []},
+				sessions: diffList(index.sessions, current?.sessions ?? []),
+				...(bookmarks && {bookmarks}),
+				records: Object.fromEntries(records),
+			};
+		} catch {
+			return null;
+		}
 	}
 
 	/**
@@ -812,17 +1088,73 @@ export function createLibraryState(
 	*/
 	async function fingerprint(): Promise<string | undefined> {
 		const entry = await getOne(STATE_KEY);
-		return isRecordsEntry(entry) &&
-			Number(entry.schemaVersion) <= LAYOUT_VERSION
-			? `rev:${Number(entry.rev)}`
-			: undefined;
+		return known(entry) ? `rev:${Number(entry.rev)}` : undefined;
 	}
+
+	const missingForUndo = (key: string) =>
+		new LibraryDamagedError(`${key} is missing, so Undo cannot run`);
 
 	/**
 	Puts the library back as a checkpoint saw it, as a new commit that rewrites only what differs.
 	*/
 	async function restoreCheckpoint(delta: UndoDelta): Promise<void> {
-		const index = parseIndex(delta.index);
+		let index: LibraryIndex;
+		let bookmarks: unknown[];
+		if (delta.undoDelta === 3) {
+			index = await loadIndex(delta.index, delta.records);
+			const loaded = await readParts(index.bookmarkParts, delta.records);
+			if (loaded.problems.length > 0) {
+				throw missingForUndo(loaded.problems[0].key);
+			}
+
+			bookmarks = loaded.items;
+		} else {
+			let raw: Raw = delta.index;
+			let patched: unknown[] | undefined;
+			if (delta.undoDelta === 2) {
+				const entry = await getOne(STATE_KEY);
+				const current = known(entry) ? await loadIndex(entry) : null;
+				const sessions = parsePatch(delta.sessions);
+				const applied =
+					sessions && applyPatch(current?.sessions ?? [], sessions);
+				if (!applied) {
+					throw new LibraryDamagedError(
+						'the library changed since the action, so Undo cannot run',
+					);
+				}
+
+				raw = {...raw, sessions: applied};
+				const bookmarksPatch = parsePatch(delta.bookmarks);
+				if (bookmarksPatch) {
+					const latest = current
+						? await readParts(current.bookmarkParts)
+						: {problems: [], items: []};
+					patched =
+						latest.problems.length === 0
+							? applyPatch(latest.items, bookmarksPatch)
+							: undefined;
+					if (!patched) {
+						throw new LibraryDamagedError(
+							'the bookmarks changed since the action, so Undo cannot run',
+						);
+					}
+				}
+			}
+
+			index = parseIndex(raw);
+			const {key} = index.bookmarkParts[0];
+			const stored = patched
+				? {items: patched}
+				: Object.hasOwn(delta.records, key)
+					? delta.records[key]
+					: await getOne(key);
+			if (!isRecord(stored) || !Array.isArray(stored.items)) {
+				throw missingForUndo(key);
+			}
+
+			bookmarks = stored.items;
+		}
+
 		const groups: Raw[] = [];
 		for (const run of batches(
 			index.sessions,
@@ -830,36 +1162,23 @@ export function createLibraryState(
 			READ_BATCH_TABS,
 		)) {
 			const keys = run.map((session) => sessionKey(session.id, session.rev));
-			const missing = keys.filter((key) => !Object.hasOwn(delta.records, key));
-			const saved = missing.length > 0 ? await backend.get(missing) : {};
+			const saved = await getMany(keys, delta.records);
 			for (const key of keys) {
-				const value = Object.hasOwn(delta.records, key)
-					? delta.records[key]
-					: saved[key];
+				const value = saved[key];
 				if (!isRecord(value)) {
-					throw new LibraryDamagedError(
-						`${key} is missing, so Undo cannot run`,
-					);
+					throw missingForUndo(key);
 				}
 
 				groups.push(sessionContent(value));
 			}
 		}
 
-		const key = bookmarksKey(index.bookmarks.rev);
-		const stored = Object.hasOwn(delta.records, key)
-			? delta.records[key]
-			: await getOne(key);
-		if (!isRecord(stored) || !Array.isArray(stored.items)) {
-			throw new LibraryDamagedError(`${key} is missing, so Undo cannot run`);
-		}
-
 		await write({
-			schemaVersion: index.schemaVersion,
+			schemaVersion: SCHEMA_VERSION,
 			groups,
 			folders: index.folders,
 			bookmarkColumns: index.bookmarkColumns,
-			bookmarks: stored.items,
+			bookmarks,
 			settings: index.settings,
 			updatedAt: index.updatedAt,
 		});
@@ -867,24 +1186,168 @@ export function createLibraryState(
 
 	async function dropGarbage(): Promise<void> {
 		const current = await getOne(STATE_KEY);
-		if (!isRecordsEntry(current)) {
+		if (!known(current)) {
 			return;
 		}
 
-		const index = parseIndex(current);
+		const index = await loadIndex(current).catch(() => undefined);
+		if (!index || index.garbage.length === 0) {
+			return;
+		}
+
 		const referenced = new Set(referencedKeys(index));
 		const garbage = index.garbage.filter(
 			(key) =>
 				!referenced.has(key) &&
 				(key.startsWith(SESSION_KEY_PREFIX) ||
-					key.startsWith(BOOKMARKS_KEY_PREFIX)),
+					key.startsWith(BOOKMARKS_KEY_PREFIX) ||
+					key.startsWith(SESSION_PAGE_KEY_PREFIX) ||
+					key.startsWith(BOOKMARK_CHUNK_KEY_PREFIX)),
 		);
-		if (index.garbage.length === 0) {
-			return;
-		}
-
 		await removeKeys(garbage);
 		await backend.set({[STATE_KEY]: {...current, garbage: []}});
+	}
+
+	async function upgrade(): Promise<{
+		status: 'none' | 'newer' | 'current' | 'upgraded';
+	}> {
+		const entry = await getOne(STATE_KEY);
+		if (!isRecordsEntry(entry)) {
+			return {status: 'none'};
+		}
+
+		if (Number(entry.schemaVersion) > maxLayout) {
+			return {status: 'newer'};
+		}
+
+		if (Number(entry.schemaVersion) >= Math.min(LAYOUT_VERSION, maxLayout)) {
+			if ((await getOne(MIGRATION_KEY)) !== undefined) {
+				await backend.remove([MIGRATION_KEY]);
+			}
+
+			return {status: 'current'};
+		}
+
+		const previous = await loadIndex(entry);
+		const part = previous.bookmarkParts[0];
+		const written: string[] = [];
+		const startedAt = now();
+		try {
+			const record = await getOne(part.key);
+			const items = isRecord(record) ? record.items : undefined;
+			if (
+				!Array.isArray(items) ||
+				items.length !== part.count ||
+				contentHash(part.key, record) !== part.hash
+			) {
+				throw new Error(
+					`Upgrade check failed: ${part.key} does not match the index.`,
+				);
+			}
+
+			const rev = previous.rev + 1;
+			const sessionPages = planParts(
+				previous.sessions,
+				SESSION_PAGE_KEY_PREFIX,
+				rev,
+				[],
+			);
+			const chunks = planParts(items, BOOKMARK_CHUNK_KEY_PREFIX, rev, []);
+			const sidecar = isRecord(record) ? record[SIDECAR] : undefined;
+			const stamps = part.sync
+				? parseSyncMap(isRecord(sidecar) ? sidecar.items : undefined)
+				: {};
+			for (const chunk of chunks) {
+				const ids = idsOf(chunk.value.items);
+				const carried = Object.fromEntries(
+					Object.entries(stamps).filter(([id]) => ids.has(id)),
+				);
+				if (Object.keys(carried).length === 0) {
+					continue;
+				}
+
+				chunk.value = {...chunk.value, [SIDECAR]: {items: carried}};
+				chunk.ref.sync = true;
+			}
+
+			const tabs = previous.sessions.reduce((sum, item) => sum + item.tabs, 0);
+			const index: LibraryIndex = {
+				...previous,
+				format: 11,
+				schemaVersion: LAYOUT_VERSION,
+				rev,
+				sessions: previous.sessions,
+				sessionPages: sessionPages.map((page) => page.ref),
+				bookmarkParts: chunks.map((chunk) => chunk.ref),
+				migratedFrom: {
+					schemaVersion: previous.schemaVersion,
+					at: startedAt,
+					keepUntil: Math.max(
+						startedAt + PREMIGRATION_KEEP_MS,
+						previous.migratedFrom?.keepUntil ?? 0,
+					),
+					sessions: previous.sessions.length,
+					tabs,
+					bookmarks: items.length,
+					kept: [part.key],
+				},
+			};
+			const pieces = [...writtenParts(sessionPages), ...writtenParts(chunks)];
+			written.push(...pieces.map((piece) => piece.key));
+			await writeAll(pieces);
+			const problems = await checkIndex(index, false);
+			if (problems.length > 0) {
+				throw new Error(
+					`Upgrade check failed: ${problems[0].key} ${problems[0].problem}.`,
+				);
+			}
+
+			await backend.set({
+				[PREUPGRADE_KEY]: {
+					version: 1,
+					createdAt: startedAt,
+					kept: [part.key],
+					state: entry,
+				},
+			});
+			await backend.set({[STATE_KEY]: storedIndex(index, previous.garbage)});
+		} catch (error) {
+			const after = await getOne(STATE_KEY).then(
+				(value) => ({value}),
+				() => undefined,
+			);
+			if (!after) {
+				throw error;
+			}
+
+			if (
+				isRecordsEntry(after.value) &&
+				Number(after.value.schemaVersion) >= LAYOUT_VERSION
+			) {
+				await backend.remove([MIGRATION_KEY]).catch(() => undefined);
+				return {status: 'upgraded'};
+			}
+
+			await removeKeys(written).catch(() => undefined);
+			await backend.remove([PREUPGRADE_KEY]).catch(() => undefined);
+			await backend
+				.set({
+					[MIGRATION_KEY]: {
+						version: 1,
+						from: previous.schemaVersion,
+						sourceHash: '',
+						startedAt,
+						attempts: 1,
+						written: [],
+						lastError: String((error as Error)?.message ?? error).slice(0, 300),
+					},
+				})
+				.catch(() => undefined);
+			throw error;
+		}
+
+		await backend.remove([MIGRATION_KEY]).catch(() => undefined);
+		return {status: 'upgraded'};
 	}
 
 	return {
@@ -895,6 +1358,8 @@ export function createLibraryState(
 		dropGarbage,
 		verify,
 		migrate,
+		upgrade,
+		readSessionEntries,
 		pruneRecoveryCopy,
 		bytesInUse,
 		beginCheckpoint,

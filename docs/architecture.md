@@ -57,7 +57,7 @@ The manifest version must match `package.json`; build verification checks this. 
 
 These identifiers are part of stored data or external formats. Changing them requires a migration:
 
-* The main storage key, `tablodge.state`, the session and bookmark record keys (`tablodge.session.`, `tablodge.bookmarks.`), and the recovery keys listed below.
+* The main storage key, `tablodge.state`, the session, page and bookmark record keys (`tablodge.session.`, `tablodge.sidx.`, `tablodge.bmchunk.`, `tablodge.bookmarks.`), and the recovery keys listed below.
 * The theme key `uiTheme` and accent key `uiAccent` in extension storage, and their `tablodge.uiTheme` and `tablodge.uiAccent` mirrors in page `localStorage`.
 * Export format identifiers such as `tablodge-sessions`, `tablodge`, `tablodge-backup`, and `tablodge-full-backup`.
 * Drag MIME types `application/x-tablodge-session`, `application/x-tablodge-column`, and `application/x-tablodge-bookmark`.
@@ -87,13 +87,16 @@ Private workers do not run automatic recovery, backups, or browser bookmark moni
 
 `src/shared/library-state.ts` owns how the library is laid out in storage. Its index and commit planning live in `library-index.ts`, the sync shapes in `library-sync.ts`, and hashing in `library-values.ts`. The rest of the worker still sees one logical value under `tablodge.state`, in the shape it always had (`groups`, `folders`, `bookmarkColumns`, `bookmarks`, `settings`, `updatedAt`), through the worker's `library` object. `library.get`, `set`, and `remove` route that key to the module and pass every other key straight through, so `getStore`, `writeStore`, Undo, erase, and backup restore did not change shape. The module takes a plain key and value backend and never touches `chrome.*`, which is how the tests make any storage call fail on purpose. Sync and encryption plug in here.
 
-Before schema 10 the whole library was one value, so saving a single tab rewrote every session. Now a save writes the changed sessions and a small index.
+Before schema 10 the whole library was one value, so saving a single tab rewrote every session. Now a save writes the changed sessions, the page and chunk it touches, and a small root ([ADR 25](adr/0025-paged-library-layout.md)). Layout 10 (the index listing every session and one bookmarks record) still loads and is upgraded at the first worker start; layout 11 is one way, because a build that only knows layout 10 refuses it.
 
 | Key | Contents |
 | --- | --- |
-| `tablodge.state` | The **index** (`layout: 'records'`, `schemaVersion: 10`): `rev` (a commit counter), folders, bookmark columns, settings, `updatedAt`, one entry per session in display order (`id`, `rev`, `hash`, tab count, name, folder, timestamps), the bookmarks reference, `garbage`, and sync reservations (below) |
+| `tablodge.state` | The **root** (`layout: 'records'`, `schemaVersion: 11`): `rev` (a commit counter), folders, bookmark columns, settings, `updatedAt`, the list of session pages and bookmark chunks (key, hash, count), `garbage`, and sync reservations (below). In layout 10 (`schemaVersion: 10`) it held one entry per session and one bookmarks reference instead |
+| `tablodge.sidx.<n>.<rev>` | `{items}`: up to 100 session entries in display order (`id`, `rev`, `hash`, tab count, name, folder, timestamps, sync stamp) |
 | `tablodge.session.<id>.<rev>` | One session with all its tabs. Never edited in place: a changed session is written to a new key |
-| `tablodge.bookmarks.<rev>` | `{items}`, all bookmarks. Rewritten only when they change. Per bookmark records can reuse the same module later |
+| `tablodge.bmchunk.<n>.<rev>` | `{items}`: up to 100 bookmarks by position, with the `$sync` stamps of those bookmarks |
+| `tablodge.bookmarks.<rev>` | Layout 10 only: `{items}`, all bookmarks. Kept for seven days after the upgrade |
+| `tablodge.state.preupgrade` | The layout 10 root, kept for seven days after the upgrade |
 | `tablodge.migration` | Progress marker, present only while a migration is unfinished |
 | `tablodge.state.premigration` | An exact copy of the old single entry, kept for seven days after a verified migration |
 

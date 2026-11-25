@@ -199,8 +199,10 @@ import {
 	type UndoDelta,
 } from '../src/shared/library-state';
 import {
+	BOOKMARK_CHUNK_KEY_PREFIX,
 	BOOKMARKS_KEY_PREFIX,
 	SESSION_KEY_PREFIX,
+	SESSION_PAGE_KEY_PREFIX,
 } from '../src/shared/library-index';
 import {
 	cleanDeviceName,
@@ -1034,6 +1036,24 @@ async function migrateStoreOnce() {
 			}
 
 			await libraryState.migrate((raw) => normalizeStore(raw));
+			invalidateSettings();
+		}
+
+		if (meta.upgradable) {
+			const started = (await rawLibrary.get([MIGRATION_KEY]))[MIGRATION_KEY];
+			if (started === undefined) {
+				const saved = await safetyBackup(
+					await getStore(),
+					'Before upgrading how the library is stored',
+				);
+				if (!saved) {
+					throw new Error(
+						'The safety backup before the upgrade could not be saved.',
+					);
+				}
+			}
+
+			await libraryState.upgrade();
 			invalidateSettings();
 		}
 
@@ -6839,7 +6859,11 @@ async function readSettings(): Promise<Settings> {
 	const generation = settingsGeneration;
 	// The index holds the settings, so no session is read.
 	const meta = await libraryState.readMeta();
-	if (meta.layout === 'records' && meta.schemaVersion === SCHEMA_VERSION) {
+	if (
+		meta.layout === 'records' &&
+		meta.schemaVersion === SCHEMA_VERSION &&
+		!meta.upgradable
+	) {
 		migrationChecked = true;
 	}
 
@@ -8141,6 +8165,8 @@ if (!privateContext) {
 					key === TRASH_KEY ||
 					key === UNDO_KEY ||
 					key.startsWith(SESSION_KEY_PREFIX) ||
+					key.startsWith(SESSION_PAGE_KEY_PREFIX) ||
+					key.startsWith(BOOKMARK_CHUNK_KEY_PREFIX) ||
 					key.startsWith(BOOKMARKS_KEY_PREFIX),
 			)
 		) {
@@ -9010,7 +9036,7 @@ async function withUndo<K extends TabLodgeMessageType>(
 		result = await run();
 	} finally {
 		if (checkpoint) {
-			delta = libraryState.endCheckpoint(checkpoint);
+			delta = await libraryState.endCheckpoint(checkpoint);
 		}
 	}
 
@@ -12296,22 +12322,30 @@ onLibraryChanged((changes, areaName) => {
 		return;
 	}
 
-	const previous = isRecord(change.oldValue) ? change.oldValue : {};
-	// The index lists sessions as `sessions` (with names and folders); the old single entry held them as `groups`.
-	const sessionsOf = (state: Raw) =>
-		state.layout === 'records' ? state.sessions : state.groups;
+	void followMenus(
+		change.newValue,
+		isRecord(change.oldValue) ? change.oldValue : {},
+	).catch(() => undefined);
+});
+
+async function followMenus(next: Raw, previous: Raw) {
+	const sessionsOf = async (state: Raw) =>
+		state.layout === 'records'
+			? libraryState.readSessionEntries(state)
+			: state.groups;
+	const before = await sessionsOf(previous).catch(() => undefined);
 	const nextSettings = normalizeSettings(
-		change.newValue.settings as RawSettings | undefined,
+		next.settings as RawSettings | undefined,
 	);
 	const nextSignature = contextMenuSignature(
 		nextSettings,
-		normalizeBookmarkColumns(change.newValue.bookmarkColumns),
-		menuSessions(sessionsOf(change.newValue), change.newValue.folders),
+		normalizeBookmarkColumns(next.bookmarkColumns),
+		menuSessions(await sessionsOf(next), next.folders),
 	);
 	const previousSignature = contextMenuSignature(
 		normalizeSettings(previous.settings as RawSettings | undefined),
 		normalizeBookmarkColumns(previous.bookmarkColumns),
-		menuSessions(sessionsOf(previous), previous.folders),
+		menuSessions(before, previous.folders),
 	);
 	if (nextSignature !== previousSignature && nextSignature !== menuSignature) {
 		scheduleContextMenuRebuild();
@@ -12323,7 +12357,8 @@ onLibraryChanged((changes, areaName) => {
 	if (previousOrigins.join(' ') !== nextSettings.excludedOrigins.join(' ')) {
 		void syncExcludeMenuItem();
 	}
-});
+}
+
 chrome.tabs?.onActivated?.addListener?.(() => {
 	void syncExcludeMenuItem();
 });
