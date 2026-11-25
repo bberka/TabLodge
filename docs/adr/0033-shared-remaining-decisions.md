@@ -70,7 +70,7 @@ This record covers the last comments in `apps/extension/src/shared/`: source col
 
 ### Small helpers
 
-* **Script scrolling is smooth** unless the user asks for reduced motion (`motion.ts:scrollBehavior`). An explicit `smooth` ignores the CSS `scroll-behavior` rule. Under reduced motion `scrollBehavior()` returns `auto`, and then `scrollIntoView` uses the target's computed CSS `scroll-behavior`, so a `scroll-behavior: smooth` rule on a container still makes that scroll smooth.
+* **Script scrolling is smooth** unless the user asks for reduced motion (`motion.ts:scrollBehavior`). An explicit `smooth` ignores the CSS `scroll-behavior` rule. Under reduced motion `scrollBehavior()` returns `auto`, and then `scrollIntoView` uses the computed CSS `scroll-behavior` of each scrolling container, and for the viewport the root element. The target's own value does not count, so a `smooth` rule on a container still makes that scroll smooth.
 * **Generated files download through one helper** (`download.ts:downloadFile`).
 * **Callbacks keep their identity** and always call the newest functions, so a long list does not re-render (`use-stable.ts:useStableCallbacks`).
 * **Radio arrow keys wrap around,** as in the WAI-ARIA radio group pattern. Home and End jump to the ends (`radio-keys.ts:radioTargetIndex`).
