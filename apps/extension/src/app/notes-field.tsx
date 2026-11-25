@@ -2,10 +2,6 @@ import {useState} from 'react';
 import {Label, Textarea} from '../shared/ui';
 import {cn} from '@/lib/utils';
 
-/**
-The optional note of a bookmark being added or edited. It stays one row tall until it is focused or holds text, so an
-add form does not grow for a field most saves leave empty. The worker cleans and caps what is saved.
-*/
 export function NotesField({
 	id,
 	value,

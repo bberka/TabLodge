@@ -1,14 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference -- the worker project has no DOM types, and these functions run in a page
 /// <reference lib="dom" />
-/*
-Functions the service worker runs in a tab for Keep a copy, through chrome.scripting.executeScript. They are sent as
-source text, so each is a plain function declaration (a method shorthand does not survive that) and uses nothing
-declared outside it.
-*/
 
-/**
-Hands over the copy shell/page-copy-capture.ts left in the tab's isolated world, and forgets it there.
-*/
 export function takeCapturedCopy(name: string): unknown {
 	const scope = globalThis as Record<string, unknown>;
 	const value = scope[name];
@@ -16,10 +8,6 @@ export function takeCapturedCopy(name: string): unknown {
 	return value;
 }
 
-/**
-A short note in the page itself, since a menu click has no page of ours to answer on. It is built from text in a
-closed shadow root, so neither the page's styles nor its scripts reach it.
-*/
 export function showPageNote(message: string, isError: boolean): void {
 	const id = 'tablodge-page-note';
 	document.querySelector(`#${id}`)?.remove();

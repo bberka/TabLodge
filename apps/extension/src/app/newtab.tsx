@@ -270,9 +270,6 @@ type OnBookmarkAction = (
 	action: BookmarkAction,
 	bookmark: Bookmark,
 ) => void | Promise<void>;
-/**
-`columnId` NEW_COLUMN creates a column named `newColumnName` and saves the bookmark into it.
-*/
 type BookmarkDraft = {
 	id?: string | null;
 	title: string;
@@ -280,10 +277,6 @@ type BookmarkDraft = {
 	notes?: string;
 	tags?: string[];
 	hiddenKinds?: Bookmark['hiddenKinds'];
-	/**
-	The person changed the tags. Only then does a save send them, so tags that sync brought in while the editor was
-	open are not overwritten with the ones it opened with.
-	*/
 	tagsTouched?: boolean;
 	columnId: string;
 	newColumnName?: string;
@@ -316,15 +309,9 @@ type FocusColumnItem = {
 	count: number;
 	column: BookmarkColumnData;
 	unfiled?: boolean;
-	/**
-	The All item, which lists every bookmark and is not a column.
-	*/
 	all?: boolean;
 };
 
-/**
-Stable fallbacks so memoized values and effects do not see a new array on every render.
-*/
 const NO_COLUMNS: BookmarkColumnData[] = [];
 const NO_BOOKMARKS: Bookmark[] = [];
 const UNFILED_COLUMN: BookmarkColumnData = {
@@ -333,9 +320,6 @@ const UNFILED_COLUMN: BookmarkColumnData = {
 	createdAt: 0,
 	isDefault: true,
 };
-/**
-The system column of the Focus view that lists every bookmark of every column. It is not stored.
-*/
 const ALL_COLUMN: BookmarkColumnData = {
 	id: ALL_BOOKMARKS_ID,
 	name: 'All',
@@ -344,9 +328,6 @@ const ALL_COLUMN: BookmarkColumnData = {
 };
 const MoveBookmarkIcon = ACTION_ICONS.move;
 const SendPrivateIcon = ACTION_ICONS.sendPrivate;
-/**
-What each quick-action button on a bookmark row does.
-*/
 const QUICK_ACTIONS: Record<
 	BookmarkQuickAction,
 	{label: string; icon: LucideIcon; action: BookmarkAction}
@@ -373,9 +354,6 @@ const QUICK_ACTIONS: Record<
 	'move-up': {label: 'Move up', icon: ArrowUp, action: 'move-up'},
 	'move-down': {label: 'Move down', icon: ArrowDown, action: 'move-down'},
 };
-/**
-Column-picker value for "New column…" in the bookmark dialog.
-*/
 const NEW_COLUMN = '__new-column__';
 type BraveNavigator = Navigator & {brave?: {isBrave: () => Promise<boolean>}};
 
@@ -383,7 +361,6 @@ function NewTab() {
 	const {state, error, reload} = useTabLodgeState(initialStateRequest);
 	const [status, showStatus] = useStatus();
 	const [busy, setBusy] = useState('');
-	// `?q=` (from the "Search … in TabLodge" selection menu) prefills both searches once, then leaves the URL.
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [openedToImport] = useState(() =>
 		Boolean(webUrl(new URLSearchParams(location.search).get('importLink'))),
@@ -398,7 +375,6 @@ function NewTab() {
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
 		useState<DropIndicator | null>(null);
-	// Dragover fires many times a second; an unchanged marker must not re-render the page.
 	const markDrop = useCallback(
 		(next: DropIndicator | null) =>
 			setColumnDropIndicator((old) =>
@@ -415,24 +391,18 @@ function NewTab() {
 		[],
 	);
 	const [bookmarkEdit, setBookmarkEdit] = useState<BookmarkDraft | null>(null);
-	// Several links pasted at once: each row can be left out before they are added to one column.
 	const [pastedLinks, setPastedLinks] = useState<
 		Array<LinkEntry & {include: boolean}>
 	>([]);
 	const [pastedColumn, setPastedColumn] = useState(UNFILED_COLUMN.id);
-	// Several pasted links can also become a new session (the NEW_SESSION choice in the session picker), named by `pastedSessionName`.
 	const [pastedSession, setPastedSession] = useState('');
 	const [pastedSessionName, setPastedSessionName] = useState('');
-	// The name from the session naming settings; it comes back if the field is left empty.
 	const [pastedDefaultName, setPastedDefaultName] = useState('');
-	// Where an added link goes in the Add bookmark and pasted links dialogs. The choice sticks for the page's lifetime.
 	const [saveTarget, setSaveTarget] = useState<SaveTarget>('bookmark');
 	const [saveSessionId, setSaveSessionId] = useState('');
 	const [pastedNewColumn, setPastedNewColumn] = useState<BookmarkColumnDraft>({
 		name: '',
 	});
-	// Deleting a column with bookmarks: move them to another column, or delete them too. Deleting the column a site
-	// saves into on this device also asks whether to stop those saves (`stop`, answered by `stopSource`).
 	const [columnDelete, setColumnDelete] = useState<{
 		column: BookmarkColumnData;
 		count: number;
@@ -440,9 +410,6 @@ function NewTab() {
 		targetColumnId: string;
 		stop?: StoppedSiteSource;
 		stopSource: boolean;
-		/**
-		A site save filled the column while the dialog was open; the dialog says so from inside, where a screen reader hears it.
-		*/
 		grew?: boolean;
 	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
@@ -495,13 +462,10 @@ function NewTab() {
 	const bookmarkPageSize = settings.limitBookmarksPerColumn
 		? (settings.bookmarkColumnPageSize ?? 16)
 		: COLUMN_PAGE;
-	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const bookmarkView = settings.bookmarkBoardView ?? 'focus';
 	const bookmarkSort = settings.bookmarkSort ?? 'manual';
-	// Only the stored order can be rearranged; any other sort is a view of it.
 	const manualOrder = bookmarkSort === 'manual';
-	// In the order shown, so a batch moved under a sort arrives in that order.
 	const sendState = useSendToPrivate();
 	const selectedBookmarkIds = sortBookmarks(
 		bookmarks.filter((bookmark) => selectedBookmarks.has(bookmark.id)),
@@ -514,14 +478,10 @@ function NewTab() {
 		compactBoard ? 'compact' : 'comfortable',
 	);
 	const [focusColumnId, setFocusColumnId] = useState('');
-	// The rail item a drag is over; `position` is set only for a column drag, which reorders.
 	const [railDrop, setRailDrop] = useState<{
 		id: string;
 		position?: InsertPosition;
 	} | null>(null);
-	// The Board view caps a column when the limit setting is on, so scrolling
-	// inside the column loads the next batch instead of growing the page.
-	// Estimated row height and body padding in rem, per density.
 	const [rowRem, bodyPaddingRem] = compactBoard ? [2.1, 0.5] : [2.5, 1];
 	const cappedColumnBodyHeight = settings.limitBookmarksPerColumn
 		? `${Math.min(Math.max(bookmarkPageSize, 1), 16) * rowRem + bodyPaddingRem}rem`
@@ -652,8 +612,6 @@ function NewTab() {
 			);
 		});
 	}, [bookmarks, bookmarkSearch, columns]);
-	// Bookmarks per column, computed once instead of filtering the whole list for every column. A column whose
-	// bookmarks did not change keeps its array, so its memoized card list is not re-rendered.
 	const previousGroupsRef = useRef({
 		all: new Map<string, Bookmark[]>(),
 		shown: new Map<string, Bookmark[]>(),
@@ -694,7 +652,6 @@ function NewTab() {
 		previousGroupsRef.current = {all, shown};
 		return {all, shown};
 	}, [bookmarks, filteredBookmarks, bookmarkSort]);
-	// What the Focus view's All item lists: every column's bookmarks in the columns' order, the Unfiled ones last.
 	const everyBookmark = useMemo(() => {
 		const ids = [...columns.map((column) => column.id), UNFILED_COLUMN.id];
 		const join = (grouped: Map<string, Bookmark[]>) =>
@@ -705,11 +662,8 @@ function NewTab() {
 		};
 	}, [columns, columnBookmarks]);
 
-	// With "Use TabLodge for new tabs" off, a tab the browser opened as a new tab is sent on to the browser's page
-	// (the service worker decides whether this tab was one); any other visit shows the dashboard as usual.
 	const [handoff, setHandoff] = useState<'idle' | 'stay'>('idle');
 	const holding = Boolean(state) && !newTabOn && handoff === 'idle';
-	// Only once the dashboard stays: a tab handed on to the browser's page would drop the toast unseen.
 	useSourcesElsewherePointer(showStatus, Boolean(state) && !holding);
 	useEffect(() => {
 		if (!holding) {
@@ -728,13 +682,11 @@ function NewTab() {
 					setHandoff('stay');
 				}
 			} catch {
-				// If the hand-off fails, show the page instead of leaving it blank.
 				setHandoff('stay');
 			}
 		})();
 	}, [holding]);
 
-	// Drops the one-time `?q=` from the address bar after the first render.
 	useEffect(() => {
 		if (initialQuery) {
 			history.replaceState(null, '', stripSearchParams(location, ['q']));
@@ -780,7 +732,6 @@ function NewTab() {
 				'bookmarkColumn',
 			]),
 		);
-		// BookmarkColumn=new (the "New column…" menu item) preselects a new column; an existing column id selects that column.
 		const requested = params.get('bookmarkColumn');
 		const columnId = newColumnRequested(requested)
 			? NEW_COLUMN
@@ -796,8 +747,6 @@ function NewTab() {
 		setDialog('bookmark');
 	}, [state, externalPromptHandled, columns, defaultColumnId]);
 
-	// Bookmarks are only added by drops on a column or Unfiled. Elsewhere, link drags show the
-	// "no drop" cursor and a stray drop is swallowed so the page does not navigate to the link.
 	useEffect(() => {
 		const guard = (event: globalThis.DragEvent) => {
 			if (!shouldBlockDocumentDrop(event)) {
@@ -812,7 +761,6 @@ function NewTab() {
 
 		document.addEventListener('dragover', guard);
 		document.addEventListener('drop', guard);
-		// One watcher scrolls the page for every drag on it, bookmarks and saved sessions alike.
 		const stopAutoscroll = watchDragAutoscroll();
 		return () => {
 			document.removeEventListener('dragover', guard);
@@ -821,8 +769,6 @@ function NewTab() {
 		};
 	}, []);
 
-	// Pasting a link outside a text field opens Add bookmark prefilled with it. The title comes from the copied
-	// link's text, then from an open tab showing that page, then the domain (no page is ever fetched).
 	const pasteToBookmark = settings.pasteLinkToBookmark !== false;
 	useEffect(() => {
 		if (!pasteToBookmark) {
@@ -986,7 +932,6 @@ function NewTab() {
 		bookmark: Bookmark | null = null,
 		preferredColumn = defaultColumnId || NEW_COLUMN,
 	) {
-		// A bookmark left in the board's Unfiled area has no column to show, so it starts on the preferred one.
 		const own = columns.some((column) => column.id === bookmark?.columnId)
 			? bookmark?.columnId
 			: undefined;
@@ -1036,7 +981,6 @@ function NewTab() {
 			}
 
 			let {columnId} = bookmarkEdit;
-			// "New column…": create the column first, then save the bookmark into it.
 			if (columnId === NEW_COLUMN) {
 				const name = bookmarkEdit.newColumnName?.trim() || '';
 				if (!name) {
@@ -1056,7 +1000,6 @@ function NewTab() {
 				setBookmarkEdit((old) => old && {...old, columnId});
 			}
 
-			// Empty lists clear the tags and removed kinds the bookmark had.
 			const tagged = {
 				tags: bookmarkEdit.tags ?? [],
 				hiddenKinds: bookmarkEdit.hiddenKinds ?? [],
@@ -1127,11 +1070,6 @@ function NewTab() {
 		await reload();
 	}
 
-	/**
-	An empty column is deleted right away. One with bookmarks asks where they go: another column, or deleted with it
-	(the only choice when it is the last column). Either way Undo restores the column and puts them back. A column a
-	site saves into here always asks, since the next save would make it again.
-	*/
 	async function requestDeleteColumn(column: BookmarkColumnData) {
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === column.id,
@@ -1168,9 +1106,6 @@ function NewTab() {
 		setDialog('delete-column');
 	}
 
-	/**
-	`targetColumnId` receives the bookmarks; null deletes them with the column.
-	*/
 	async function deleteColumn(
 		column: BookmarkColumnData,
 		targetColumnId: string | null,
@@ -1220,7 +1155,6 @@ function NewTab() {
 			return;
 		}
 
-		// A save on the site can fill an empty source column while the dialog is open: ask where those bookmarks go.
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === columnDelete.column.id,
 		).length;
@@ -1264,15 +1198,10 @@ function NewTab() {
 		};
 		try {
 			event.currentTarget.setPointerCapture(event.pointerId);
-		} catch {
-			/*
-			Pointer capture is optional.
-			*/
-		}
+		} catch {}
 	}
 
 	useEffect(() => {
-		// Works out the column under the pointer; runs on every move and again after the view scrolls.
 		const retarget = () => {
 			const drag = pointerColumnDragRef.current;
 			if (!drag?.dragging) {
@@ -1363,10 +1292,8 @@ function NewTab() {
 			document.removeEventListener('pointercancel', cancel);
 			autoscroll.stop();
 		};
-		// ShowStatus is recreated every render; the handlers only need the latest reload.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `reload` on purpose
 	}, [reload]);
-	// Waits for the Move dialog to close, then rescues focus if it fell back to the page body.
 	function keepFocusAfterMove() {
 		let attempts = 0;
 		const timer = setInterval(() => {
@@ -1422,7 +1349,6 @@ function NewTab() {
 				showStatus,
 				reload,
 			);
-			// The selection bar (and the dialog opened from it) is gone, so keep focus on the page.
 			keepFocusAfterMove();
 			return true;
 		} finally {
@@ -1464,9 +1390,6 @@ function NewTab() {
 		openBookmarkMove(selectedBookmarkIds);
 	}
 
-	/**
-	Deletes right away; `closeEditor` also closes the edit dialog it was asked from. Undo restores it from the trash.
-	*/
 	async function deleteBookmark(bookmark: Bookmark, closeEditor = false) {
 		const result = await send('DELETE_BOOKMARK', {bookmarkId: bookmark.id});
 		if (!result?.ok) {
@@ -1562,7 +1485,6 @@ function NewTab() {
 		}
 	}
 
-	// Keyboard alternative to dragging: one step earlier or later within the bookmark's column.
 	async function moveBookmarkStep(
 		bookmark: Bookmark,
 		direction: MoveDirection,
@@ -1603,7 +1525,6 @@ function NewTab() {
 		);
 	}
 
-	// Keyboard alternative to dragging a column header: one step left or right.
 	async function moveColumnStep(
 		column: BookmarkColumnData,
 		direction: MoveDirection,
@@ -1640,7 +1561,6 @@ function NewTab() {
 		);
 	}
 
-	// Keyboard alternative to dropping a bookmark on a saved session.
 	async function addBookmarkToSession(
 		bookmark: Bookmark,
 		target: {id: string; name: string},
@@ -1678,7 +1598,6 @@ function NewTab() {
 			}));
 	}
 
-	// The session picker's options, and the destination actually in effect: a session only while one exists to choose.
 	const pasteSessions = sessionTargets();
 	const pasteSessionId = pasteSessions.some(
 		(session) => session.id === saveSessionId,
@@ -1687,7 +1606,6 @@ function NewTab() {
 		: (pasteSessions[0]?.id ?? '');
 	const toSession = pasteSessions.length > 0 && saveTarget === 'session';
 	const bookmarkToSession = toSession && !bookmarkEdit?.id;
-	// The pasted links dialog also lets the session picker create a session, so it can pick one even with none saved.
 	const pastedSessionPick =
 		pastedSession === NEW_SESSION || pasteSessions.length === 0
 			? NEW_SESSION
@@ -1871,7 +1789,6 @@ function NewTab() {
 		return result;
 	}
 
-	// Drag data must be read synchronously, before the first await.
 	async function dropOnColumn(
 		event: DragEvent<HTMLElement>,
 		column: ColumnRef,
@@ -1912,7 +1829,6 @@ function NewTab() {
 			return;
 		}
 
-		// All is a view of every column: nothing is dropped on it.
 		if (column.id === ALL_BOOKMARKS_ID) {
 			return;
 		}
@@ -1920,7 +1836,6 @@ function NewTab() {
 		const targetCard = (event.target as Element).closest<HTMLElement>(
 			'[data-bookmark-id]',
 		);
-		// A sorted column shows no slots, so a drop goes to its end.
 		const targetBookmarkId = manualOrder
 			? targetCard?.dataset.bookmarkId || null
 			: null;
@@ -1941,7 +1856,6 @@ function NewTab() {
 			const ids = draggedBookmarksRef.current.includes(bookmarkId)
 				? draggedBookmarksRef.current
 				: [bookmarkId];
-			// In a sorted column, bookmarks already there keep their stored position.
 			const movable = manualOrder
 				? ids
 				: ids.filter(
@@ -2048,7 +1962,6 @@ function NewTab() {
 			return;
 		}
 
-		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
 		if (bookmarkEntries.length > 10) {
 			offerCloseTabsUndo(
 				`Opened ${bookmarkEntries.length} tabs.`,
@@ -2175,18 +2088,15 @@ function NewTab() {
 		});
 	}
 
-	// The latest handlers, so the finder's command list can stay stable between renders.
 	const settingsRef = useRef(settings);
 	settingsRef.current = settings;
 	const commandHandlersRef = useRef<CommandHandlers>(undefined!);
 	commandHandlersRef.current = {
 		'save-window': () => void saveWindow(),
-		// This page's own tab is no web page. Its other open tabs offer Keep a copy in their actions (→).
 		'keep-copy': undefined,
 		'new-bookmark': () => openBookmarkEditor(),
 		'new-column': () => openColumnEditor(),
 		'new-folder': () => emitFinderEvent({type: 'new-folder'}),
-		// A private window's separate library syncs from its own Settings.
 		'sync-now': inPrivateWindow()
 			? undefined
 			: async () => {
@@ -2206,11 +2116,9 @@ function NewTab() {
 		'backup-bookmarks': openBookmarkBackup,
 		'import-sessions': () => emitFinderEvent({type: 'import-sessions'}),
 		'backup-sessions': () => emitFinderEvent({type: 'backup-sessions'}),
-		// Private windows keep no snapshots.
 		'recent-snapshots': inPrivateWindow()
 			? undefined
 			: () => emitRecoveryEvent({type: 'snapshots'}),
-		// Only a private window has a private library to lock.
 		'lock-private': inPrivateWindow()
 			? async () => {
 					const result = await send('LOCK_PRIVATE');
@@ -2228,7 +2136,6 @@ function NewTab() {
 			const dark = document.documentElement.style.colorScheme === 'dark';
 			void setTheme(dark ? 'light' : 'dark');
 		},
-		// This page is the dashboard.
 		'open-dashboard': undefined,
 	};
 	const finderCommands = useMemo(() => {
@@ -2247,20 +2154,17 @@ function NewTab() {
 		);
 	}, [tabSelection]);
 
-	// `?command=` from the palette window, which runs the commands that need this page here.
 	const requestedCommandRef = useRef(
 		new URLSearchParams(location.search).get('command'),
 	);
 	const hasState = Boolean(state);
 	useEffect(() => {
 		const requestedCommand = requestedCommandRef.current;
-		// While a new tab is being handed to the browser, the dashboard (and the listeners some commands need) is not up.
 		if (!hasState || holding || !requestedCommand) {
 			return;
 		}
 
 		history.replaceState(null, '', stripSearchParams(location, ['command']));
-		// After this render, so the sessions area is listening for the events some commands send.
 		const timer = setTimeout(() => {
 			requestedCommandRef.current = null;
 			void finderCommands
@@ -2270,7 +2174,6 @@ function NewTab() {
 		return () => clearTimeout(timer);
 	}, [hasState, holding, finderCommands]);
 
-	// Ctrl/Cmd+K or Ctrl/Cmd+F, or "/" outside text fields, opens the finder.
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
@@ -2305,7 +2208,6 @@ function NewTab() {
 		return () => document.removeEventListener('keydown', onKeyDown);
 	}, []);
 
-	// The "Open the search palette" browser shortcut pressed on this page toggles the palette here (see service-worker.ts).
 	useEffect(() => {
 		const onMessage = (message: unknown) => {
 			if ((message as {type?: string} | null)?.type === 'toggle-finder') {
@@ -2317,8 +2219,6 @@ function NewTab() {
 		return () => chrome.runtime.onMessage.removeListener(onMessage);
 	}, []);
 
-	// "Focus search when opening a new tab": opens the palette once per page load (not for ?q= links, which prefill
-	// the page search instead). A tab loaded in the background gets its input focused once it becomes visible.
 	useEffect(() => {
 		if (!autoOpenFinder || autoOpenedFinderRef.current) {
 			return;
@@ -2393,7 +2293,6 @@ function NewTab() {
 	);
 	const sessionTargetsForBookmarks = sessionTargets();
 
-	// One stable set of callbacks for every column and bookmark, so memoized ones skip re-rendering.
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
 		share: (column) => shareBookmarks(column),
@@ -2443,7 +2342,6 @@ function NewTab() {
 		},
 	});
 
-	// Keep the extension handoff blank, but show a stable shell while the initial state read is in flight.
 	if (holding) {
 		return <main className="min-h-screen" />;
 	}
@@ -2466,7 +2364,6 @@ function NewTab() {
 		);
 	}
 
-	// The rail lists columns top to bottom from the md breakpoint and left to right below it.
 	const railAxis = () =>
 		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
 	const allMenuActions = (): MenuAction[] => [
@@ -2791,7 +2688,6 @@ function NewTab() {
 										className={cn(
 											'flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm md:whitespace-normal',
 											compactBoard ? 'py-1' : 'py-1.5',
-											// A column with a color is active in that color: its text, wash, and edge; the rest use the accent.
 											active
 												? railColor
 													? cn(
@@ -2865,7 +2761,6 @@ function NewTab() {
 								return (
 									<li
 										key={item.id}
-										// The item, not the button, is the drag handle: Firefox does not drag buttons.
 										draggable={!isSystem}
 										data-drag-column={isSystem ? undefined : item.id}
 										className="relative shrink-0 md:block"
@@ -2901,7 +2796,6 @@ function NewTab() {
 														itemIndex > 0,
 														itemIndex < columns.length - 1,
 														boardActions,
-														// The rail is a vertical list from the md breakpoint, a row of chips below it.
 														globalThis.matchMedia('(min-width: 768px)').matches,
 													)
 												}
@@ -3814,9 +3708,6 @@ function NewTab() {
 	);
 }
 
-/**
-Fills missing titles from open tabs showing the same page, then the domain.
-*/
 async function pastedLinkTitles(links: LinkEntry[]): Promise<LinkEntry[]> {
 	let tabs: chrome.tabs.Tab[] = [];
 	try {
@@ -3852,30 +3743,18 @@ async function pastedLinkTitle(link: LinkEntry): Promise<string> {
 	}
 }
 
-/**
-Handlers the board shares with every column and bookmark. The object never changes identity.
-*/
 type BoardActions = {
 	bookmark: OnBookmarkAction;
 	share: (column: BookmarkColumnData) => void;
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
-	/**
-	Keyboard alternative to dragging: moves a column one place earlier or later.
-	*/
 	moveColumn: (column: BookmarkColumnData, direction: MoveDirection) => void;
 	addToSession: (
 		bookmark: Bookmark,
 		target: {id: string; name: string},
 	) => void;
-	/**
-	Sessions a bookmark can be added to (read when a menu opens, never while rendering).
-	*/
 	sessionTargets: () => Array<{id: string; name: string}>;
-	/**
-	Opens the shared searchable picker for an action whose targets can outgrow a menu.
-	*/
 	pickTarget: (request: TargetPickerRequest) => void;
 	remove: (column: BookmarkColumnData) => void;
 	canSendToPrivate: () => boolean;
@@ -3900,9 +3779,6 @@ function columnMenuActions(
 	canMoveEarlier: boolean,
 	canMoveLater: boolean,
 	actions: BoardActions,
-	/**
-	The columns are in a vertical list, as in the Focus view's rail, so moving one goes up or down, not left or right.
-	*/
 	vertical = false,
 ): MenuAction[] {
 	return [
@@ -3970,13 +3846,7 @@ type BookmarkColumnProps = {
 	column: BookmarkColumnData;
 	selected: Set<string>;
 	selectionMode: BookmarkSelectionMode;
-	/**
-	The bookmarks to show (after the search).
-	*/
 	bookmarks: Bookmark[];
-	/**
-	Every bookmark in the column, in order.
-	*/
 	siblings: Bookmark[];
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickActions: BookmarkQuickAction[];
@@ -3988,33 +3858,12 @@ type BookmarkColumnProps = {
 	pageSize: number;
 	autoLoadMore: boolean;
 	actions: BoardActions;
-	/**
-	Scroll the bookmark list inside the column instead of letting it grow.
-	*/
 	scrollBody?: boolean;
-	/**
-	Maximum height of a scrolling body, used when the Board view caps columns.
-	*/
 	bodyMaxHeight?: string;
-	/**
-	Draw every bookmark, used by capped panes that scroll instead of loading batches.
-	*/
 	renderAll?: boolean;
-	/**
-	The column shows the stored order, so a drop picks a slot between cards and Move up and Move down apply. False while a sort is on.
-	*/
 	manualOrder?: boolean;
-	/**
-	Tighter header, body, and row spacing (the compact bookmark density).
-	*/
 	compact?: boolean;
-	/**
-	Header without the column icon, menu, or drag handle, used by Unfiled and All.
-	*/
 	simpleHeader?: boolean;
-	/**
-	Icon and options menu for a simple header (All has both; Unfiled has neither).
-	*/
 	headerIcon?: LucideIcon;
 	headerMenu?: () => MenuAction[];
 	allowColumnDrag?: boolean;
@@ -4023,9 +3872,6 @@ type BookmarkColumnProps = {
 	emptyMessage?: string;
 };
 
-/**
-Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
-*/
 const COLUMN_PAGE = 60;
 const sortLabel = (sort: BookmarkSort) =>
 	BOOKMARK_SORT_OPTIONS.find(([value]) => value === sort)?.[1] ?? sort;
@@ -4080,7 +3926,6 @@ const BookmarkColumn = memo(
 			}
 		}
 
-		// Built only when a menu opens.
 		const columnActions = () =>
 			columnMenuActions(
 				column,
@@ -4138,7 +3983,6 @@ const BookmarkColumn = memo(
 				onPointerDown={
 					allowColumnDrag
 						? (event) => {
-								// Buttons in the header (its menu) keep their own taps and clicks.
 								if (!(event.target as Element).closest('button')) {
 									actions.pointerDown(event, column.id);
 								}
@@ -4199,8 +4043,7 @@ const BookmarkColumn = memo(
 			<div
 				ref={setBodyElement}
 				role={scrollBody ? 'region' : undefined}
-				// Focusable so keyboard users can scroll this region on its own.
-				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
+				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex -- the scroll region must be focusable so keyboard users can scroll it on its own
 				tabIndex={scrollBody ? 0 : undefined}
 				aria-label={
 					scrollBody ? (ariaLabel ?? `${column.name} bookmarks`) : undefined
@@ -4275,7 +4118,6 @@ const BookmarkColumn = memo(
 				<section
 					ref={sectionRef}
 					data-column-id={column.id}
-					// The color line is on the card itself, so it follows the rounded corners like a session card's.
 					style={colorVars}
 					className={cn(
 						'bookmark-column relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card',
@@ -4339,9 +4181,6 @@ type BookmarkCardProps = {
 	>;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickActions: BookmarkQuickAction[];
-	/**
-	Clicking the card opens its action menu instead of the link.
-	*/
 	clickOpensMenu?: boolean;
 	urlSettings?: UrlSettings;
 	dropBefore?: boolean;
@@ -4442,7 +4281,6 @@ const BookmarkCard = memo(
 			destructive: true,
 			onSelect: act('delete'),
 		};
-		// One list feeds both the ⋯ menu and the right-click menu so they always match.
 		const actions = (): MenuAction[] => [
 			open,
 			openNew,
@@ -4518,7 +4356,6 @@ const BookmarkCard = memo(
 					data-bookmark-url={bookmark.url}
 					data-column-id={bookmark.columnId}
 					className="bookmark-drop-row relative"
-					// The column body has its own right-click menu; a card keeps its own.
 					onContextMenu={(event) => event.stopPropagation()}
 				>
 					{dropBefore && <InsertionLine className="inset-x-1 top-[-3px]" />}
@@ -4642,7 +4479,6 @@ const BookmarkCard = memo(
 								</a>
 							</LinkPreview>
 							{bookmark.notes && (
-								// Outside the card's link, because a passage link cannot sit inside another link.
 								<NoteText
 									notes={bookmark.notes}
 									className={cn(
