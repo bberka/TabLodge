@@ -1,5 +1,3 @@
-// Pure logic for the global finder (command palette): builds a flat index of everything searchable, ranks it
-// with the shared fuzzy scorer, groups the hits by type, and recognizes typed web addresses.
 import {fold, scoreFolded, searchTerms} from './fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 import {siteName} from './web-url';
@@ -26,40 +24,16 @@ export type FinderKind =
 	| 'web';
 
 export type FinderItem = {
-	/**
-	Unique within the index; also the React key.
-	*/
 	id: string;
 	kind: FinderKind;
 	title: string;
-	/**
-	Second line: a host, a session name, a short description.
-	*/
 	detail?: string;
-	/**
-	Web address to open (and to show a favicon for).
-	*/
 	url?: string;
-	/**
-	Texts the query is matched against; the first counts most.
-	*/
 	texts: ReadonlyArray<string | undefined>;
-	/**
-	`texts`, folded for matching (filled in by the index builder, once, instead of on every keystroke).
-	*/
 	folded?: readonly string[];
-	/**
-	What the search operators (site:, in:, col:, …) look at; none, for items that are not in the index.
-	*/
 	facets?: SearchFacets;
-	/**
-	What the item refers to: a session, column, folder, command, settings section or browser-tab id.
-	*/
 	ref?: string;
 	windowId?: number;
-	/**
-	Sessions only: when it was last restored or changed, to list the most recently used first.
-	*/
 	recency?: number;
 };
 
@@ -82,10 +56,6 @@ export type FinderCommand = {
 	keywords?: readonly string[];
 };
 
-/**
-A place in Settings. `target` is where it leads when that differs from `id` (a sub-page opens the section it sits
-in), and `detail` names that section.
-*/
 export type FinderSetting = FinderCommand & {detail?: string; target?: string};
 
 const SECTION_LABELS: Record<FinderKind, string> = {
@@ -101,9 +71,6 @@ const SECTION_LABELS: Record<FinderKind, string> = {
 	web: 'Web search',
 };
 
-/**
-Fixed order of the groups; the group holding the best match goes first, ties follow this order.
-*/
 const KIND_ORDER: FinderKind[] = [
 	'url',
 	'tab',
@@ -128,26 +95,17 @@ const SECTION_LIMIT: Partial<Record<FinderKind, number>> = {
 	setting: 5,
 };
 
-/**
-How many sessions, open tabs and commands the finder lists before anything is typed, in display order.
-*/
 const EMPTY_LIMIT: Array<[FinderKind, number]> = [
 	['session', 8],
 	['tab', 5],
 	['command', 8],
 ];
 
-/**
-Most items per group that the (slow) typo pass looks at, so a huge library cannot stall a keystroke.
-*/
 const TYPO_SCAN_LIMIT = 1500;
 
 const MAX_TEXT = 400;
 const clip = (value: string | undefined) => (value ?? '').slice(0, MAX_TEXT);
 
-/**
-The URL as text to match: the host and path without the scheme, so "https" never matches everything.
-*/
 function matchableUrl(url: string): string {
 	return clip(url.replace(/^[a-z][\d+\-.a-z]*:\/\/(?:www\.)?/i, ''));
 }
@@ -159,18 +117,12 @@ export type FinderSources = {
 	columns: readonly BookmarkColumn[];
 	tabs: readonly OpenTabInfo[];
 	commands: readonly FinderCommand[];
-	/**
-	Settings sections, found by name but not listed before anything is typed.
-	*/
 	settings?: readonly FinderSetting[];
 };
 
 const UNFILED = 'bookmark-unfiled';
 const NO_FACETS: SearchFacets = {places: [], urls: []};
 
-/**
-Everything the finder can find, in a flat list.
-*/
 export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 	const items: FinderItem[] = [];
 	const columnName = new Map(
@@ -266,8 +218,6 @@ const prepared = (item: FinderItem): FinderItem => {
 	return item;
 };
 
-// The bookmark and session items are by far the biggest part of the index and rarely change, so the last
-// build is kept and reused (state reloads keep the arrays of unchanged data) instead of rebuilt on every open.
 let bookmarkCache:
 	| {
 			bookmarks: readonly Bookmark[];
@@ -385,10 +335,6 @@ function cachedSessionItems(
 	return items;
 }
 
-/**
-A typed web address as a full URL, or undefined when the text looks like a normal search. Accepts http(s)
-URLs, "localhost[:port]", IPv4 addresses and domains with a letters-only top-level domain ("github.com/x").
-*/
 export function looksLikeUrl(input: string): string | undefined {
 	const text = input.trim();
 	if (!text || /\s/.test(text) || text.length > 2048) {
@@ -418,14 +364,9 @@ export function looksLikeUrl(input: string): string | undefined {
 		return undefined;
 	}
 
-	// "localhost" and "host:port" without a scheme are local development servers, which rarely have TLS.
 	return !explicit && (isLocalhost || isIpv4) ? `http://${text}` : candidate;
 }
 
-/**
-Ranks the index for a query and groups the hits by type. A typed address adds a "Go to" group first, and a
-non-empty query always ends with a web-search item, so Enter always has something to do.
-*/
 export function searchFinder(
 	query: string,
 	index: readonly FinderItem[],
@@ -460,9 +401,6 @@ export function searchFinder(
 	>();
 	const foldedOf = (item: FinderItem) =>
 		item.folded ?? item.texts.map((text) => fold(text ?? ''));
-	// Pass 1 skips typo matching, the slowest part, over the whole index. A typo match always ranks below every
-	// other kind of match, so pass 2 only looks for them (and only among the items pass 1 rejected, up to a cap
-	// on very large indexes) in groups whose list is not already full.
 	const misses: Array<{item: FinderItem; position: number}> = [];
 	for (const [position, item] of index.entries()) {
 		if (
@@ -472,7 +410,6 @@ export function searchFinder(
 			continue;
 		}
 
-		// A query of operators only lists everything that passes them, in index order.
 		const score =
 			terms.length === 0 ? 1 : scoreFolded(terms, foldedOf(item), false);
 		if (score <= 0) {
@@ -520,7 +457,6 @@ export function searchFinder(
 			return [];
 		}
 
-		// Only the best few are shown, so keep a short sorted list instead of sorting every hit.
 		const limit = SECTION_LIMIT[kind] ?? 6;
 		const top: Hit[] = [];
 		for (const hit of hits) {
@@ -584,8 +520,5 @@ export function searchFinder(
 	return sections;
 }
 
-/**
-The result items of all groups in display order (the order the arrow keys walk).
-*/
 export const flattenSections = (sections: readonly FinderSection[]) =>
 	sections.flatMap((section) => section.items);
