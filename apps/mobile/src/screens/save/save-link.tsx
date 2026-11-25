@@ -402,6 +402,8 @@ export function SaveLinkForm({
 						/>
 					</>
 				)}
+			</ScrollView>
+			<View style={[styles.footer, {borderColor: colors.border}]}>
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
 						{problem}
@@ -412,8 +414,6 @@ export function SaveLinkForm({
 						{notice}
 					</Text>
 				)}
-			</ScrollView>
-			<View style={[styles.footer, {borderColor: colors.border}]}>
 				<Button
 					label="Save"
 					icon="checkmark"
@@ -430,6 +430,7 @@ const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
 	scroll: {flexGrow: 0, flexShrink: 1},
 	footer: {
+		gap: 8,
 		paddingHorizontal: 20,
 		paddingVertical: 12,
 		borderTopWidth: StyleSheet.hairlineWidth,

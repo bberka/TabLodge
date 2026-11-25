@@ -259,7 +259,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
-	const [server, setServer] = useState<{connected: boolean}>();
+	const [server, setServer] = useState<{hasKey: boolean; failed: boolean}>();
 	useEffect(() => {
 		let live = true;
 		void privateServerInfo().then((info) => {
@@ -350,7 +350,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 				and asks for a new one.
 				{server === undefined
 					? ''
-					: server.connected
+					: server.hasKey && !server.failed
 						? ' Your server keeps its copy.'
 						: ' This cannot be undone.'}
 			</Text>
