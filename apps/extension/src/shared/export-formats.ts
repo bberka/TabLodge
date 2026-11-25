@@ -1,6 +1,3 @@
-// Pure builders for every backup/export format (no DOM or chrome.* access), shared by the backup
-// dialog and tested in Vitest. JSON is the full, re-importable backup; the others trade fidelity
-// for portability (HTML), analysis (CSV) or readability (Markdown, plain URLs).
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 import {
 	BACKUP_VERSION,
@@ -11,9 +8,6 @@ import {
 import {escapeHtml} from './escape-html';
 
 export type ExportFormat = 'json' | 'html' | 'csv' | 'markdown' | 'txt';
-/**
-"selected" is a sessions export limited to the tabs picked on the dashboard.
-*/
 export type ExportKind = 'sessions' | 'bookmarks' | 'selected';
 
 export type ExportData = {
@@ -44,15 +38,9 @@ const EXPORT_FORMATS: ReadonlyArray<{
 
 const UNFILED_COLUMN_ID = 'bookmark-unfiled';
 const pad = (value: number) => String(value).padStart(2, '0');
-/**
-Local calendar date as YYYY-MM-DD.
-*/
 export const dateStamp = (date: Date) =>
 	`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
-/**
-For example `tablodge-sessions-2026-10-25.json`: lower-case display name, what was exported, and the date. A session name is included for individual session exports.
-*/
 export function exportFilename(
 	appName: string,
 	kind: ExportKind,
@@ -67,9 +55,6 @@ export function exportFilename(
 	return `${fileNamePrefix(appName)}-${what}${namePart}-${dateStamp(date)}.${extension}`;
 }
 
-/**
-Sessions and tabs, or columns and bookmarks, in an export.
-*/
 export function exportCounts(data: ExportData): {
 	groups: number;
 	items: number;
@@ -88,9 +73,6 @@ export function exportCounts(data: ExportData): {
 	};
 }
 
-/**
-Bookmark columns in board order with their bookmarks; Unfiled (or unknown-column) bookmarks come last under `null`.
-*/
 function bookmarkSections(
 	data: ExportData,
 ): Array<{column: BookmarkColumn | null; bookmarks: Bookmark[]}> {
@@ -115,9 +97,6 @@ function bookmarkSections(
 	return sections;
 }
 
-/**
-Bookmarks as share groups, one per non-empty column in board order, Unfiled last.
-*/
 export function bookmarkShareGroups(
 	data: ExportData,
 ): Array<{name: string; tabs: Bookmark[]}> {
@@ -171,9 +150,7 @@ function toJson(data: ExportData, now: Date): string {
 	);
 }
 
-// Netscape bookmark file, the format every browser imports. Sessions and columns become folders.
 function toHtml(data: ExportData, appName: string): string {
-	// A bookmark's own tags go in TAGS=, as Pinboard, Raindrop, and Firefox write and read them.
 	const link = (
 		url: string,
 		title: string,
@@ -194,7 +171,6 @@ function toHtml(data: ExportData, appName: string): string {
 	const body: string[] = [];
 	if (data.kind === 'bookmarks') {
 		for (const {column, bookmarks} of bookmarkSections(data)) {
-			// A note is the link's <DD> description, which browsers and the importer read back.
 			const items = bookmarks.map(
 				(bookmark) =>
 					link(
@@ -235,8 +211,6 @@ function toHtml(data: ExportData, appName: string): string {
 	].join('\n');
 }
 
-// Spreadsheet-safe cell: quoted when needed, and text that a spreadsheet would run as a formula is
-// prefixed with an apostrophe (the importer strips it again).
 export function csvCell(value: unknown): string {
 	let text = String(value ?? '');
 	if (/^[\t\r+\-=@]/.test(text)) {
@@ -283,7 +257,6 @@ function toCsv(data: ExportData): string {
 		}
 	}
 
-	// A byte-order mark makes spreadsheet apps read the file as UTF-8.
 	return `\uFEFF${rows.map((row) => row.map((cell) => csvCell(cell)).join(',')).join('\r\n')}\r\n`;
 }
 
@@ -292,7 +265,6 @@ const escapeMarkdown = (value: string) =>
 		.replaceAll(/([#*<>[\\\]_`|])/g, String.raw`\$1`)
 		.replaceAll(/\s+/g, ' ')
 		.trim();
-// Web URLs never contain spaces or angle brackets (URL parsing encodes them), so `<url>` is always safe.
 const markdownUrl = (url: string) => (/[\s()]/.test(url) ? `<${url}>` : url);
 const markdownLink = (title: string, url: string) =>
 	`- [${escapeMarkdown(title || url)}](${markdownUrl(url)})`;
@@ -355,9 +327,6 @@ function toText(data: ExportData): string {
 	return urls.length > 0 ? `${urls.join('\n')}\n` : '';
 }
 
-/**
-Builds the file for an export: its text, MIME type, and dated file name.
-*/
 export function buildExport(
 	data: ExportData,
 	format: ExportFormat,

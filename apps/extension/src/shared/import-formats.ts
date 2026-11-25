@@ -1,10 +1,3 @@
-// Pure parsers for every importable file format. No DOM, chrome.* or network access: input is the
-// file's text, output is plain data, so the module runs in pages and in Vitest alike.
-//
-// Every format is reduced to groups of links (a session, a bookmark folder, a OneTab group, a Toby
-// list…). Native backups are also passed through untouched so a JSON restore keeps everything the
-// service worker understands (notes, split pairs, folders, column order).
-//
 import {
 	BACKUP_VERSION,
 	BOOKMARKS_FORMAT_ID,
@@ -23,16 +16,7 @@ import {isSourceColumnId} from './source-columns';
 import {webUrl} from './web-url';
 import type {Bookmark} from './types';
 
-// Safety: only http/https URLs survive, titles are stripped of control characters and capped, the
-// input size is limited, and HTML is tokenized as text (never parsed into a live document).
-
-/**
-Largest file the import accepts, in bytes (also checked against the text length).
-*/
 export const MAX_IMPORT_BYTES = 45 * 1024 * 1024;
-/**
-Links read from one file. A file with more is refused as a whole, so an import never drops part of its links.
-*/
 const MAX_IMPORT_LINKS = 250_000;
 const MAX_TITLE = 500;
 const MAX_GROUP_NAME = 120;
@@ -57,71 +41,35 @@ export type ImportFormatId =
 	| 'mastodon'
 	| 'json-links'
 	| 'shared-page';
-/**
-How well a format's structure is known: checked against the tool's source or real files, or a best-effort reading.
-*/
 export type FormatConfidence = 'verified' | 'best-effort';
 
 export type ImportLink = DeviceStamp & {
 	url: string;
 	title: string;
 	notes?: string;
-	/**
-	A bookmark's tags, normalized as bookmark-tags.ts stores them; a saved tab has none.
-	*/
 	tags?: string[];
-	/**
-	Automatic kinds removed from the bookmark; only a TabLodge export carries them.
-	*/
 	hiddenKinds?: Bookmark['hiddenKinds'];
 	createdAt?: number;
 	pinned?: boolean;
 };
-/**
-A session, bookmark folder or list. An empty `name` means "no group" (the default column, or a generic session name).
-*/
 export type ImportGroup = {
 	name: string;
 	folder?: string;
 	description?: string;
-	/**
-	Older exports kept a second text field; it is merged into `description`.
-	*/
 	notes?: string;
 	createdAt?: number;
-	/**
-	A TabLodge backup's source column id (`source-<site>`), which an import keeps because the id marks the column.
-	*/
 	sourceColumnId?: string;
 	links: ImportLink[];
 };
 
 export type ParsedImport = {
 	format: ImportFormatId;
-	/**
-	Human-readable format name, for example "OneTab export".
-	*/
 	label: string;
 	confidence: FormatConfidence;
-	/**
-	The file's content as sessions (groups of tabs).
-	*/
 	sessions: ImportGroup[];
-	/**
-	The file's content as bookmark folders; `name: ""` holds links without a folder.
-	*/
 	bookmarks: ImportGroup[];
-	/**
-	Rows or entries that were skipped: non-web links, malformed rows, or over the size limit.
-	*/
 	invalid: number;
-	/**
-	Notes about the file, for example that it holds bookmarks but no sessions.
-	*/
 	warnings: string[];
-	/**
-	For native backups: the parsed JSON, sent to the importer as is (keeps everything).
-	*/
 	native?: {data: unknown; sessions: boolean; bookmarks: boolean};
 	kind?: ImportKind;
 };
@@ -140,9 +88,6 @@ const text = (value: unknown) =>
 			? String(value)
 			: '';
 
-/**
-Plain one-line text: control and zero-width characters removed, whitespace collapsed, length capped.
-*/
 export function cleanTitle(value: unknown, max = MAX_TITLE): string {
 	return text(value)
 		.replaceAll(
@@ -154,10 +99,6 @@ export function cleanTitle(value: unknown, max = MAX_TITLE): string {
 		.slice(0, max);
 }
 
-/**
-Tags from another tool: a list of names, or of objects with a `name` or `label` (Linkwarden, wallabag), or one text
-that `separator` splits (commas and bars by default, as in Netscape `TAGS=`, Raindrop, and Pocket files).
-*/
 function tagList(value: unknown, separator = /[,|]/): string[] {
 	if (typeof value === 'string') {
 		return value.split(separator);
@@ -175,9 +116,6 @@ const cleanNotes = (value: unknown) =>
 		.trim()
 		.slice(0, MAX_NOTES);
 
-/**
-Epoch milliseconds from seconds, milliseconds, or a date string; undefined when unusable.
-*/
 export function toTimestamp(value: unknown): number | undefined {
 	if (value == null || value === '') {
 		return undefined;
@@ -201,18 +139,15 @@ export function toTimestamp(value: unknown): number | undefined {
 	}
 
 	ms = Math.round(ms);
-	// Ignore obviously wrong dates (before 1995 or far in the future).
 	return ms > 788_918_400_000 && ms < 4_102_444_800_000 ? ms : undefined;
 }
 
-// Collects links with the shared limits and counts what was skipped.
 class Collector {
 	invalid = 0;
 	total = 0;
 	link(
 		rawUrl: unknown,
 		rawTitle?: unknown,
-		// Tags are read from any tool's shape here, so they come in unchecked.
 		extra: Omit<ImportLink, 'url' | 'title' | 'tags' | 'hiddenKinds'> & {
 			tags?: unknown;
 			hiddenKinds?: unknown;
@@ -259,9 +194,6 @@ class Collector {
 		return link;
 	}
 
-	/**
-	Counts an entry that is not a usable link and returns null in its place.
-	*/
 	skip(): null {
 		this.invalid += 1;
 		return null;
@@ -282,7 +214,6 @@ function group(
 		created.folder = cleanTitle(extra.folder, 60);
 	}
 
-	// Sessions have one description field; an old description plus notes become one text.
 	const description = [extra.description, extra.notes]
 		.map((value) => cleanNotes(value))
 		.filter(Boolean);
@@ -305,10 +236,6 @@ function group(
 	return created;
 }
 
-/**
-Folder hierarchy is flattened to bookmark columns. Equal folder names share a
-column, and links outside a folder join the first named column.
-*/
 function mergeBookmarkFolders(entries: ImportGroup[]): ImportGroup[] {
 	const folders = new Map<string, ImportGroup>();
 	const looseLinks: ImportLink[] = [];
@@ -348,9 +275,6 @@ function mergeBookmarkFolders(entries: ImportGroup[]): ImportGroup[] {
 	return merged;
 }
 
-/**
-Splits groups over the service worker's per-session limit into numbered parts and drops empty ones.
-*/
 function sessionSized(groups: ImportGroup[]): ImportGroup[] {
 	return groups.flatMap((entry) => {
 		if (entry.links.length === 0) {
@@ -400,7 +324,6 @@ function result(
 }
 
 function parseNative(data: unknown, collector: Collector): ParsedImport | null {
-	// Recognized by structure, not by the `format` id, so backups written under any id import.
 	const record = isObject(data) ? data : null;
 	const groups = Array.isArray(data) ? data : asArray(record?.groups);
 	const looksLikeSessions =
@@ -526,8 +449,6 @@ function parseNative(data: unknown, collector: Collector): ParsedImport | null {
 	return out;
 }
 
-// Session Buddy: v4 "nxs.json.v2" (collections → folders → links, epoch ms) and v3 "nxs.json.v1"
-// (sessions → windows → tabs, ISO dates). Aliases of either shape are accepted.
 function parseSessionBuddy(
 	data: unknown,
 	collector: Collector,
@@ -586,9 +507,6 @@ function parseSessionBuddy(
 	);
 }
 
-/**
-Tab Session Manager stores lazily loaded tabs as an extension page that carries the real URL in `url=`.
-*/
 function unwrapTsmUrl(value: unknown): {url: unknown; title?: string} {
 	const raw = text(value);
 	if (
@@ -614,7 +532,6 @@ function unwrapTsmUrl(value: unknown): {url: unknown; title?: string} {
 	}
 }
 
-// Tab Session Manager: an array of sessions; `windows` maps windowId → tabId → tabs.Tab.
 function parseTabSessionManager(
 	data: unknown,
 	collector: Collector,
@@ -679,8 +596,6 @@ function parseTabSessionManager(
 	);
 }
 
-// Toby: `{ version, lists: [{ title, cards: [{ title, url, customTitle, customDescription }] }] }`;
-// newer exports wrap lists in `groups` (spaces). Any object with a `cards` array is read as a list.
 function parseToby(data: unknown, collector: Collector): ParsedImport | null {
 	const lists: Array<{list: Json; space: string}> = [];
 	const visit = (value: unknown, space: string, depth: number) => {
@@ -735,7 +650,6 @@ function parseToby(data: unknown, collector: Collector): ParsedImport | null {
 	return result('toby', 'Toby export', confidence, groups, collector);
 }
 
-// A bare JSON array of links (`[{ url, title }]` or `["https://…"]`).
 function parseJsonLinks(
 	data: unknown,
 	collector: Collector,
@@ -774,12 +688,6 @@ function parseJsonLinks(
 	);
 }
 
-// The readers below follow each tool's published exporter or API docs, not real files, so they are
-// best-effort. A link's own note or description becomes its note; tags are not imported.
-
-/**
-Every entry of a non-empty array is an object that has all the given keys.
-*/
 const arrayOfRecords = (data: unknown, keys: string[]): data is Json[] =>
 	Array.isArray(data) &&
 	data.length > 0 &&
@@ -788,10 +696,6 @@ const arrayOfRecords = (data: unknown, keys: string[]): data is Json[] =>
 			isObject(entry) && keys.every((key) => Object.hasOwn(entry, key)),
 	);
 
-// Linkwarden: Settings › Migrate data › Export writes the user record with its collections and their
-// links (`collections: [{id, name, parentId, createdAt, links: [{name, url, description, createdAt, importDate}]}]`).
-// Source: apps/web/lib/api/controllers/migration/exportData.ts and the Link and Collection models in
-// packages/prisma/schema.prisma at linkwarden/linkwarden@24adcc1.
 function parseLinkwarden(
 	data: unknown,
 	collector: Collector,
@@ -816,7 +720,6 @@ function parseLinkwarden(
 						? collector.link(link.url, link.name, {
 								notes: text(link.description),
 								tags: tagList(link.tags),
-								// `importDate` keeps the date from the tool a link was imported from.
 								createdAt: toTimestamp(link.importDate ?? link.createdAt),
 							})
 						: collector.skip(),
@@ -834,10 +737,6 @@ function parseLinkwarden(
 	);
 }
 
-// Karakeep (formerly Hoarder): Settings › Import / Export › Export writes
-// `{bookmarks: [{createdAt (seconds), title, note, lists: [listId], content: {type: "link", url} | {type: "text"}}],
-// lists: [{id, name, type}]}`. A bookmark joins the column of its first list; text notes are skipped.
-// Source: packages/shared/import-export/exporters.ts at karakeep-app/karakeep@bcc4b90.
 function parseKarakeep(
 	data: unknown,
 	collector: Collector,
@@ -902,9 +801,6 @@ function parseKarakeep(
 	);
 }
 
-// Omnivore: the export ZIP holds `metadata_<from>_to_<to>.json` files, each an array of
-// `{id, slug, title, url, state, labels, savedAt, ...}`. Import one file at a time.
-// Source: packages/api/src/jobs/export.ts at omnivore-app/omnivore@0475038.
 function parseOmnivore(
 	data: unknown,
 	collector: Collector,
@@ -929,9 +825,6 @@ function parseOmnivore(
 	);
 }
 
-// Wallabag: Export › JSON writes an array of entries serialized with the `entries_for_user` group:
-// `{id, title, url, is_archived, is_starred, created_at: "2016-09-08T11:55:58+0200", tags, content, ...}`.
-// Source: src/Entity/Entry.php and src/Helper/EntriesExport.php at wallabag/wallabag@15a90c6.
 function parseWallabag(
 	data: unknown,
 	collector: Collector,
@@ -944,7 +837,6 @@ function parseWallabag(
 		data.map((entry) =>
 			collector.link(entry.url, entry.title, {
 				tags: tagList(entry.tags),
-				// PHP writes the offset without a colon (+0200), which not every JavaScript engine parses.
 				createdAt: toTimestamp(
 					text(entry.created_at).replace(/([+-]\d{2})(?=\d{2}$)/, '$1:'),
 				),
@@ -960,10 +852,6 @@ function parseWallabag(
 	);
 }
 
-// Pinboard: the JSON export lists posts with the fields of the API's posts/all: `href`, `description`
-// (the title), `extended` (the description), and `time` ("2010-12-11T19:48:02Z"). The docs show these
-// fields only in XML, so the JSON shape (an array of post objects) is inferred and needs a real sample.
-// Source: https://pinboard.in/api (posts/all, posts/add, data types) and https://pinboard.in/howto/.
 function parsePinboard(
 	data: unknown,
 	collector: Collector,
@@ -976,7 +864,6 @@ function parsePinboard(
 		data.map((post) =>
 			collector.link(post.href, post.description, {
 				notes: text(post.extended),
-				// Pinboard separates tags with spaces.
 				tags: tagList(post.tags, /\s+/),
 				createdAt: toTimestamp(post.time),
 			}),
@@ -1060,11 +947,6 @@ function attributes(source: string): Record<string, string> {
 	return attrs;
 }
 
-/**
- Reads a Netscape bookmark file (what every browser exports) or any HTML page with links, as text.
- `<H3>` folders nest through `<DL>` lists; `<DD>` after a link is its description. Scripts, styles and
- comments are dropped before tokenizing, and nothing is ever handed to an HTML parser.
- */
 function parseHtml(source: string): ParsedImport {
 	const collector = new Collector();
 	const html = source
@@ -1075,7 +957,6 @@ function parseHtml(source: string): ParsedImport {
 		);
 	const isNetscape = /<!doctype\s+netscape-bookmark-file/i.test(html);
 	const groups = new Map<string, ImportGroup>();
-	// Links that carry Raindrop highlights, which are not imported.
 	const raindropHighlighted = new Set<ImportLink>();
 	const path: string[] = [];
 	let pendingFolder: {name: string; createdAt?: number} | null = null;
@@ -1109,7 +990,6 @@ function parseHtml(source: string): ParsedImport {
 			};
 		} else if (capture.kind === 'a') {
 			const link = collector.link(capture.attrs.href, content, {
-				// Netscape files separate tags with commas only.
 				tags: tagList(capture.attrs.tags ?? '', /,/),
 				createdAt: toTimestamp(capture.attrs.add_date),
 			});
@@ -1147,7 +1027,6 @@ function parseHtml(source: string): ParsedImport {
 		}
 
 		const tag = rawTag.toLowerCase();
-		// Raindrop writes a link's highlights as a quote under it.
 		const quoted = lastLink as ImportLink | null;
 		if (!closing && tag === 'blockquote' && quoted) {
 			raindropHighlighted.add(quoted);
@@ -1193,7 +1072,6 @@ function parseHtml(source: string): ParsedImport {
 
 		if (!closing && tag === 'dl') {
 			finish();
-			// Finish() may have set the pending folder, which control-flow narrowing cannot see.
 			const folder = pendingFolder as {name: string; createdAt?: number} | null;
 			if (folder) {
 				path.push(folder.name);
@@ -1223,13 +1101,11 @@ function parseHtml(source: string): ParsedImport {
 	}
 
 	finish();
-	// Unnamed <DL> wrappers do not become columns; root links stay loose for the first column.
 	const list = mergeBookmarkFolders([...groups.values()]);
 	if (list.every((entry) => entry.links.length === 0) && !collector.invalid) {
 		throw new ImportFormatError('This HTML file has no links.');
 	}
 
-	// Raindrop.io writes its own name as the title of the Netscape file it exports.
 	const raindrop = isNetscape && /<title>\s*raindrop\.io\b/i.test(html);
 	if (raindrop) {
 		const highlighted = list
@@ -1254,9 +1130,6 @@ function parseHtml(source: string): ParsedImport {
 	);
 }
 
-/**
-RFC 4180 rows: quoted fields may contain the delimiter, quotes ("") and line breaks.
-*/
 export function parseCsvRows(source: string, delimiter: string): string[][] {
 	const rows: string[][] = [];
 	let row: string[] = [];
@@ -1349,7 +1222,6 @@ function csvHeader(cells: string[]) {
 	};
 }
 
-// Exports guard spreadsheet formulas with a leading apostrophe; it is removed again here.
 const unguard = (value: string) =>
 	/^'[\t\r+\-=@]/.test(value) ? value.slice(1) : value;
 
@@ -1360,8 +1232,6 @@ function detectDelimiter(firstLine: string) {
 	return counts.toSorted((a, b) => b[1] - a[1])[0];
 }
 
-// Raindrop.io keeps links saved without a collection in "Unsorted". Here they belong in the default column, not in a
-// column of their own that would only repeat it.
 function unsortedToDefault(groups: ImportGroup[]): ImportGroup[] {
 	const unsorted = groups.filter(
 		(entry) =>
@@ -1379,7 +1249,6 @@ function unsortedToDefault(groups: ImportGroup[]): ImportGroup[] {
 	return [loose, ...groups.filter((entry) => !unsorted.includes(entry))];
 }
 
-// The columns of a Raindrop.io CSV export, in its order. A file with all of the ones that no other tool writes is one.
 const RAINDROP_CSV_MARKERS = ['excerpt', 'cover', 'highlights', 'favorite'];
 
 function parseCsv(source: string): ParsedImport | null {
@@ -1397,14 +1266,11 @@ function parseCsv(source: string): ParsedImport | null {
 
 	const names = (rows[0] ?? []).map((cell) => cell.trim().toLowerCase());
 	const raindrop = RAINDROP_CSV_MARKERS.every((name) => names.includes(name));
-	// Raindrop's highlights have no place in a bookmark here, so the preview says how many are left out.
 	const highlights = raindrop ? names.indexOf('highlights') : -1;
 	let highlighted = 0;
 
 	const collector = new Collector();
 	const groups = new Map<string, ImportGroup>();
-	// With both a session/column and a folder column, the folder is the session's folder; otherwise
-	// the folder (or path) column names the group.
 	const groupIndex = header.group >= 0 ? header.group : header.folder;
 	const folderIndex = header.group >= 0 ? header.folder : -1;
 	for (const cells of rows.slice(1)) {
@@ -1470,7 +1336,6 @@ function raindropWarnings(count: number): string[] {
 		: [];
 }
 
-// OneTab "Export URLs": `url | title` per line, groups separated by blank lines, no header.
 const ONETAB_LINE = /^([a-z][+\-.0-9a-z]*:\S+)(?: \| ?(.*))?$/i;
 function parseOneTab(lines: string[]): ParsedImport {
 	const collector = new Collector();
@@ -1511,8 +1376,6 @@ function parseOneTab(lines: string[]): ParsedImport {
 	return result('onetab', 'OneTab export', 'verified', groups, collector);
 }
 
-// A Markdown list of links, grouped by headings (the Markdown export of this extension reads back).
-// `[title](url)` or `[title](<url>)`; the angle-bracket form allows parentheses inside the URL.
 const MARKDOWN_LINK =
 	/^\s*(?:[*+\-]|\d+[).])\s+\[((?:\\.|[^\\\]])*)\]\(\s*(?:<([^\s>]+)>|([^\s)]+))(?:\s+"[^"]*")?\s*\)(.*)$/;
 function parseMarkdown(lines: string[]): ParsedImport {
@@ -1554,7 +1417,6 @@ function parseMarkdown(lines: string[]): ParsedImport {
 	return result('markdown', 'Markdown list', 'verified', groups, collector);
 }
 
-// One link per line. The first http(s) URL on a line is the link, the rest of the line its title, or else the line above it.
 function parseUrlList(lines: string[]): ParsedImport {
 	const collector = new Collector();
 	const links: ImportLink[] = [];
@@ -1614,11 +1476,6 @@ function parseUrlList(lines: string[]): ParsedImport {
 	);
 }
 
-// Mastodon: Preferences › Import and export › Data export › Bookmarks writes bookmarks.csv with one
-// status URI per row and no header. A post on a Mastodon server has the URI
-// https://<server>/users/<name>/statuses/<id>; posts from other servers keep their own URI.
-// Source: app/models/export.rb (to_bookmarks_csv) and app/lib/activitypub/tag_manager.rb (uri_for)
-// at mastodon/mastodon@4e9a766.
 const MASTODON_STATUS =
 	/^https?:\/\/[^\s/]+\/(?:ap\/)?users\/[^\s/]+\/statuses\/\w+$/i;
 function parseMastodonBookmarks(lines: string[]): ParsedImport | null {
@@ -1676,10 +1533,6 @@ function parseSharedPage(html: string): ParsedImport | undefined {
 	);
 }
 
-/**
- Detects the format of an import file and parses it. Throws ImportFormatError with a readable
- message when the file is empty, too large, or not a supported format.
- */
 export function parseImportFile(source: string, filename = ''): ParsedImport {
 	if (source.length > MAX_IMPORT_BYTES) {
 		throw new ImportFormatError('This file is larger than 45 MB.');
@@ -1782,9 +1635,6 @@ function withEmptyCheck(parsed: ParsedImport): ParsedImport {
 	return parsed;
 }
 
-/**
-Reads browser bookmarks (chrome.bookmarks.getTree output) as folders, the same way the service worker imports them.
-*/
 export type BookmarkTreeNode = {
 	id?: string;
 	title?: string;
@@ -1844,25 +1694,10 @@ export function parseBookmarkTree(roots: BookmarkTreeNode[]): ParsedImport {
 }
 
 export type ImportPreview = {
-	/**
-	Sessions, or bookmark folders that become columns.
-	*/
 	groups: number;
-	/**
-	Tabs or bookmarks.
-	*/
 	links: number;
-	/**
-	Links already saved, or repeated within the file.
-	*/
 	duplicates: number;
-	/**
-	Skipped while reading (non-web or malformed).
-	*/
 	invalid: number;
-	/**
-	Pinned tabs the importer leaves out because Settings excludes pinned tabs (never for a TabLodge export).
-	*/
 	pinnedSkipped: number;
 	sample: Array<{title: string; url: string; group: string}>;
 };
@@ -1870,9 +1705,6 @@ export type ImportPreview = {
 export type PreviewOptions = {
 	existingUrls: Iterable<string>;
 	includePinned?: boolean;
-	/**
-	Bookmark imports into a single column count one group.
-	*/
 	singleColumn?: boolean;
 	sampleSize?: number;
 };
@@ -1893,7 +1725,6 @@ export function previewImport(
 	let duplicates = 0;
 	let links = 0;
 	let pinnedSkipped = 0;
-	// A TabLodge export keeps its pinned tabs; the setting only filters other formats.
 	const keepPinned = includePinned || Boolean(parsed.native?.sessions);
 	const sample: ImportPreview['sample'] = [];
 	for (const entry of groups) {
@@ -1932,9 +1763,6 @@ export function previewImport(
 	};
 }
 
-/**
-The message payload for IMPORT_SESSIONS: the native backup when it has sessions, else converted groups.
-*/
 export function sessionImportPayload(
 	parsed: ParsedImport,
 	fallbackName = 'Imported tabs',
@@ -1973,9 +1801,6 @@ export function sessionImportPayload(
 	};
 }
 
-/**
-The message payload for IMPORT_BOOKMARKS_FILE: the native backup when it has bookmarks, else folders as columns.
-*/
 export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 	if (parsed.native?.bookmarks) {
 		return parsed.native.data;
