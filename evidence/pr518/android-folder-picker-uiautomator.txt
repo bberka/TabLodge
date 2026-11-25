@@ -1,0 +1,5 @@
+uiautomator dump of the Edit details sheet with the Folder row (23 folders), after the fix:
+{'text': '', 'content-desc': '\uf329, Newsletters', 'selected': 'true', 'clickable': 'true', 'bounds': '[95,1704][432,1809]'}
+{'text': 'Newsletters', 'content-desc': '', 'selected': 'true', 'clickable': 'false', 'bounds': '[192,1731][392,1782]'}
+{'text': 'Podcasts', 'content-desc': '', 'selected': 'false', 'clickable': 'false', 'bounds': '[549,1731][704,1782]'}
+{'text': 'Gift ideas', 'content-desc': '', 'selected': 'false', 'clickable': 'false', 'bounds': '[862,1731][1020,1782]'}
