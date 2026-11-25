@@ -1,9 +1,5 @@
 import {hexToRgb, rgbToHex, type Rgb} from './accent-colors';
 
-/**
-Hue (0 to 360), saturation and lightness (0 to 1) to a `#rrggbb` color, so a picker can offer sliders and store the
-same text a typed or preset color is stored as.
-*/
 export function hslToHex(hue: number, saturation: number, lightness: number) {
 	const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
 	const section = (((hue % 360) + 360) % 360) / 60;
@@ -22,9 +18,6 @@ export function hslToHex(hue: number, saturation: number, lightness: number) {
 	);
 }
 
-/**
-A `#rrggbb` color as hue (0 to 360), saturation and lightness (0 to 1).
-*/
 export function hexToHsl(hex: string): [number, number, number] {
 	const [r, g, b] = hexToRgb(hex).map((part) => part / 255) as Rgb;
 	const high = Math.max(r, g, b);

@@ -1,6 +1,3 @@
-// The accent colors and the arithmetic on them, with nothing that touches the page, so the Android app can use the
-// same palette and the same shades as the extension. src/shared/accents.ts adds what needs a browser and re-exports
-// all of this.
 export const ACCENTS = [
 	{id: 'red', label: 'Red', hex: '#dc2626'},
 	{id: 'orange', label: 'Orange', hex: '#c2410c'},
@@ -16,7 +13,6 @@ export const ACCENTS = [
 ] as const;
 
 export const DEFAULT_ACCENT = 'default';
-// The stylesheet's color, shown for the default accent.
 export const DEFAULT_ACCENT_HEX = '#6254d7';
 export const SYSTEM_ACCENT = 'system';
 export const ACCENT_MIRROR_KEY = 'tablodge.uiAccent';
@@ -58,7 +54,6 @@ const mix = (from: Rgb, to: Rgb, amount: number): Rgb => [
 	Math.round(from[2] + (to[2] - from[2]) * amount),
 ];
 
-// Moves a color toward black or white until it stands out from the page (accent text and rings).
 export function legibleOn(color: Rgb, page: Rgb): Rgb {
 	const target = luminance(page) > 0.5 ? BLACK : WHITE;
 	let result = color;
@@ -69,7 +64,6 @@ export function legibleOn(color: Rgb, page: Rgb): Rgb {
 	return result;
 }
 
-// Text on a filled accent: white or near-black, whichever reads better.
 export const foregroundOn = (color: Rgb) =>
 	contrast(color, WHITE) >= contrast(color, INK) ? WHITE : INK;
 
@@ -82,10 +76,6 @@ export const hexToRgb = (hex: string): Rgb => [
 export const rgbToHex = ([r, g, b]: Rgb) =>
 	`#${[r, g, b].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 
-/**
-The color of a preset id or a custom `#rrggbb`, or undefined for anything else (the default and the system accent have
-no color of their own here).
-*/
 export function presetColor(accent: string): Rgb | undefined {
 	const preset = ACCENTS.find(({id}) => id === accent);
 	if (preset) {
@@ -95,17 +85,9 @@ export function presetColor(accent: string): Rgb | undefined {
 	return isCustomAccent(accent) ? hexToRgb(accent) : undefined;
 }
 
-/**
-Whether a value can color a bookmark column: a preset id or a custom `#rrggbb`. The default and the system accent are not
-colors of their own, so they do not count; a column without a color is simply neutral.
-*/
 export const isColumnColor = (value: unknown): value is string =>
 	isCustomAccent(value) || ACCENTS.some(({id}) => id === value);
 
-/**
-A column color as the two shades that stand out from the light and the dark page, the same way the accent does, or
-undefined for a value that is not a column color.
-*/
 export function columnColorShades(
 	value: string | undefined,
 ): {light: Rgb; dark: Rgb} | undefined {

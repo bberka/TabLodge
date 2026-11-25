@@ -1,6 +1,3 @@
-// Icon ids a bookmark column or session folder may use. Kept free of imports so the classic
-// service worker can inline the same list (a test keeps both in sync); the components live in
-// icon-registry.ts.
 export const ICON_IDS = [
 	'bookmark',
 	'folder',

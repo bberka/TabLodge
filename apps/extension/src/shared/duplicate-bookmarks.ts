@@ -7,23 +7,11 @@ export type DuplicateCopy = Pick<
 >;
 
 export type DuplicateGroup = {
-	/**
-	The canonical address saved more than once.
-	*/
 	url: string;
-	/**
-	Every copy, in board order.
-	*/
 	copies: DuplicateCopy[];
-	/**
-	The copy kept by default: the oldest, or the first on the board when they tie.
-	*/
 	keepId: string;
 };
 
-/**
-Addresses saved more than once on the bookmark board. Copies match when their canonical web address is exactly equal, the rule saving uses, whatever column they are in. One pass over the board.
-*/
 export function findDuplicateBookmarks(
 	bookmarks: readonly Bookmark[],
 ): DuplicateGroup[] {
@@ -63,9 +51,6 @@ export function findDuplicateBookmarks(
 	return groups;
 }
 
-/**
-The copies to remove: every one except the kept copy of each group. `keep` maps an address to the copy the person chose instead of the default.
-*/
 export function removalIds(
 	groups: readonly DuplicateGroup[],
 	keep: ReadonlyMap<string, string>,
