@@ -4,8 +4,6 @@ import {Check, ChevronRight, Circle} from 'lucide-react';
 import {ScrollArea} from './scroll-area';
 import {cn} from '@/lib/utils';
 
-// Menus size to their items but never past the space Radix reports as available; the
-// ScrollArea flex-shrinks inside that limit (or a caller's own max-h) and scrolls the rest.
 const menuScrollClass = 'flex min-h-0 flex-col';
 
 const DropdownMenu = DropdownMenuPrimitive.Root;

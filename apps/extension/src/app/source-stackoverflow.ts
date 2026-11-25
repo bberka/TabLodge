@@ -1,7 +1,3 @@
-// Stack Overflow bookmarks: notices the user clicking the bookmark (Save) button beside a question. The button is
-// `.js-saves-btn` (`.js-bookmark-btn` on older pages) with the post's id and type, and `aria-pressed="true"` once
-// the post is saved. A save on an answer (post type 2) is not a question and saves nothing. The question's address
-// and title come from the link in the page's heading, which carries the same id.
 import {stackOverflowQuestionUrl} from './site-sources';
 import {eventElements, squash, type SourceReader} from './source-reader';
 

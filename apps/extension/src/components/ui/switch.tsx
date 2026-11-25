@@ -2,8 +2,6 @@ import * as React from 'react';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import {cn} from '@/lib/utils';
 
-// `readOnly` keeps the switch focusable and announced (aria-readonly) but blocks toggling;
-// it shares the faded look of `disabled`.
 const Switch = React.forwardRef<
 	React.ComponentRef<typeof SwitchPrimitives.Root>,
 	React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & {

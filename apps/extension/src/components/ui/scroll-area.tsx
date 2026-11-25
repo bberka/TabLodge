@@ -2,21 +2,14 @@ import * as React from 'react';
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 import {cn} from '@/lib/utils';
 
-// Radix wraps viewport children in a `display: table` div, which lets long text push the
-// content wider than the viewport and breaks `truncate`. Vertical-only areas keep it a block.
 type ScrollAreaProps = React.ComponentPropsWithoutRef<
 	typeof ScrollAreaPrimitive.Root
 > & {
 	viewportClassName?: string;
 	viewportRef?: React.Ref<HTMLDivElement>;
-	/**
-	Adds a horizontal scrollbar and lets content extend wider than the viewport.
-	*/
 	horizontal?: boolean;
 };
 
-// The scrollbar overlays the viewport. Once it mounts (type auto or always), the viewport gains
-// right padding for it, so row content such as a selected checkmark never sits under the thumb.
 const reserveScrollbar = '[&:has(~[data-orientation=vertical])]:pr-3';
 
 const ScrollArea = React.forwardRef<

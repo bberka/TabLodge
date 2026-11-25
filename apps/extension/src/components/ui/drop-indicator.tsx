@@ -1,17 +1,9 @@
 import {cn} from '@/lib/utils';
 
-/**
-The one insertion marker for every drag and drop: a straight 2px primary line with square ends and a small
-dot at its start. The caller positions it in the gap between two items (absolute, offset by half the gap and
-the line width) inside a `relative` container; it never takes up space or catches the pointer.
-*/
 export function DropIndicator({
 	orientation = 'horizontal',
 	className,
 }: {
-	/**
-	Horizontal lines sit between rows; vertical lines sit between columns or grid cards.
-	*/
 	orientation?: 'horizontal' | 'vertical';
 	className?: string;
 }) {

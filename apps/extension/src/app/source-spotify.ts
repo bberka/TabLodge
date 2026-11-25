@@ -1,8 +1,3 @@
-// Your Library on Spotify: notices the user clicking the save button (`data-testid="add-button"`) on a song, album,
-// playlist, show, or episode. It reads `aria-checked="true"` once the item is saved, and a click then removes it or
-// opens a playlist picker, which saves nothing; the attribute is the same in every interface language. The item is
-// the song link of the track list row the button is in, the song in the now playing bar, the one item a small card
-// around the button links to (an episode listed on a show's page), or else the page itself.
 import {spotifyItemUrl} from './site-sources';
 import {
 	eventElements,
@@ -20,14 +15,7 @@ const PAGE_TITLE = 'main h1, h1';
 const CARD_DEPTH = 6;
 const CARD_KIND = /\/(?:track|episode)\//;
 
-/**
-The song or episode a card around the button names: the closest ancestor linking to exactly one. An ancestor
-linking to several is a list or the page itself, so the search stops there. Other links near a page's own button,
-such as its artist, are not items a card is about, and neither is anything in a container that also holds the
-page's heading: that is the page's own header, even on an album of one song.
-*/
 function cardItem(button: Element, page: string | null) {
-	// The card's item once found; its title may sit further out than its artwork link, so the search goes on for it.
 	let found: {url: string; title: string} | undefined;
 	let container = button.parentElement;
 	for (let depth = 0; container && depth < CARD_DEPTH; depth++) {
@@ -70,7 +58,6 @@ export function createSpotifyReader(document: Document): SourceReader {
 			return undefined;
 		}
 
-		// In a row or the now playing bar, the song is named there; the page may be another album or playlist.
 		const container = button.closest(`${ROW}, ${NOW_PLAYING}`);
 		if (container) {
 			const link = container.querySelector(ROW_LINK);

@@ -29,8 +29,6 @@ const SelectTrigger = React.forwardRef<
 ));
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
-// The Select viewport doubles as the ScrollArea viewport (the composition Radix documents), so
-// long lists get the thin themed scrollbar and stay within the space left in the window.
 const SelectContent = React.forwardRef<
 	React.ComponentRef<typeof SelectPrimitive.Content>,
 	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>

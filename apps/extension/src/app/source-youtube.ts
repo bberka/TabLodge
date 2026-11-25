@@ -1,10 +1,3 @@
-// YouTube Watch later: notices the user adding a video to Watch later, by any of the site's four controls:
-//   - the Watch later button on a thumbnail (its label turns to "Added" once the video is in the list)
-//   - the Watch later clock in the player that plays over a hovered thumbnail, which sits outside the card
-//   - "Save to Watch later" in a video's menu, which YouTube opens in a popup outside the video
-//   - the Watch later checkbox in the "Save video to..." dialog, which also opens outside the video
-// The controls are found by their English labels, so another interface language finds none and saves nothing.
-// The Watch later playlist (/playlist?list=WL), which only its owner can open, is read for catch-up (#383).
 import type {SavedPageReader} from './source-catch-up';
 import {youtubeVideoUrl} from './site-sources';
 import {
@@ -27,10 +20,7 @@ const VIDEO_ITEMS = [
 	'ytd-reel-item-renderer',
 	'ytm-shorts-lockup-view-model',
 ].join(',');
-// The player that plays over a thumbnail while the pointer rests on it. YouTube draws it outside the card, so its
-// Watch later clock is in no card; the card is found by the video address (see previewedCard).
 const HOVER_PREVIEW = 'ytd-video-preview';
-// The area under the player: its menu and Save button act on the video being watched.
 const WATCH_AREA = 'ytd-watch-metadata, #above-the-fold';
 const CONTROL = 'button, [role="button"], [role="menuitem"], [role="checkbox"]';
 const OPTION = [
@@ -40,8 +30,6 @@ const OPTION = [
 	'[role="checkbox"]',
 ].join(',');
 
-// A row of the Save dialog: its aria-label is on an inner button ("Watch later, Private, Not selected") and its
-// text adds the privacy line to the name, so the name is read from its title.
 const OPTION_NAME = '#label, [id="label"], .ytListItemViewModelTitle';
 
 const isWatchLater = (label: string) => /^watch later$/i.test(label);
@@ -69,7 +57,6 @@ function itemLink(item: Element): SourceLink | undefined {
 	return undefined;
 }
 
-// YouTube keeps the pages it navigated away from, hidden; only the shown playlist page is read.
 const WATCH_LATER_ROW =
 	'ytd-browse[page-subtype="playlist"]:not([hidden]) ytd-playlist-video-renderer';
 
@@ -103,10 +90,6 @@ function watchedVideo(document: Document): SourceLink | undefined {
 	};
 }
 
-/**
-The card a hover preview plays over, found by the video it shows: the preview has no title of its own (its link
-announces the length too), and sits outside the card.
-*/
 function previewedCard(
 	document: Document,
 	preview: Element,
@@ -128,9 +111,6 @@ function previewedCard(
 	return undefined;
 }
 
-/**
-Whether a Watch later option in the Save dialog is being ticked: undefined when its state cannot be read.
-*/
 function optionTicks(option: Element): boolean | undefined {
 	const box = option.matches('[role="checkbox"]')
 		? option
@@ -148,7 +128,6 @@ export function createYoutubeReader(
 	document: Document,
 	now = () => Date.now(),
 ): SourceReader {
-	// The video a menu or dialog opened from, set by the click that opened it.
 	const lastItem = rememberLast<SourceLink | undefined>(now);
 	return (event) => {
 		const path = eventElements(event);

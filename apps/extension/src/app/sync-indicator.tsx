@@ -4,10 +4,6 @@ import {SYNC_STATUS_KEY, type SyncStatus} from '../shared/sync/client';
 import {isRecord} from '../shared/library-values';
 import {Button, IconTooltip} from '../shared/ui';
 
-/**
-The value under `key` in extension storage, kept current as it changes in any page or the worker. Undefined until it
-has been read, so a caller can wait instead of showing something the stored value would hide.
-*/
 export function useLocalValue(key: string): {value: unknown} | undefined {
 	const [value, setValue] = useState<{value: unknown}>();
 	useEffect(() => {
@@ -31,9 +27,6 @@ export function useLocalValue(key: string): {value: unknown} | undefined {
 	return value;
 }
 
-/**
-The sync status the worker last wrote, kept current as it changes. Undefined while sync is off.
-*/
 export function useSyncStatus(): SyncStatus | undefined {
 	const value = useLocalValue(SYNC_STATUS_KEY)?.value;
 	return isRecord(value) && value.connected === true
@@ -43,9 +36,6 @@ export function useSyncStatus(): SyncStatus | undefined {
 
 export const SYNC_SETTINGS_PAGE = 'options.html#settings-sync';
 
-/**
-What the button says besides the state, so a screen reader and the tooltip both name where it goes.
-*/
 const SYNC_ACTION = 'Open Sync settings';
 
 function describe(status: SyncStatus) {
@@ -77,12 +67,8 @@ function describe(status: SyncStatus) {
 	}
 }
 
-// A sync that finishes faster than this would flash by unseen, so the button keeps showing it this long.
 const MIN_SYNCING_MS = 900;
 
-/**
-Whether to show the syncing look: while a sync runs, and for a moment after a quick one ends.
-*/
 function useSyncingLook(syncing: boolean): boolean {
 	const [shown, setShown] = useState(syncing);
 	useEffect(() => {
@@ -101,10 +87,6 @@ function useSyncingLook(syncing: boolean): boolean {
 	return syncing || shown;
 }
 
-/**
-A header button that shows how sync is doing and opens its settings. Hidden while sync is off. While syncing it spins and
-turns the accent color with a soft glow behind it.
-*/
 export function SyncIndicator() {
 	const status = useSyncStatus();
 	const syncing = useSyncingLook(status?.phase === 'syncing');
@@ -117,7 +99,6 @@ export function SyncIndicator() {
 		Icon,
 		spin,
 	} = describe(syncing ? {...status, phase: 'syncing'} : status);
-	// An error message brings its own full stop.
 	const label = `${state.replace(/\.$/, '')}. ${SYNC_ACTION}`;
 	const tone =
 		status.phase === 'error' && !syncing

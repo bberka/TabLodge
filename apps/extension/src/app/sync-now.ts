@@ -1,8 +1,5 @@
 import type {ActionResult} from '../shared/types';
 
-/**
-What Sync now tells the user: the worker answers ok even when no server is set up or the round failed.
-*/
 export function syncNowOutcome(result: ActionResult<'SYNC_NOW'>): {
 	message: string;
 	failed: boolean;

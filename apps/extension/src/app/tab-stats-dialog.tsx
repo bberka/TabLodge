@@ -1,5 +1,3 @@
-// The read-only Statistics dialog in Settings: saved sessions and tabs, how many tabs are open, which of them
-// were used longest ago, and a rough memory guess. It only reads data; nothing is changed or sent anywhere.
 import {useEffect, useState} from 'react';
 import {Check} from 'lucide-react';
 import {
