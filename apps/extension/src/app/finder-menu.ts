@@ -16,24 +16,11 @@ export type ItemActionId =
 export type ItemAction = {id: ItemActionId; label: string};
 
 export type ItemActionContext = {
-	/**
-	The palette window, which has no dashboard to reveal a session on.
-	*/
 	standalone: boolean;
-	/**
-	Addresses with a page copy on this device. Empty in a private window.
-	*/
 	copies?: ReadonlySet<string>;
-	/**
-	Whether this browser can open a private window (not Firefox).
-	*/
 	privateWindow?: boolean;
 };
 
-/**
-The second level of the palette: what can be done with a result besides its default action. Results with one
-obvious action return nothing.
-*/
 export function itemActions(
 	item: FinderItem,
 	{standalone, copies, privateWindow}: ItemActionContext,
@@ -93,10 +80,6 @@ export function filterItemActions(
 		: [...actions];
 }
 
-/**
-Whether a key in the actions filter goes back to the results. ← only does so with the caret at the start and nothing
-selected, so it still moves the caret through typed text; Backspace only on an empty filter.
-*/
 export function leavesActionMenu(
 	event: Pick<
 		KeyboardEvent,

@@ -25,20 +25,10 @@ import {cn} from '@/lib/utils';
 type IconPickerDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	/**
-	The stored icon id; anything unknown shows no selection.
-	*/
 	value?: string;
-	/**
-	Called with an icon id, or undefined for "Reset to default".
-	*/
 	onSelect: (id: string | undefined) => void;
 };
 
-/**
-Searchable icon grid. Arrow keys move through the grid (ArrowDown from the search box enters it),
-Enter picks the focused icon, or the first match while typing.
-*/
 function IconPickerDialog({
 	open,
 	onOpenChange,
@@ -77,7 +67,6 @@ function IconPickerDialog({
 			return;
 		}
 
-		// Columns in the current layout: buttons that share the first row's offset.
 		const columns = all.filter(
 			(button) => button.offsetTop === all[0].offsetTop,
 		).length;
@@ -138,7 +127,6 @@ function IconPickerDialog({
 								event.preventDefault();
 								focusFirst();
 							} else if (event.key === 'Enter') {
-								// Never submit an enclosing form; pick the best match instead.
 								event.preventDefault();
 								if (icons[0]) {
 									choose(icons[0].id);
@@ -226,13 +214,7 @@ function IconPickerDialog({
 
 type IconNameFieldProps = {
 	id: string;
-	/**
-	Visible label above the row, for example "Name".
-	*/
 	label: string;
-	/**
-	Accessible name of the text input, for example "Column name".
-	*/
 	nameLabel: string;
 	icon?: string;
 	defaultIcon: IconId;
@@ -240,9 +222,6 @@ type IconNameFieldProps = {
 	inputProps: Omit<React.ComponentPropsWithoutRef<typeof Input>, 'id'>;
 };
 
-/**
-One form row: the icon button (opens the picker) on the left, the name input filling the rest, both 36px tall.
-*/
 export function IconNameField({
 	id,
 	label,

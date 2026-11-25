@@ -1,5 +1,3 @@
-// The Find duplicate bookmarks dialog: lists addresses saved more than once on the bookmark board, lets the
-// person pick the copy to keep in each, and removes the rest. Removed copies go to the trash and one Undo restores them.
 import {useMemo, useState} from 'react';
 import {Trash2} from 'lucide-react';
 import {
@@ -25,9 +23,6 @@ import {
 import {plural, send, type ShowStatus} from './common';
 
 const GROUPS_PER_BATCH = 25;
-/**
-The most copies one removal can trash (the trash bin's item limit).
-*/
 const REMOVE_AT_ONCE = 500;
 
 export function DuplicateBookmarksDialog({

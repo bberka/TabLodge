@@ -53,7 +53,6 @@ export const send = async <K extends TabLodgeMessageType>(
 
 		return result;
 	} catch {
-		// The worker is gone (the extension was reloaded or updated while this page stayed open).
 		return {
 			ok: false,
 			error: `${PROJECT.name} was updated. Reload this page.`,
