@@ -559,7 +559,11 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 				</ScrollView>
 			</GlassTarget>
 			{!search.open && (
-				<FloatingActions bottom={space} onSearch={search.show} />
+				<FloatingActions
+					bottom={space}
+					searchLabel="Search settings"
+					onSearch={search.show}
+				/>
 			)}
 			{search.open && (
 				<SearchDock

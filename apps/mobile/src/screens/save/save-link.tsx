@@ -412,6 +412,8 @@ export function SaveLinkForm({
 						{notice}
 					</Text>
 				)}
+			</ScrollView>
+			<View style={[styles.footer, {borderColor: colors.border}]}>
 				<Button
 					label="Save"
 					icon="checkmark"
@@ -419,14 +421,19 @@ export function SaveLinkForm({
 					loading={saving}
 					onPress={() => void save()}
 				/>
-			</ScrollView>
+			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
-	scroll: {flexGrow: 0},
+	scroll: {flexGrow: 0, flexShrink: 1},
+	footer: {
+		paddingHorizontal: 20,
+		paddingVertical: 12,
+		borderTopWidth: StyleSheet.hairlineWidth,
+	},
 	sessionChoice: {gap: 8},
 	preview: {flexDirection: 'row', alignItems: 'center', gap: 12},
 	previewText: {flex: 1, gap: 2},

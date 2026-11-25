@@ -11,7 +11,7 @@ import {confirm, notify} from '../ui/dialog';
 import {setPreferences} from '../settings/preferences';
 import {showSnack} from '../ui/snackbar';
 import {useColors} from '../ui/theme';
-import {Button, Field} from '../ui/widgets';
+import {Button, Field, IconButton} from '../ui/widgets';
 import {setView} from '../library/view';
 import {
 	changePrivateLock,
@@ -259,6 +259,18 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
+	const [server, setServer] = useState<{connected: boolean}>();
+	useEffect(() => {
+		let live = true;
+		void privateServerInfo().then((info) => {
+			if (live) {
+				setServer(info);
+			}
+		});
+		return () => {
+			live = false;
+		};
+	}, []);
 	const dismissedRef = useRef(false);
 	useEffect(() => {
 		dismissedRef.current = false;
@@ -297,7 +309,12 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 
 	return (
 		<View style={styles.body}>
-			<Title>Unlock the private library</Title>
+			<View style={styles.headRow}>
+				<View style={styles.headText}>
+					<Title>Unlock the private library</Title>
+				</View>
+				<IconButton icon="close" label="Close" onPress={onDone} />
+			</View>
 			<Field
 				secureTextEntry
 				autoFocus
@@ -330,7 +347,12 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 			/>
 			<Text style={{color: colors.muted}}>
 				Erasing deletes the private library from this phone, with its password,
-				and asks for a new one. Your server keeps its copy.
+				and asks for a new one.
+				{server === undefined
+					? ''
+					: server.connected
+						? ' Your server keeps its copy.'
+						: ' This cannot be undone.'}
 			</Text>
 		</View>
 	);
@@ -569,4 +591,6 @@ function ServerForm({
 const styles = StyleSheet.create({
 	body: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	title: {fontSize: 20, fontWeight: '700'},
+	headRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+	headText: {flex: 1},
 });

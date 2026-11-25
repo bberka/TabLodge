@@ -269,88 +269,109 @@ function SessionCardView({
 										left={swipeLink(prefs.linkSwipeRight, tab.id)}
 										right={swipeLink(prefs.linkSwipeLeft, tab.id)}
 									>
-										<Pressable
-											accessibilityRole="link"
-											accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}${tab.notes.trim() ? `, note: ${spokenNote(tab.notes.trim())}` : ''}`}
-											accessibilityHint="Opens the link"
-											style={({pressed}) => [
-												styles.tab,
-												isCompact && styles.tabCompact,
-												{
-													backgroundColor: pressed
-														? colors.pressed
-														: 'transparent',
-												},
-											]}
-											accessibilityActions={[
-												...(onTabMenu
-													? [{name: 'menu', label: 'Link menu'}]
-													: []),
-												...(passage
-													? [{name: 'passage', label: passage.name}]
-													: []),
-											]}
-											onAccessibilityAction={(event) => {
-												if (event.nativeEvent.actionName === 'passage') {
-													if (passage) {
-														openLink(linkToOpen(passage.url, links));
+										<View style={styles.tabRow}>
+											<Pressable
+												accessibilityRole="link"
+												accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}${tab.notes.trim() ? `, note: ${spokenNote(tab.notes.trim())}` : ''}`}
+												accessibilityHint="Opens the link"
+												style={({pressed}) => [
+													styles.tab,
+													isCompact && styles.tabCompact,
+													{
+														backgroundColor: pressed
+															? colors.pressed
+															: 'transparent',
+													},
+												]}
+												accessibilityActions={[
+													...(onTabMenu
+														? [{name: 'menu', label: 'Link menu'}]
+														: []),
+													...(passage
+														? [{name: 'passage', label: passage.name}]
+														: []),
+												]}
+												onAccessibilityAction={(event) => {
+													if (event.nativeEvent.actionName === 'passage') {
+														if (passage) {
+															openLink(linkToOpen(passage.url, links));
+														}
+
+														return;
 													}
 
-													return;
+													onTabMenu?.(session, tab.id);
+												}}
+												onLongPress={
+													onTabMenu
+														? () => {
+																onTabMenu(session, tab.id);
+															}
+														: undefined
 												}
-
-												onTabMenu?.(session, tab.id);
-											}}
-											onLongPress={
-												onTabMenu
-													? () => {
-															onTabMenu(session, tab.id);
-														}
-													: undefined
-											}
-											onPress={() => {
-												openLink(linkToOpen(tab.url, links));
-											}}
-										>
-											<SiteIcon
-												host={hostOf(tab.url)}
-												size={isCompact ? 24 : 32}
-											/>
-											<View style={styles.texts}>
-												<Text
-													numberOfLines={isCompact ? 1 : 2}
-													style={{color: colors.text}}
-												>
-													{text.main}
-												</Text>
-												{text.sub !== undefined && !isCompact && (
+												onPress={() => {
+													openLink(linkToOpen(tab.url, links));
+												}}
+											>
+												<SiteIcon
+													host={hostOf(tab.url)}
+													size={isCompact ? 24 : 32}
+												/>
+												<View style={styles.texts}>
 													<Text
-														numberOfLines={1}
-														style={{color: colors.muted, fontSize: 13}}
-													>
-														{text.sub}
-													</Text>
-												)}
-												{tab.notes.trim() !== '' && (
-													<NoteText
-														notes={tab.notes.trim()}
 														numberOfLines={isCompact ? 1 : 2}
-														style={{color: colors.muted, fontSize: 13}}
-														onOpen={(url) => {
-															openLink(linkToOpen(url, links));
-														}}
-													/>
+														style={{color: colors.text}}
+													>
+														{text.main}
+													</Text>
+													{text.sub !== undefined && !isCompact && (
+														<Text
+															numberOfLines={1}
+															style={{color: colors.muted, fontSize: 13}}
+														>
+															{text.sub}
+														</Text>
+													)}
+													{tab.notes.trim() !== '' && (
+														<NoteText
+															notes={tab.notes.trim()}
+															numberOfLines={isCompact ? 1 : 2}
+															style={{color: colors.muted, fontSize: 13}}
+															onOpen={(url) => {
+																openLink(linkToOpen(url, links));
+															}}
+														/>
+													)}
+												</View>
+												{tab.pinned && (
+													<Icon name="pin" size={15} color={colors.muted} />
 												)}
-											</View>
-											{tab.pinned && (
-												<Icon name="pin" size={15} color={colors.muted} />
+												<Icon
+													name="open-outline"
+													size={18}
+													color={colors.muted}
+												/>
+											</Pressable>
+											{onTabMenu && (
+												<Pressable
+													accessibilityRole="button"
+													accessibilityLabel={`More actions for ${text.main}`}
+													style={({pressed}) => [
+														styles.round,
+														styles.roundEnd,
+														pressed && {backgroundColor: colors.pressed},
+													]}
+													onPress={() => {
+														onTabMenu(session, tab.id);
+													}}
+												>
+													<Icon
+														name="ellipsis-horizontal"
+														color={colors.muted}
+													/>
+												</Pressable>
 											)}
-											<Icon
-												name="open-outline"
-												size={18}
-												color={colors.muted}
-											/>
-										</Pressable>
+										</View>
 									</SwipeRow>
 								);
 							})}
@@ -437,7 +458,9 @@ const styles = StyleSheet.create({
 	},
 	roundEnd: {marginRight: 8},
 	tabs: {borderTopWidth: StyleSheet.hairlineWidth},
+	tabRow: {flexDirection: 'row', alignItems: 'center'},
 	tab: {
+		flex: 1,
 		borderRadius: 12,
 		minHeight: TARGET,
 		flexDirection: 'row',

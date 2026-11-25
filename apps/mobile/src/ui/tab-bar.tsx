@@ -312,7 +312,7 @@ export function TabBar<T extends string>({
 							>
 								<Text
 									numberOfLines={1}
-									maxFontSizeMultiplier={1}
+									allowFontScaling={false}
 									style={{
 										color: ink,
 										fontWeight: on && !ios ? '700' : '500',
@@ -338,7 +338,7 @@ export function TabBar<T extends string>({
 							<View style={styles.label}>
 								<Text
 									numberOfLines={1}
-									maxFontSizeMultiplier={1}
+									allowFontScaling={false}
 									style={{
 										color: colors.muted,
 										fontWeight: '500',
