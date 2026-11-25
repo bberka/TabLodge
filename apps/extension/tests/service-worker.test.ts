@@ -35,8 +35,6 @@ import {
 } from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 
-// The service worker is a classic script with no exports, so each harness runs the
-// type-stripped source in a fresh VM context against a mocked chrome.* API.
 const workerPath = join(
 	import.meta.dirname,
 	'..',
@@ -86,16 +84,7 @@ type SidePanelCall = {
 	method: 'setOptions' | 'setPanelBehavior';
 	value: {enabled?: boolean; path?: string; openPanelOnActionClick?: boolean};
 };
-/**
- `splitApi`: "native" (default) provides createSplit/unsplit and create({ splitWithTabId }) with Chromium's
- constraints, "missing" mirrors a browser before Chrome 155, and "throws" has createSplit always reject.
- `misplacedCreateUrls` opens those tabs at the start of the window, as if the browser placed them elsewhere.
- */
 type HarnessOptions = {
-	/**
-	Start with the library in the old single entry, as before the update, so the worker has to migrate it.
-	By default the fixture is stored in the per-record layout.
-	*/
 	legacyLayout?: boolean;
 	layout10?: boolean;
 	incognitoContext?: boolean;
@@ -104,37 +93,13 @@ type HarnessOptions = {
 	withoutContextMenuShown?: boolean;
 	splitApi?: 'native' | 'missing' | 'throws';
 	misplacedCreateUrls?: string[];
-	/**
-	Fire tabs.onRemoved when the worker removes a tab (off by default so other tests stay quiet).
-	*/
 	tabEvents?: boolean;
-	/**
-	The network the worker sees, for the sync tests; missing means no `fetch` at all.
-	*/
 	fetch?: (url: string, init: RequestInit) => Promise<Response>;
-	/**
-	Runs after each local storage write lands, so a test can change things between two writes of one operation.
-	*/
 	afterLocalSet?: (values: Record<string, unknown>) => void;
-	/**
-	Other chrome.* storage keys present at start (snapshots, backups, trash ...).
-	*/
 	storage?: Record<string, unknown>;
-	/**
-	Timers do not run on their own: tests run them with `runTimers()` (used for the snapshot debounce).
-	*/
 	manualTimers?: boolean;
-	/**
-	Chrome.storage.session values present at start (a worker that restarted).
-	*/
 	sessionStorage?: Record<string, unknown>;
-	/**
-	Extra normal windows (ids) that exist at start; their tabs come from `initialTabs`.
-	*/
 	extraWindows?: number[];
-	/**
-	Mark window ids as incognito. A private worker (`incognitoContext`) starts with window 10 private unless this says otherwise.
-	*/
 	incognitoWindows?: number[];
 	tabGroups?: Array<{
 		id: number;
@@ -142,52 +107,18 @@ type HarnessOptions = {
 		color: string;
 		collapsed: boolean;
 	}>;
-	/**
-	Provide chrome.downloads and grant the optional "downloads" permission.
-	*/
 	downloads?: boolean;
-	/**
-	New tabs start with only a pendingUrl, as before their first navigation commits.
-	*/
 	pendingNavigation?: boolean;
-	/**
-	Tabs the worker creates stay `loading` until `completeLoading()`.
-	*/
 	loadingTabs?: boolean;
-	/**
-	Chrome.alarms is missing in this browser build.
-	*/
 	noAlarms?: boolean;
-	/**
-	Make window creation reject explicit bounds as Chromium does for off-screen geometry.
-	*/
 	rejectWindowBounds?: boolean;
-	/**
-	Freeze the worker's clock at this time and set navigator.language (default 'en-US').
-	*/
 	now?: number;
 	locale?: string;
-	/**
-	Run as Firefox: `moz-extension:` addresses, no Side Panel API but a sidebar, and `chrome:` addresses refused.
-	*/
 	firefox?: boolean;
-	/**
-	Chrome.scripting.executeScript rejects, as it does on pages an extension cannot script or without an activeTab grant.
-	*/
 	scriptingFails?: boolean;
-	/**
-	What chrome.scripting.executeScript reports for an injected function (default true).
-	*/
 	scriptResult?: unknown;
-	/**
-	Host permissions the browser has granted at start (Settings › Sources); `permissions.request` grants unless
-	`refusePermissions` is set.
-	*/
 	grantedOrigins?: string[];
 	refusePermissions?: boolean;
-	/**
-	Waits before answering `permissions.contains` for these origins, so a test can change the grants in between.
-	*/
 	holdPermissionCheck?: {origins: string[]; until: Promise<void>};
 };
 type MenuItem = {
@@ -200,12 +131,9 @@ type MessageListener = (
 	sender: unknown,
 	sendResponse: (response: never) => void,
 ) => unknown;
-// Tests call listeners with whatever arguments the real event would carry.
 
 type EventListener = (...args: any[]) => unknown;
 
-// The stored `tablodge.state` as tests seed it (partial) and read it back after
-// the worker has written its normalized store.
 type StoredSession = {tabs: Array<Partial<SavedTab>>} & Partial<
 	Omit<Session, 'tabs'>
 >;
@@ -219,8 +147,6 @@ type StoredState = {
 	updatedAt: number;
 };
 
-// Responses as the tests read them: success fields are typed from the protocol, while `ok` and
-// `error` are checked at runtime by each test's assertions.
 type TestResponse<K extends TabLodgeMessageType> = Omit<
 	ActionSuccess<K>,
 	'ok' | 'locked'
@@ -248,8 +174,6 @@ function createWorkerHarness(
 ) {
 	let messageListener: MessageListener | undefined;
 	const listeners: Record<string, EventListener> = {};
-	// Storage holds the fixture as the old single entry; the worker migrates it to the per-record layout on its
-	// first mutation. `state` below is the library as the app sees it, whichever way it is stored.
 	const openedTabs: MockTab[] = [];
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
@@ -279,8 +203,6 @@ function createWorkerHarness(
 		...structuredClone(options.storage ?? {}),
 	};
 	extraStorage[storageKey] ??= structuredClone(initialState);
-	// `state` is a plain object that mirrors the stored library: a test can edit it in place, and what the worker
-	// writes shows up in it. The two are synced whenever the worker touches storage.
 	const state = (logicalState(extraStorage) ?? {}) as StoredState;
 	let syncedState = JSON.stringify(state);
 	const pushState = () => {
@@ -343,7 +265,6 @@ function createWorkerHarness(
 			incognito: privateWindowIds.includes(id),
 		})),
 	];
-	// Tab-strip order: `index` is kept contiguous per window, like Chromium's tab strip.
 	const tabsForWindow = (windowId: number) =>
 		tabs
 			.filter((tab) => tab.windowId === windowId)
@@ -370,9 +291,6 @@ function createWorkerHarness(
 	};
 
 	const isSplit = (tab: MockTab) => (tab.splitViewId ?? -1) >= 0;
-	/**
-	Calls to tabs.group, tabs.createSplit, tabs.move, and tabGroups.update, in order.
-	*/
 	const apiLog: string[] = [];
 	const splitApi = {
 		async createSplit(tabIds: [number, number]) {
@@ -417,7 +335,6 @@ function createWorkerHarness(
 	const sessionStore: Record<string, unknown> = structuredClone(
 		options.sessionStorage ?? {},
 	);
-	// Every storage.local.set, so tests can assert what a code path writes.
 	const storageSets: string[][] = [];
 	const changeListeners: Array<
 		(changes: Record<string, unknown>, area: string) => void
@@ -433,7 +350,6 @@ function createWorkerHarness(
 		Set<(...args: unknown[]) => unknown>
 	>();
 	const event = (name: string) => ({
-		// Several worker modules can listen to one event: all of them run, the last result is returned.
 		addListener(callback: EventListener) {
 			let callbacks = eventCallbacks.get(name);
 			if (!callbacks) {
@@ -458,7 +374,6 @@ function createWorkerHarness(
 				?.delete(callback as (...args: unknown[]) => unknown);
 		},
 	});
-	// Firefox refuses addresses of its own pages (`chrome:`, `about:newtab`) in tabs.create and windows.create.
 	const refuseBrowserUrls = (url: string | string[] | undefined) => {
 		if (
 			options.firefox &&
@@ -488,7 +403,6 @@ function createWorkerHarness(
 			local: {
 				async get(keys: string[] | null) {
 					pushState();
-					// `null` reads everything, as chrome.storage does; the private lock lists its keys that way.
 					const wanted = keys ?? Object.keys(extraStorage);
 					const out: Record<string, unknown> = {};
 					for (const key of wanted) {
@@ -746,7 +660,6 @@ function createWorkerHarness(
 					...fields,
 				};
 				let position = index ?? tabsForWindow(windowId).length;
-				// New pinned tabs join the end of the pinned area; a split-with tab opens to the right unless index says left.
 				if (created.pinned) {
 					position = tabsForWindow(windowId).filter((tab) => tab.pinned).length;
 				}
@@ -816,7 +729,6 @@ function createWorkerHarness(
 					}
 
 					const [removed] = tabs.splice(index, 1);
-					// Closing one half of a split view unsplits the other.
 					if (isSplit(removed)) {
 						for (const tab of tabs) {
 							if (tab.splitViewId === removed.splitViewId) {
@@ -846,7 +758,6 @@ function createWorkerHarness(
 				findTab(id).discarded = true;
 				return tabs.find((entry) => entry.id === id);
 			},
-			// Like Chromium, grouping moves the tabs together (in the given order) at the first tab's position.
 			async group({tabIds}: {tabIds: number[]}) {
 				apiLog.push(`group:${tabIds.join(',')}`);
 				const members = tabIds.map((id) => findTab(id));
@@ -1039,7 +950,6 @@ function createWorkerHarness(
 				menuItems.push(structuredClone(item));
 			},
 			onClicked: event('contextMenuClicked'),
-			// Chrome has no onShown; tests can drop it to mirror that browser.
 			...(!options.withoutContextMenuShown && {
 				onShown: event('contextMenuShown'),
 			}),
@@ -1103,9 +1013,6 @@ function createWorkerHarness(
 	return {
 		executeScriptCalls,
 		registeredScripts,
-		/**
-		The user granting a site's access in the browser prompt (Settings asks for it before switching a source on).
-		*/
 		grantOrigins(origins: string[]) {
 			if (!options.refusePermissions) {
 				for (const origin of origins) {
@@ -1113,9 +1020,6 @@ function createWorkerHarness(
 				}
 			}
 		},
-		/**
-		The user removing site access in the browser's extension settings: the grant goes, and onRemoved fires.
-		*/
 		async revokeOrigins(origins: string[], {fire = true} = {}) {
 			for (const origin of origins) {
 				grantedOrigins.delete(origin);
@@ -1153,9 +1057,6 @@ function createWorkerHarness(
 		windowUpdates,
 		defaultSuggestions,
 		timers,
-		/**
-		Runs every pending manual timer (and any they schedule), then lets the queued async work settle.
-		*/
 		async runTimers() {
 			for (let round = 0; round < 10 && timers.size > 0; round += 1) {
 				const due = [...timers];
@@ -1167,17 +1068,10 @@ function createWorkerHarness(
 
 			await settle();
 		},
-		/**
-		Fires an event listener the worker registered, then lets its async work settle.
-		*/
 		async fire(name: string, ...args: unknown[]) {
 			listeners[name]?.(...args);
 			await settle();
 		},
-		/**
-		Opens a window the way the browser does and fires windows.onCreated. Pass `fire: false` for a window that opened
-		while the worker was stopped, so the worker only finds it by listing windows.
-		*/
 		async openWindow({incognito = false, fire = true} = {}) {
 			const id = nextWindowId++;
 			windows.push({
@@ -1195,10 +1089,6 @@ function createWorkerHarness(
 
 			return id;
 		},
-		/**
-		Closes a window the way the browser does: its tabs go, then windows.onRemoved fires. Pass `fire: false` when it
-		closed while the worker was stopped, so no event reaches the worker.
-		*/
 		async closeWindow(id: number, {fire = true} = {}) {
 			const at = windows.findIndex((win) => win.id === id);
 			if (at !== -1) {
@@ -1229,9 +1119,6 @@ function createWorkerHarness(
 		},
 		state,
 		storageSets,
-		/**
-		Another extension context (a page) writing the state: the worker only learns of it through storage.onChanged.
-		*/
 		externalSetState(next: Partial<StoredState>) {
 			pushState();
 			const oldValue = structuredClone(extraStorage[storageKey]);
@@ -1245,9 +1132,6 @@ function createWorkerHarness(
 				},
 			});
 		},
-		/**
-		Another extension context writing local storage (the regular window changing the sync server, say): `undefined` removes a key.
-		*/
 		externalStorage(values: Record<string, unknown>) {
 			const changes: Record<string, unknown> = {};
 			for (const [key, value] of Object.entries(values)) {
@@ -1263,9 +1147,6 @@ function createWorkerHarness(
 
 			notifyChanged(changes);
 		},
-		/**
-		A message from an extension page by default; pass a web page `url` to send as the site content script does.
-		*/
 		async sendMessage<M extends TabLodgeMessage>(
 			message: M,
 			sender: {tab?: Partial<MockTab>; url?: string} = {
@@ -1299,9 +1180,6 @@ function createWorkerHarness(
 	};
 }
 
-/**
-Lets queued promise work and storage mocks finish.
-*/
 async function settle() {
 	for (let index = 0; index < 40; index += 1) {
 		await new Promise<void>((resolve) => {
@@ -1525,9 +1403,6 @@ const privateDataKeys = (storage: Record<string, unknown>) =>
 			key !== 'tablodge.private.config' &&
 			key !== LOCK_RECORD,
 	);
-/**
-Waits for work that runs on Web Crypto's thread pool, which `settle()` does not cover.
-*/
 async function eventually(check: () => boolean) {
 	for (let attempt = 0; attempt < 500 && !check(); attempt += 1) {
 		await new Promise<void>((resolve) => {
@@ -1537,9 +1412,6 @@ async function eventually(check: () => boolean) {
 }
 
 const LOCK_ACTIVITY = 'tablodge.privatelock.active';
-/**
-Pretends the library has been idle for this many minutes.
-*/
 const ageLock = (
 	harness: {sessionStore: Record<string, unknown>},
 	minutes: number,
@@ -1553,9 +1425,6 @@ const isSealedValue = (value: unknown) =>
 	value !== null &&
 	(value as {tlock?: unknown}).tlock === 1;
 
-/**
-A saved separate private library with a bookmark and a folder, no lock yet.
-*/
 async function plainPrivateLibrary(
 	extra: HarnessOptions = {},
 	storage: Record<string, unknown> = {},
@@ -1582,9 +1451,6 @@ async function plainPrivateLibrary(
 	return harness;
 }
 
-/**
-The same worker after a restart: storage stays, and the session store stays unless the browser restarted.
-*/
 function restartPrivate(
 	before: ReturnType<typeof createWorkerHarness>,
 	{browserRestart = false}: {browserRestart?: boolean} = {},
@@ -1627,7 +1493,6 @@ test('the private lock encrypts the saved library at rest and leaves the config,
 	});
 	assert.equal(harness.extraStorage.uiTheme, 'dark');
 	assert.equal(harness.state.groups[0]?.name, 'Research');
-	// Unlocked, the app sees the same library and keeps writing sealed values.
 	const state = await harness.sendMessage({type: 'GET_STATE'});
 	assert.equal(state.bookmarks?.length, 1);
 	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
@@ -1644,7 +1509,6 @@ test('the private lock encrypts the saved library at rest and leaves the config,
 		JSON.stringify(harness.extraStorage).includes('later-secret.example'),
 		false,
 	);
-	// The key is in session storage only.
 	assert.ok(harness.sessionStore[LOCK_KEY]);
 	assert.equal(
 		JSON.stringify(harness.extraStorage).includes(
@@ -1680,7 +1544,6 @@ test('a locked private library refuses reads, writes, backups, and exports until
 		assert.equal(refused.locked, true, message.type);
 	}
 
-	// Nothing the refused messages did reached storage.
 	assert.equal(
 		JSON.stringify(harness.extraStorage).includes('x.example'),
 		false,
@@ -1743,7 +1606,6 @@ test('unlocking records the open private windows, and Lock now forgets them', as
 	});
 	await enableLock(harness);
 	assert.deepEqual(harness.sessionStore[LOCK_WINDOWS], [10, 50]);
-	// A private window opening while unlocked joins the set, and a regular one never does.
 	const opened = await harness.openWindow({incognito: true});
 	await harness.openWindow();
 	assert.deepEqual(harness.sessionStore[LOCK_WINDOWS], [10, 50, opened]);
@@ -1782,7 +1644,6 @@ test('a private worker that was stopped when the last private window closed lock
 	const first = await plainPrivateLibrary();
 	await enableLock(first);
 	assert.deepEqual(first.sessionStore[LOCK_WINDOWS], [10]);
-	// Window 10 closed with no worker running; a new private window 20 opened. Window 10 stands in as a regular window.
 	const next = restartPrivate(
 		first,
 		{},
@@ -1801,7 +1662,6 @@ test('a private worker that was stopped when the last private window closed lock
 	});
 	const status = await next.sendMessage({type: 'GET_PRIVATE_LOCK'});
 	assert.equal(status.locked, true);
-	// The next unlock belongs to the new window.
 	const opened = await next.sendMessage({
 		type: 'UNLOCK_PRIVATE',
 		credential: lockPassword,
@@ -1839,7 +1699,6 @@ test('every kind of first message to a worker that missed the last close finds t
 		assert.notEqual(answer.locked, false, message.type);
 	}
 
-	// The worker's own startup also locks, before any page asks.
 	const waking = restartPrivate(
 		first,
 		{},
@@ -1858,7 +1717,6 @@ test('a worker evicted while a private window stays open keeps the library unloc
 		incognitoWindows: [10, 20],
 	});
 	await enableLock(first);
-	// Window 20 closed and window 30 opened while the worker slept; window 10 never closed.
 	const next = restartPrivate(
 		first,
 		{},
@@ -1871,7 +1729,6 @@ test('a worker evicted while a private window stays open keeps the library unloc
 	assert.equal(state.ok, true, state.error);
 	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
 	assert.deepEqual(next.sessionStore[LOCK_WINDOWS], [10, 30]);
-	// After another sleep only a window nobody tracked is left, so both earlier windows have closed.
 	const later = restartPrivate(
 		next,
 		{},
@@ -1939,7 +1796,6 @@ test('the idle timeout locks the library and the alarm checks it', async () => {
 	});
 	assert.equal(shortened.idleMinutes, 1);
 	ageLock(harness, 2);
-	// Even without the alarm, the next library read finds the library idle and locked.
 	const late = await harness.sendMessage({type: 'GET_STATE'});
 	assert.equal(late.locked, true);
 	const invalid = await harness.sendMessage({
@@ -1992,7 +1848,6 @@ test('changing the storage mode is refused while a lock exists, locked or not, f
 	assert.equal(blocked.ok, false);
 	assert.match(blocked.error ?? '', /remove the lock/);
 	assert.deepEqual(harness.extraStorage, before);
-	// A regular window reads the same lock record and refuses the same way.
 	const regular = createWorkerHarness(stateWithSession(), undefined, {
 		storage: structuredClone(before),
 	});
@@ -2006,13 +1861,11 @@ test('changing the storage mode is refused while a lock exists, locked or not, f
 		regular.extraStorage['tablodge.private.config'],
 		before['tablodge.private.config'],
 	);
-	// Choosing the mode it already has is not a change.
 	const same = await regular.sendMessage({
 		type: 'SET_PRIVATE_CONFIG',
 		mode: 'saved',
 	});
 	assert.equal(same.ok, true, same.error);
-	// After the lock is removed the mode can change, and the library stays plain and intact.
 	const removed = await harness.sendMessage({
 		type: 'REMOVE_PRIVATE_LOCK',
 		credential: lockPassword,
@@ -2055,7 +1908,6 @@ test('removing the lock restores the plain library byte for byte', async () => {
 	assert.equal(harness.extraStorage[LOCK_RECORD], undefined);
 	assert.equal(harness.sessionStore[LOCK_KEY], undefined);
 	for (const [key, value] of Object.entries(plain)) {
-		// Storage keeps JSON, which drops undefined fields.
 		assert.deepEqual(
 			harness.extraStorage[key],
 			// eslint-disable-next-line unicorn/prefer-structured-clone -- JSON drops undefined fields, as storage does
@@ -2116,7 +1968,6 @@ test('an enable cut off before any value was sealed finishes on the next worker 
 		isSealedValue(harness.extraStorage['tablodge.private.tablodge.state']),
 		false,
 	);
-	// Reads keep working on the plain values while the pass is open.
 	const restarted = restartPrivate(harness);
 	await eventually(
 		() =>
@@ -2154,7 +2005,6 @@ test('a private library still in the old single entry layout is sealed whole, th
 	);
 	const state = await harness.sendMessage({type: 'GET_STATE'});
 	assert.equal(state.groups?.[0]?.name, 'Old private session');
-	// A write migrates the library to the per record layout, and every new key is sealed.
 	const added = await harness.sendMessage({
 		type: 'ADD_BOOKMARK',
 		bookmark: {title: 'New', url: 'https://new-private.example/'},
@@ -2168,7 +2018,6 @@ test('a private library still in the old single entry layout is sealed whole, th
 
 	const stored = JSON.stringify(harness.extraStorage);
 	assert.equal(stored.includes('old-private.example'), false);
-	// Going back removes the lock and leaves plain per record keys that still hold the session.
 	const removed = await harness.sendMessage({
 		type: 'REMOVE_PRIVATE_LOCK',
 		credential: lockPassword,
@@ -2580,14 +2429,12 @@ test('new tab hand-off only happens for browser-opened new tabs while TabLodge n
 		{id: 7, windowId: 10, index: 0, active: true, url: ''},
 	]);
 	const tab = off.tabs.find((entry) => entry.id === 7)!;
-	// Not claimed yet (an intentionally opened dashboard): nothing to hand off.
 	assert.equal(
 		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
 		false,
 	);
 	await off.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
 	assert.equal(tab.url, 'chrome://new-tab-page/');
-	// The browser sent the tab back: try once more, then fall back to a blank page, then stop.
 	assert.equal(
 		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
 		true,
@@ -3289,7 +3136,6 @@ test('the toggle-side-panel command opens the side panel for the window', async 
 	assert.deepEqual(structuredClone(harness.sidePanelOpened), [{windowId: 7}]);
 });
 
-// Firefox: the same worker runs as an event page. These cover where its browser differs from Chromium.
 test('Firefox restores into a new window that starts blank, then removes that bootstrap tab', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({restoreTarget: 'always-new-window'}),
@@ -3801,20 +3647,17 @@ test('drag kinds are told apart by type, and the document guard only blocks stra
 		target: target(),
 		...fields,
 	});
-	// Over a column, the column has already called preventDefault: leave it alone.
 	assert.equal(
 		shouldBlockDocumentDrop(
 			event([SESSION_DRAG_TYPE, 'text/uri-list'], {defaultPrevented: true}),
 		),
 		false,
 	);
-	// Anywhere else, session, tab, and external link drags are blocked (no copy cursor, nothing saved).
 	assert.equal(
 		shouldBlockDocumentDrop(event([SESSION_DRAG_TYPE, 'text/uri-list'])),
 		true,
 	);
 	assert.equal(shouldBlockDocumentDrop(event(['text/uri-list'])), true);
-	// Text fields keep native drops, and unrelated drags are not touched.
 	assert.equal(
 		shouldBlockDocumentDrop(event(['text/plain'], {target: target(true)})),
 		false,
@@ -4287,7 +4130,6 @@ test('a single tab dragged out of a session keeps its title when dropped', async
 	const data = buildLinkDragData([
 		{title: 'My saved title', url: 'https://a.example/page'},
 	])!;
-	// Node has no DOMParser; a stand-in that reads the one anchor buildLinkDragData writes.
 	const globals = globalThis as {DOMParser?: unknown};
 	const original = globals.DOMParser;
 	globals.DOMParser = class {
@@ -4382,7 +4224,6 @@ test("DELETE_BOOKMARK_COLUMN with discardBookmarks deletes the column's bookmark
 		['default-link'],
 	);
 
-	// Discarding also works for the last column, where bookmarks would otherwise become unfiled.
 	const last = await harness.sendMessage({
 		type: 'DELETE_BOOKMARK_COLUMN',
 		columnId: 'bookmark-default',
@@ -4730,9 +4571,6 @@ test('install opens a dashboard tab, but extension updates do not', async () => 
 	assert.equal(updated.openedTabs.length, 0);
 });
 
-// ---- Split View (Chrome 155+): two tabs shown side by side in one tab-strip slot ----
-
-// Window 10: a split pair (1|2), a plain tab (3), and a second split pair (4|5).
 function splitWindowTabs(highlighted: number[] = [1]): MockTab[] {
 	return [
 		{
@@ -4789,7 +4627,6 @@ const savedUrlsAndSplits = (group: StoredSession | undefined) =>
 		tab.split?.position ?? null,
 	]);
 
-// A session holding a split pair (left|right) followed by a plain tab.
 function stateWithSplitSession(
 	settings: Record<string, unknown> = {},
 	tabs?: Array<Partial<SavedTab>>,
@@ -4868,7 +4705,6 @@ test('saving only one half of a split stores it as a plain tab, and an active sp
 		],
 	);
 
-	// Both halves of the active split highlighted is one tab-strip slot, so "selected or window" saves the window.
 	const slot = createWorkerHarness(
 		stateWithSession({closeOnSave: false}),
 		splitWindowTabs([1, 2]),
@@ -4932,7 +4768,6 @@ test("saveSplitTabs 'focused' keeps only the active half of the active split in 
 		scope: 'selected',
 	});
 	assert.equal(focusedResult.ok, true, focusedResult.error);
-	// Other split views in the selection are still saved in full.
 	assert.deepEqual(
 		savedUrlsAndSplits(
 			focused.state.groups.find((group) => group.id === focusedResult.groupId),
@@ -4963,7 +4798,6 @@ test("saveSplitTabs 'focused' keeps only the active half of the active split in 
 		3,
 	);
 
-	// Whole-window saves always keep both halves.
 	const windowSave = createWorkerHarness(
 		stateWithSession({closeOnSave: false, saveSplitTabs: 'focused'}),
 		splitWindowTabs(highlighted),
@@ -5327,7 +5161,6 @@ test('unloading restored tabs leaves split tabs loaded', async () => {
 	)!;
 	assert.deepEqual(harness.discardedTabs, [plain.id]);
 
-	// When the browser refused the split, the pair are ordinary background tabs again and may be unloaded.
 	const refused = createWorkerHarness(
 		stateWithSplitSession({
 			unloadRestoredTabs: true,
@@ -5359,7 +5192,6 @@ test('import keeps valid split pairs and drops invalid, orphaned, or mismatched 
 			{
 				name: 'Split import',
 				tabs: [
-					// Stored right-then-left: reordered so the left tab comes first.
 					{title: 'B', url: 'https://b.example/', split: split('p1', 1)},
 					{title: 'A', url: 'https://a.example/', split: split('p1', 0)},
 					{
@@ -5567,7 +5399,6 @@ test('split settings default to side-by-side restore and saving both tabs, and n
 	assert.equal(reset.settings.saveSplitTabs, 'both');
 });
 
-// Boolean settings fall back to their default unless the stored value is exactly the opposite boolean.
 for (const [key, fallback] of [
 	['expandSessionsByDefault', false],
 	['pasteLinkToBookmark', true],
@@ -5592,7 +5423,6 @@ for (const [key, fallback] of [
 			(await defaults.sendMessage({type: 'GET_STATE'})).settings[key],
 			fallback,
 		);
-		// Wrong-typed values that point away from the default, so loose truthiness checks fail.
 		assert.equal(await readStored(fallback ? 0 : 'yes'), fallback);
 		assert.equal(await readStored(!fallback), !fallback, 'explicit is kept');
 
@@ -6038,7 +5868,6 @@ test("bookmark imports with a target column ignore the file's columns and fill o
 			['https://two.example/', 'reading'],
 		],
 	);
-	// Unfiled works as a target; an unknown column id falls back to the file's columns.
 	const unfiled = await harness.sendMessage({
 		type: 'IMPORT_BOOKMARKS_FILE',
 		data: {bookmarks: [{url: 'https://three.example/'}]},
@@ -6192,7 +6021,6 @@ test('dashboard query parameters: search prefill, new-column request, and URL cl
 	);
 });
 
-// ---- Session link moves, session ordering, and the pinned TabLodge tab ----
 function reorderState(settings: Record<string, unknown> = {}): StoredState {
 	const state = stateWithSession(settings);
 	const tab = (
@@ -6417,7 +6245,6 @@ test('SET_GROUP_ORDER persists a custom session order and switches the sort to c
 	);
 	assert.equal(harness.state.settings.sessionSort, 'custom');
 
-	// A filtered view lists only some sessions: they trade places among their own slots.
 	const subset = await harness.sendMessage({
 		type: 'SET_GROUP_ORDER',
 		order: ['B', 'C', 'ghost'],
@@ -6452,12 +6279,10 @@ test('keepLodgePinned creates one pinned TabLodge tab per window, re-pins, and n
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 	assert.equal(pinnedLodges(harness, 10)[0].active, false);
 
-	// A second check finds it and adds nothing.
 	harness.listeners.windowFocusChanged(10);
 	await harness.runTimers();
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 
-	// A restore into a new window gets its own pinned tab; the restored session never contains one.
 	const restored = await harness.sendMessage({
 		type: 'RESTORE_GROUP',
 		groupId: 'session-1',
@@ -6683,7 +6508,6 @@ test('bookmark columns store a registry icon and drop unknown ones', async () =>
 	assert.equal(plain.ok, true, plain.error);
 	assert.equal('icon' in plain.column, false);
 
-	// Renaming without an icon keeps it; an empty string resets it; a valid id replaces it.
 	const renamed = await harness.sendMessage({
 		type: 'UPDATE_BOOKMARK_COLUMN',
 		columnId: created.column.id,
@@ -6739,7 +6563,6 @@ test('bookmark columns store a color from the accent palette and drop anything e
 	});
 	assert.equal(custom.column.color, '#a1b2c3');
 
-	// Renaming without a color keeps it; a valid one replaces it; an empty string removes it.
 	const renamed = await harness.sendMessage({
 		type: 'UPDATE_BOOKMARK_COLUMN',
 		columnId: created.column.id,
@@ -6820,7 +6643,6 @@ test('a column with domains takes matching bookmarks when none is chosen', async
 	assert.equal(await add('https://docs.github.com/a'), docs.column.id);
 	assert.notEqual(await add('https://notgithub.com/a'), dev.column.id);
 
-	// A path entry matches that path and below, and beats a bare host.
 	const repo = await harness.sendMessage({
 		type: 'CREATE_BOOKMARK_COLUMN',
 		name: 'Mine',
@@ -6832,14 +6654,12 @@ test('a column with domains takes matching bookmarks when none is chosen', async
 	assert.equal(await add('https://github.com/bberkaa/x'), dev.column.id);
 	assert.equal(await add('https://github.com/other'), dev.column.id);
 
-	// An explicit column still wins over the domain.
 	const explicit = await harness.sendMessage({
 		type: 'ADD_BOOKMARK',
 		bookmark: {url: 'https://github.com/b', columnId: docs.column.id},
 	});
 	assert.equal(explicit.bookmark.columnId, docs.column.id);
 
-	// Omitting domains keeps them; an empty list clears them.
 	const kept = await harness.sendMessage({
 		type: 'UPDATE_BOOKMARK_COLUMN',
 		columnId: dev.column.id,
@@ -6970,7 +6790,6 @@ test('a folder color is stored, validated and applied to sessions moved in only 
 	});
 	assert.equal(moved.group.color, 'blue');
 
-	// A color named in the same save wins over the folder's.
 	const other = await harness.sendMessage({
 		type: 'CREATE_FOLDER',
 		name: 'Other',
@@ -7185,8 +7004,6 @@ test('ADD_EXCLUDED_ORIGINS adds many websites at once and ignores repeats', asyn
 	assert.equal(none.ok, false);
 });
 
-// ---- Recovery: snapshots, backups, trash ----
-
 const LIVE_KEY = 'tablodge.snapshots.live';
 const HISTORY_KEY = 'tablodge.snapshots';
 const META_KEY = 'tablodge.snapshots.meta';
@@ -7332,7 +7149,6 @@ test('auto-archive moves stale sessions to the Archived folder and leaves recent
 	assert.equal(folderOf('edited-recently'), 'unfiled');
 	assert.equal(harness.state.groups.length, 4, 'nothing is deleted');
 
-	// A session moved back out is not archived again until it goes stale again.
 	await harness.sendMessage({
 		type: 'UPDATE_GROUP',
 		groupId: 'session-1',
@@ -7512,10 +7328,8 @@ test('snapshot writes are debounced and identical captures are not rewritten or 
 	const firstLive = liveOf(harness)!;
 	assert.ok(firstLive);
 	assert.equal(historyOf(harness).length, 0, 'event captures do not rotate');
-	// Title-only updates do not schedule anything.
 	await harness.fire('tabUpdated', 1, {title: 'Renamed'}, {});
 	assert.equal(harness.timers.size, 0);
-	// An alarm rotates the live state into history.
 	await harness.fire('alarm', {name: 'tablodge-snapshot'});
 	assert.equal(historyOf(harness).length, 1);
 	const rewritten = liveOf(harness)!;
@@ -7525,10 +7339,8 @@ test('snapshot writes are debounced and identical captures are not rewritten or 
 		firstLive.id,
 		'identical live snapshot is left alone',
 	);
-	// The same state again adds nothing.
 	await harness.fire('alarm', {name: 'tablodge-snapshot'});
 	assert.equal(historyOf(harness).length, 1);
-	// A change adds a second entry, newest first.
 	harness.tabs.push(webTab(40, 10, 2));
 	await harness.fire('alarm', {name: 'tablodge-snapshot'});
 	const history = historyOf(harness);
@@ -7725,7 +7537,6 @@ test('crash detection: a run that never closed cleanly leaves a pending recovery
 });
 
 test('crash detection: clean exits, shutdowns in progress, tiny sessions and browser-restored sessions need no recovery', async () => {
-	// Clean exit: sessionOpen was cleared by the last window closing.
 	const clean = recoveryHarness({}, undefined, {
 		storage: cleanStorage(seededSnapshotStorage({sessionOpen: false})),
 	});
@@ -7738,7 +7549,6 @@ test('crash detection: clean exits, shutdowns in progress, tiny sessions and bro
 		'still kept in history',
 	);
 
-	// Windows were being closed down to one and nothing was captured afterwards: a shutdown, not a crash.
 	const closing = recoveryHarness({}, undefined, {
 		storage: cleanStorage(
 			seededSnapshotStorage({
@@ -7753,7 +7563,6 @@ test('crash detection: clean exits, shutdowns in progress, tiny sessions and bro
 		null,
 	);
 
-	// A capture after the close means the session went on, so it counts as a crash.
 	const continued = recoveryHarness({}, undefined, {
 		storage: cleanStorage(
 			seededSnapshotStorage({
@@ -7766,7 +7575,6 @@ test('crash detection: clean exits, shutdowns in progress, tiny sessions and bro
 	await continued.fire('onStartup');
 	assert.ok((await continued.sendMessage({type: 'GET_SNAPSHOTS'})).recovery);
 
-	// Too small to be worth a banner.
 	const tiny = recoveryHarness({}, undefined, {
 		storage: cleanStorage(
 			seededSnapshotStorage(
@@ -7784,7 +7592,6 @@ test('crash detection: clean exits, shutdowns in progress, tiny sessions and bro
 		null,
 	);
 
-	// The browser reopened the same tabs itself.
 	const restored = recoveryHarness(
 		{},
 		[
@@ -7801,7 +7608,6 @@ test('crash detection: clean exits, shutdowns in progress, tiny sessions and bro
 		null,
 	);
 
-	// Disabled snapshots never judge a run.
 	const disabled = recoveryHarness({snapshotsEnabled: false}, undefined, {
 		storage: cleanStorage(seededSnapshotStorage({sessionOpen: true})),
 	});
@@ -7828,7 +7634,6 @@ test('closing the last window is the clean-exit signal and files the final state
 		2,
 		'the state before closing',
 	);
-	// Empty captures never replace the saved state.
 	await harness.fire('alarm', {name: 'tablodge-snapshot'});
 	assert.equal(liveOf(harness)!.windows.length, 2);
 });
@@ -8080,7 +7885,6 @@ test('REMOVE_DUPLICATE_BOOKMARKS trashes the extra copies and Undo restores them
 	assert.ok(trash.ok);
 	assert.equal(trash.items.length, 2);
 	assert.equal(trash.items[0].kind, 'bookmark');
-	// Undo restores in reverse order, as the page does.
 	for (const id of removed.trashIds.toReversed()) {
 		const restored = await harness.sendMessage({type: 'RESTORE_TRASH', id});
 		assert.equal(restored.ok, true, restored.error);
@@ -8195,7 +7999,6 @@ test('BACKUP_NOW stores a full export that the importer reads, and keeps setting
 	assert.equal(data.ok, true);
 	assert.match(data.filename, /^tablodge-backup-\d{4}-\d{2}-\d{2}\.json$/);
 	assert.equal(data.json, stored.json);
-	// The file imports into a fresh install.
 	const fresh = createWorkerHarness({
 		...stateWithSession(),
 		groups: [],
@@ -8216,7 +8019,6 @@ test('BACKUP_NOW stores a full export that the importer reads, and keeps setting
 test('adding a backup to the library merges it: both are kept, duplicates are skipped, settings stay', async () => {
 	const mine = createWorkerHarness(bookmarksState(3));
 	const before = mine.state.settings.closeOnSave;
-	// Another library: the same three bookmarks and session, two more bookmarks, another session, other settings.
 	const theirsState = bookmarksState(5);
 	theirsState.settings = {...theirsState.settings, closeOnSave: !before};
 	theirsState.groups = [
@@ -8263,7 +8065,6 @@ test('adding a backup to the library merges it: both are kept, duplicates are sk
 		before,
 		'a merge never changes the settings',
 	);
-	// One Undo puts the library back as it was.
 	assert.ok(merged.undoId);
 	const undone = await mine.sendMessage({type: 'UNDO', id: merged.undoId});
 	assert.equal(undone.ok, true, undone.error);
@@ -8414,7 +8215,7 @@ test('oversized backups report that no Downloads copy was written', async () => 
 	await harness.fire('alarm', {name: 'tablodge-backup'});
 	assert.equal(harness.downloads.length, 0);
 	assert.match(backupsOf(harness).downloadError, /too large/i);
-}, 30_000); // Builds a deliberately oversized backup; slow machines need more than the 5 s default.
+}, 30_000);
 
 test('safety backups are taken before erase, large imports and bulk deletes, in a ring of five', async () => {
 	const harness = createWorkerHarness(bookmarksState());
@@ -8531,7 +8332,6 @@ test('RESTORE_BACKUP brings data back, keeps current settings, and takes its own
 		'oldest',
 		'settings are kept',
 	);
-	// Restoring over data that exists keeps that data as a safety backup first.
 	await harness.sendMessage({
 		type: 'ADD_BOOKMARK',
 		bookmark: {url: 'https://newer.example/', title: 'Newer'},
@@ -8660,7 +8460,6 @@ test('RESTORE_FULL_BACKUP restores a phone-made backup, whose preferences, snaps
 		harness.state.bookmarks.map((bookmark) => bookmark.id),
 		['in-1'],
 	);
-	// A backup without preferences leaves the theme alone.
 	assert.equal(harness.extraStorage.uiTheme, 'light');
 	assert.equal(harness.extraStorage.uiAccent, 'rose');
 	assert.equal(trashOf(harness).length, 0);
@@ -8896,7 +8695,6 @@ test('deleted saved links come back at their position, or recreate a vanished se
 		['tab-a', 'tab-b', 'tab-c'],
 	);
 
-	// Deleting the last links removes the session; undo recreates it with the same id.
 	for (const id of ['tab-a', 'tab-b']) {
 		await harness.sendMessage({
 			type: 'DELETE_TAB',
@@ -8922,7 +8720,6 @@ test('deleted saved links come back at their position, or recreate a vanished se
 		harness.state.groups[0].tabs.map((tab) => tab.id),
 		['tab-c'],
 	);
-	// With the session still there, the link joins it instead.
 	const other = await harness.sendMessage({type: 'GET_TRASH'});
 	assert.equal(
 		other.items.length,
@@ -8945,7 +8742,6 @@ test('bookmarks and columns restore into their old place, falling back to the fi
 		['bm-0', 'bm-1', 'bm-2', 'bm-3', 'bm-4'],
 	);
 
-	// A bookmark whose column was deleted goes to the first column.
 	const second = await harness.sendMessage({
 		type: 'DELETE_BOOKMARK',
 		bookmarkId: 'bm-3',
@@ -8967,7 +8763,6 @@ test('bookmarks and columns restore into their old place, falling back to the fi
 		'bookmark-default',
 	);
 
-	// Restoring the column sends its moved links back.
 	const trash = await harness.sendMessage({type: 'GET_TRASH'});
 	const column = trash.items.find((item) => item.kind === 'column')!;
 	const back = await harness.sendMessage({
@@ -9063,7 +8858,6 @@ test('trash can be emptied, items deleted permanently, and old items are purged 
 		type: 'UPDATE_SETTINGS',
 		settings: {trashRetentionDays: 7},
 	});
-	// A new deletion prunes with the new retention too.
 	const removed = await harness.sendMessage({
 		type: 'DELETE_BOOKMARK',
 		bookmarkId: 'bm-0',
@@ -9097,7 +8891,6 @@ test('storage usage reports each area', async () => {
 });
 
 test('undo paths: restore-and-remove, move between sessions and close-after-save are reversible', async () => {
-	// Restore-and-remove: the removed links sit in the trash and Undo puts them back.
 	const state = stateWithSession({
 		restoreTarget: 'current-window',
 		restoreDuplicateHandling: 'open',
@@ -9132,7 +8925,6 @@ test('undo paths: restore-and-remove, move between sessions and close-after-save
 		['saved-tab-1', 'saved-tab-2'],
 	);
 
-	// Moving a link and moving it back to the neighbor it sat next to.
 	const two = stateWithSession();
 	two.groups = [
 		{
@@ -9169,7 +8961,6 @@ test('undo paths: restore-and-remove, move between sessions and close-after-save
 		['t-a', 't-b', 't-c'],
 	);
 
-	// Close-after-save: restoring the saved session into the current window reopens the closed tabs.
 	const saving = createWorkerHarness(stateWithSession({closeOnSave: true}), [
 		webTab(1, 10, 0, {active: true, url: 'https://keep.example/'}),
 		webTab(2, 10, 1, {url: 'https://gone.example/'}),
@@ -9208,8 +8999,6 @@ test('the manifest asks for alarms up front and Downloads only as an optional pe
 	assert.equal(manifest.permissions?.includes('downloads'), false);
 	assert.deepEqual(manifest.optional_permissions, ['downloads']);
 });
-
-// ---- Limits, moves, scopes and recovery details ----
 
 const manyTabs = (count: number, windowId = 10): MockTab[] =>
 	Array.from({length: count}, (_, index) =>
@@ -9260,7 +9049,6 @@ test('MOVE_TAB trashes a session emptied by the move, and Undo brings it back wi
 	assert.equal(harness.state.groups.find((g) => g.id === 'C')?.name, 'C');
 	assert.equal(trashOf(harness).length, 0);
 
-	// A move that leaves the source non-empty adds no trash entry.
 	const plain = await harness.sendMessage({
 		type: 'MOVE_TAB',
 		fromGroupId: 'A',
@@ -9312,7 +9100,6 @@ test('saving is refused with a clear error when it would exceed the session limi
 
 test('adding into a full session is refused for a move and for saving the current tab', async () => {
 	const state = reorderState();
-	// The default target is the most recently updated session, so make the full one that.
 	state.groups[0] = {
 		...state.groups[0],
 		...filler('A', MAX_TABS_PER_SESSION),
@@ -9430,7 +9217,6 @@ test('the excluded-sites list dedupes before it caps, and reports sites that do 
 	assert.equal(full.ok, false);
 	assert.match(String(full.error), /full/i);
 
-	// Repeats in a long raw list no longer eat into the 500.
 	const repeated = createWorkerHarness(
 		stateWithSession({
 			excludedOrigins: [
@@ -9475,7 +9261,6 @@ test('importing a TabLodge export keeps its pinned tabs even with pinned tabs of
 		],
 	);
 
-	// A plain list of tabs is a foreign shape: the setting still applies.
 	const plain = await harness.sendMessage({
 		type: 'IMPORT_SESSIONS',
 		data: [
@@ -9517,14 +9302,11 @@ test('a run that starts with no window is not marked open, so exiting without on
 	assert.equal(response.recovery, null);
 });
 
-// ---- Worker CPU and memory use ----
-
 test('the settings cache follows changes written by another context', async () => {
 	const harness = createWorkerHarness(stateWithSession({newTabEnabled: true}), [
 		{id: 7, windowId: 10, index: 0, active: true, url: ''},
 	]);
 	const tab = harness.tabs[0];
-	// Warms the cache with newTabEnabled on: nothing to hand off.
 	await harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
 	assert.equal(tab.url, '');
 	harness.externalSetState({
@@ -9561,16 +9343,11 @@ test('the trash is capped by total size, dropping the oldest items first', async
 	assert.deepEqual(ids.slice(1), ['a', 'b']);
 });
 
-// ---- Storage layout migration ----
-
 const PREMIGRATION = 'tablodge.state.premigration';
 const MIGRATION_MARKER = 'tablodge.migration';
 const sessionKeysOf = (storage: Record<string, unknown>) =>
 	Object.keys(storage).filter((key) => key.startsWith('tablodge.session.'));
 
-/**
-A library of `count` sessions with `tabs` links each, in the old single entry.
-*/
 function legacyLibrary(count: number, tabs = 3): StoredState {
 	const state = stateWithSession();
 	state.groups = Array.from({length: count}, (_, index) => ({
@@ -9927,7 +9704,6 @@ test('session description and old notes merge into one description on load, impo
 	}
 });
 
-// ---- Archive and lock were removed: older data is migrated on read.
 type LegacyState = StoredState & {groups: Array<Record<string, unknown>>};
 function legacyState(): LegacyState {
 	const state = stateWithSession({restoreMode: 'archive'}) as LegacyState;
@@ -10013,7 +9789,6 @@ test('stored archived sessions and links become normal data, with an Archived fo
 test('the archive migration is persisted once and is idempotent', async () => {
 	const harness = createWorkerHarness(legacyState());
 	await harness.sendMessage({type: 'GET_STATE'});
-	// Any mutation runs the persisted migration.
 	await harness.sendMessage({
 		type: 'UPDATE_GROUP',
 		groupId: 'plain',
@@ -10254,9 +10029,6 @@ test('UPDATE_TAB rejects addresses that are not http or https', async () => {
 	);
 });
 
-// ---- Session name setting ----
-
-// Saturday, Oct 25 2025, 10:42 PM in the machine's time zone (the worker formats in local time).
 const NAME_NOW = new Date(2025, 9, 25, 22, 42).getTime();
 const nameTabs = (): MockTab[] => [
 	webTab(1, 10, 0, {
@@ -10500,7 +10272,6 @@ test('session name setting: "Ask each time" and its fallback are validated and r
 	});
 	assert.equal(ask.settings.sessionNameStyle, 'ask');
 	assert.equal(ask.settings.sessionNameFallback, 'datetime');
-	// The fallback can never be "ask" itself.
 	const bad = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
 		settings: {sessionNameFallback: 'ask'} as unknown as Partial<Settings>,
@@ -10535,7 +10306,6 @@ test('with "ask", a save that was not named uses the fallback and a typed name s
 		await savedName({sessionNameStyle: 'ask'}, {groupName: 'Trip planning'}),
 		'Trip planning',
 	);
-	// The page-initiated save does not open the prompt window.
 	const harness = nameHarness({sessionNameStyle: 'ask'});
 	await harness.sendMessage({type: 'SAVE_TABS', scope: 'window'});
 	assert.equal(harness.windowCreateCalls.length, 0);
@@ -10768,7 +10538,6 @@ test('the bookmark shortcut saves into a column that claims the site without ope
 });
 
 test('the palette shortcut opens one palette window over the focused window on any page, and a second press closes it', async () => {
-	// A restricted page: the palette is a window of its own, so the page does not matter.
 	const harness = nameHarness({}, [
 		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
 	]);
@@ -10794,7 +10563,6 @@ test('the palette shortcut opens one palette window over the focused window on a
 	assert.equal(url.searchParams.get('window'), '10');
 	assert.equal(url.searchParams.get('tab'), '1');
 
-	// The palette window is now open; pressing the shortcut again closes it instead of opening a second one.
 	await press();
 	assert.equal(harness.windowCreateCalls.length, 1);
 	assert.equal(
@@ -10866,7 +10634,6 @@ test('by default, pages that cannot be scripted open the window instead', async 
 		await settle();
 	};
 
-	// Browser pages are never injected into.
 	const restricted = nameHarness({}, [
 		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
 	]);
@@ -10874,7 +10641,6 @@ test('by default, pages that cannot be scripted open the window instead', async 
 	assert.equal(restricted.executeScriptCalls.length, 0);
 	assert.equal(restricted.windowCreateCalls.length, 1);
 
-	// A web page the browser refuses to script (Web Store, PDF viewer, no activeTab grant) falls back too.
 	const refused = nameHarness(
 		{},
 		[
@@ -10894,7 +10660,6 @@ test('by default, pages that cannot be scripted open the window instead', async 
 	assert.equal(refused.executeScriptCalls.length, 1);
 	assert.equal(refused.windowCreateCalls.length, 1);
 
-	// Choosing the window never touches scripting.
 	const standard = nameHarness({paletteLocation: 'window'}, [
 		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
 	]);
@@ -11390,7 +11155,6 @@ test('bookmarking a page cleans a leading notification counter from its title', 
 	assert.equal(added.bookmark.title, 'YouTube');
 });
 
-// Browser bookmarks: the worker offers (or adds) a page the user just bookmarked with the browser's star.
 const browserColumns = [
 	{id: 'bookmark-default', name: 'Bookmarks', createdAt: 0, isDefault: true},
 	{id: 'col-2', name: 'Reading', createdAt: 1},
@@ -11508,7 +11272,6 @@ test('browser bookmark: imports are ignored, also after a worker restart', async
 	await harness.runTimers();
 	assert.equal(harness.state.bookmarks.length, 1);
 
-	// The import flag survives in session storage when only the in-memory state is lost.
 	const fresh = browserBookmarkHarness(
 		{browserBookmarkAction: 'add'},
 		{},
@@ -12010,8 +11773,6 @@ test('omnibox: a bookmark saved after the first search shows up in the next one'
 	assert.equal((await suggest('lemmings')).length, 1);
 });
 
-// ---- Batched restores ----
-
 const manyTabsSession = (
 	count: number,
 	settings: Record<string, unknown> = {},
@@ -12036,7 +11797,6 @@ test('a large restore opens tabs in batches and waits for each batch to load', a
 	});
 	const seen: number[] = [];
 	for (let batch = 0; batch < 5; batch += 1) {
-		// A full batch is open and the next one waits while its tabs are still loading.
 		await settle();
 		seen.push(harness.openedTabs.length);
 		await harness.runTimers();
@@ -12098,7 +11858,6 @@ test('with unloading on, each batch is unloaded before the next opens, and the a
 	);
 	harness.completeLoading();
 	await harness.runTimers();
-	// The first batch finished loading and was unloaded except its first tab; the second batch is open.
 	assert.equal(harness.openedTabs.length, 50);
 	assert.equal(harness.discardedTabs.length, 24);
 	for (let batch = 0; batch < 4; batch += 1) {
@@ -12262,7 +12021,6 @@ test('a regular window uploads, lists, and deletes shared pages; a private windo
 	);
 });
 
-// A change another browser pushed, stamped well after this test's own.
 const remoteSource = (id: string, value?: Record<string, unknown>) => ({
 	kind: 'source' as const,
 	id,
@@ -12707,7 +12465,6 @@ test('a library kept on the device with its own password adopts the server’s w
 		urls.includes('https://secret-bookmark.example/'),
 		'the server’s data merged in',
 	);
-	// The library now has one password: the server's.
 	await other.sendMessage({type: 'LOCK_PRIVATE'});
 	assert.equal(
 		(
@@ -12881,7 +12638,6 @@ test('a lock an older version made with a 4 digit PIN still unlocks, and its key
 		sync: true,
 	});
 	assert.equal(sent.ok, true, sent.error);
-	// What an older version wrote for this lock: the same record, saying it is a PIN.
 	const record = first.extraStorage[LOCK_RECORD] as Record<string, unknown>;
 	assert.equal(record.kind, 'password', 'a new lock is written as a password');
 	first.extraStorage[LOCK_RECORD] = {...record, kind: 'pin'};
@@ -12897,7 +12653,6 @@ test('a lock an older version made with a 4 digit PIN still unlocks, and its key
 	});
 	assert.equal(opened.ok, true, opened.error);
 
-	// A browser with no lock joins the server's key with the same short number.
 	const second = createWorkerHarness({}, undefined, {
 		incognitoContext: true,
 		fetch: server.fetch,
@@ -13071,7 +12826,6 @@ test('a failed sync connect names the field the page should flag', async () => {
 });
 
 test('syncing an unchanged library sends nothing, even when normalizing adds the Archived folder', async () => {
-	// Only Date is faked, so each round below gets a later timestamp without a real sleep.
 	vi.useFakeTimers({toFake: ['Date']});
 	try {
 		await syncUnchangedLibraryRounds();
@@ -13099,7 +12853,6 @@ async function syncUnchangedLibraryRounds() {
 	assert.equal(connected.ok, true, connected.error);
 	const {cursor} = server.log;
 	for (let round = 0; round < 3; round += 1) {
-		// Normalizing at a later time must not make the added folder look new.
 		vi.advanceTimersByTime(5);
 		await harness.sendMessage({type: 'SYNC_NOW'});
 	}
@@ -13228,7 +12981,6 @@ test('moving to another sync server ends private sync, and a new password is the
 test('turning private sync off deletes its key even when no client is running', async () => {
 	const harness = await plainPrivateLibrary();
 	await enableLock(harness);
-	// No sync server and so no client, with a key and switch left behind, as an older version could leave them.
 	harness.externalStorage({
 		'tablodge.private.sync.private.key': {id: 'x', raw: 'x', wrapped: 'x'},
 		'tablodge.private.sync.private.on': true,
@@ -13253,7 +13005,6 @@ test('a server password made in one Unicode form joins when typed in an equivale
 	const server = syncServer();
 	const {createSyncKey, serverKeyText} =
 		await import('../src/shared/private-sync');
-	// A key an older version wrapped with four code points that normalize to two characters.
 	const key = await createSyncKey({value: 'e\u0301e\u0301', verified: true});
 	const posted = await server.fetch(
 		'https://sync.example.test/private/v1/key',
@@ -13334,7 +13085,6 @@ test('two password changes started together run one after another, so the server
 	});
 	assert.equal(joined.ok, true, joined.error);
 
-	// The browser that made the changes ends on the same password as the server.
 	await first.sendMessage({type: 'LOCK_PRIVATE'});
 	assert.equal(
 		(
@@ -13426,7 +13176,6 @@ test('a password change that the server may have taken, and that cannot be confi
 		type: 'PRIVATE_SYNC_ENABLE',
 		credential: lockPassword,
 	});
-	// The server stores the new wrapper, but neither the reply nor the check afterwards gets through.
 	const {key} = server.privateLog;
 	blind = true;
 	const changed = await first.sendMessage({
@@ -13440,7 +13189,6 @@ test('a password change that the server may have taken, and that cannot be confi
 	assert.equal(changed.ok, false);
 	assert.match(changed.error ?? '', /did not confirm/);
 
-	// The library keeps the new password, which is the one the server now needs, so the two agree.
 	await first.sendMessage({type: 'LOCK_PRIVATE'});
 	assert.equal(
 		(
@@ -13471,7 +13219,6 @@ test('a join that saved the lock but could not reach the server carries on when 
 		credential: lockPassword,
 	});
 
-	// The server answers the key lookup, then goes away when sync is being turned on, after the lock is saved.
 	let statusCalls = 0;
 	const flaky = async (url: string, init: RequestInit) => {
 		if (url.endsWith('/v1/status')) {
@@ -13503,7 +13250,6 @@ test('a join that saved the lock but could not reach the server carries on when 
 		'the lock was saved',
 	);
 
-	// Another password is refused, and the same one carries on.
 	const wrong = await second.sendMessage({
 		type: 'JOIN_PRIVATE_SERVER',
 		credential: 'another password',
@@ -13718,9 +13464,6 @@ test('a session takes a color like a column does: a preset or a hex, kept when o
 	assert.equal(groups[0].color, undefined);
 });
 
-/**
-A network where the sync server answers every icon request with a small PNG, logging the hosts asked for.
-*/
 function iconNetwork() {
 	const asked: string[] = [];
 	return {
@@ -13880,7 +13623,6 @@ test('Keep a copy reads the tab, bookmarks an unsaved page, and goes to the tras
 		harness.executeScriptCalls.map((call) => call.target.tabId),
 		[1, 1],
 	);
-	// Chrome sends an injected function to the tab as text, which a method shorthand does not survive.
 	for (const call of harness.executeScriptCalls as Array<{func?: unknown}>) {
 		if (call.func) {
 			assert.match(String(call.func), /^function \w+\(/);
@@ -13898,7 +13640,6 @@ test('Keep a copy reads the tab, bookmarks an unsaved page, and goes to the tras
 	assert.deepEqual(structuredClone(read.copy?.blocks), capturedPage.blocks);
 	assert.equal(read.copy?.title, 'Current page');
 
-	// Keeping it again replaces the copy and adds no second bookmark.
 	const again = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
 	assert.equal(again.bookmarked, false);
 	assert.equal(
@@ -13908,7 +13649,6 @@ test('Keep a copy reads the tab, bookmarks an unsaved page, and goes to the tras
 		1,
 	);
 
-	// Deleted, the link is in the trash and the copy stays with it.
 	await harness.sendMessage({
 		type: 'DELETE_BOOKMARK',
 		bookmarkId: bookmark.id!,
@@ -13916,13 +13656,11 @@ test('Keep a copy reads the tab, bookmarks an unsaved page, and goes to the tras
 	await settle();
 	assert.deepEqual(copyIndexUrls(harness), ['https://current.example/']);
 
-	// Emptying the trash leaves the copy while Undo can still bring the link back.
 	const emptied = await harness.sendMessage({type: 'EMPTY_TRASH'});
 	assert.ok(emptied.undoId);
 	await settle();
 	assert.deepEqual(copyIndexUrls(harness), ['https://current.example/']);
 
-	// Once the Undo has expired and is purged, the copy goes too.
 	const undo = harness.extraStorage['tablodge.undo'] as {
 		records: Array<{createdAt: number}>;
 	};
@@ -14041,7 +13779,6 @@ test('deleting a copy that is not there offers no Undo', async () => {
 test('Keep a copy attaches to the saved link and refuses with the budget message when full', async () => {
 	const state = stateWithSession();
 	const savedUrl = state.groups[0].tabs[0].url!;
-	// The copy filling the budget belongs to a saved bookmark, so the startup sweep keeps it.
 	state.bookmarks.push({
 		id: 'bm-elsewhere',
 		title: 'Elsewhere',
@@ -14164,7 +13901,6 @@ test('a full backup carries the copies and a restore brings them back with their
 	});
 	assert.deepEqual(structuredClone(read.copy?.blocks), capturedPage.blocks);
 
-	// Merged instead: only saved links without a copy here get one.
 	const merging = createWorkerHarness(stateWithSession());
 	assert.equal(
 		(
@@ -14246,7 +13982,6 @@ test('a noted bookmark keeps its note and its copy together through delete, back
 		'Why I saved it',
 	);
 
-	// Deleting the bookmark, note record and all, sends the copy to the trash with it; emptying the trash ends it.
 	const id = harness.state.bookmarks.find(
 		(entry) => entry.url === 'https://noted.example/',
 	)!.id!;
@@ -14275,7 +14010,6 @@ const youtubeTab = {
 	url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
 	title: 'Big Buck Bunny - YouTube',
 };
-// What the site content script sends: from a youtube.com tab, with the page's address.
 const fromYoutube = {tab: youtubeTab, url: youtubeTab.url};
 const watchLater = (
 	url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=WL',
@@ -14431,7 +14165,6 @@ test('revoking the permission in the browser turns the source off and says so', 
 	await harness.revokeOrigins(YOUTUBE_ORIGINS);
 	assert.equal(harness.registeredScripts.size, 0);
 	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
-	// Access is this browser's: the site stays on, so other browsers keep it.
 	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
 		id: 'youtube',
 		enabled: false,
@@ -14456,7 +14189,6 @@ test('a site on in another browser shows as on but not here, and runs once this 
 	});
 	assert.equal(harness.registeredScripts.size, 0);
 
-	// The dashboard said so once; an unknown id is ignored.
 	await harness.sendMessage({
 		type: 'SITE_SOURCES_POINTED',
 		sources: ['youtube', 'nope'],
@@ -14464,7 +14196,6 @@ test('a site on in another browser shows as on but not here, and runs once this 
 	const pointed = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
 	assert.equal(pointed.ok && pointed.sources[0]?.pointed, true);
 
-	// Turn on: the page asks for access, then switches it on here.
 	const on = await switchOnYoutube(harness);
 	assert.deepEqual(on.ok && structuredClone(on.sources[0]), {
 		id: 'youtube',
@@ -14530,7 +14261,6 @@ test('access revoked while startup checks the other sites keeps the site off', a
 			},
 		},
 	});
-	// YouTube is checked and found allowed, then the check waits on Reddit while YouTube's access goes.
 	harness.listeners.onStartup();
 	await settle();
 	await harness.revokeOrigins(YOUTUBE_ORIGINS);
@@ -14601,7 +14331,6 @@ test("Remove drops the site's choices, gives back its access, and keeps the choi
 	});
 	assert.deepEqual(structuredClone(stored()), {mastodon: {x: 1}});
 	assert.equal(harness.registeredScripts.size, 0);
-	// The access went back: turning it on again needs a new grant.
 	const again = await harness.sendMessage({
 		type: 'SET_SITE_SOURCE',
 		source: 'youtube',
@@ -14651,7 +14380,6 @@ test('a save on YouTube goes to a new YouTube column, and Undo takes it back', a
 		],
 	);
 
-	// A second save reuses the column.
 	await harness.sendMessage(
 		watchLater('https://www.youtube.com/watch?v=jNQXAC9IVRw'),
 		fromYoutube,
@@ -14769,7 +14497,6 @@ test('X saves from twitter.com and x.com land once, in a new X column, and Insta
 	);
 	assert.equal(again.ok && again.outcome, 'exists');
 
-	// A page on one site never speaks for another.
 	const wrongSite = await harness.sendMessage(
 		{...post, source: 'instagram'},
 		page('https://x.com/home'),
@@ -14825,7 +14552,6 @@ test('Hacker News and Lobsters saves keep the discussion in the note, and only a
 	} as const;
 	const saved = await harness.sendMessage(story, hn);
 	assert.equal(saved.ok && saved.column, 'Hacker News');
-	// A text post links to its own page, which needs no note.
 	await harness.sendMessage(
 		{
 			...story,
@@ -14835,7 +14561,6 @@ test('Hacker News and Lobsters saves keep the discussion in the note, and only a
 		},
 		hn,
 	);
-	// A discussion link off the site, or a second save of the same story, adds nothing.
 	await harness.sendMessage(
 		{
 			...story,
@@ -14963,7 +14688,6 @@ test('the next page in a tab takes the result of a save that loaded it, once, an
 		ok: true,
 	});
 
-	// A site whose save keeps the page shows the result there, so it keeps nothing for the next page.
 	harness.grantOrigins(['https://github.com/*']);
 	await harness.sendMessage({
 		type: 'SET_SITE_SOURCE',
@@ -15003,7 +14727,6 @@ test('a web page reaches only the source actions, never the rest of the worker',
 		assert.equal(result.ok, false, message.type);
 	}
 
-	// Undo from a page only undoes a source save.
 	const added = await harness.sendMessage({
 		type: 'ADD_BOOKMARKS',
 		bookmarks: [{url: 'https://other.example/'}],
@@ -15066,7 +14789,6 @@ test('a private window saves only when private windows use the regular library',
 		false,
 	);
 
-	// Before the private setup, the mode defaults to shared but nothing is chosen yet.
 	const unconfigured = sourcesHarness({incognitoContext: true, storage: on});
 	const notSetUp = await unconfigured.sendMessage(watchLater(), fromYoutube);
 	assert.equal(notSetUp.ok && notSetUp.outcome, 'off');
@@ -15190,7 +14912,6 @@ test('a deleted source column comes back with the same id on the next save', asy
 		['source-youtube'],
 	);
 
-	// Restoring the deleted column from the trash joins the one that came back, rather than making a second.
 	const restored = await harness.sendMessage({
 		type: 'RESTORE_TRASH',
 		id: String(deleted.ok && deleted.trashId),
@@ -15234,7 +14955,6 @@ test('a source saves to the column chosen in Settings, and to its own column onc
 	assert.equal(saved.ok && saved.column, 'Later');
 	assert.equal(harness.state.bookmarks[0]?.columnId, laterId);
 
-	// Turning it on in another way keeps the choice; only Remove drops it.
 	await switchOnYoutube(harness);
 	const sources = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
 	assert.equal(sources.ok && sources.sources[0]?.columnId, laterId);
@@ -15271,7 +14991,6 @@ const savedPost = (id: string, title = `Post ${id}`) => ({
 	title,
 });
 
-// Answers come from the worker's VM realm; deepEqual needs them as this realm's plain objects.
 const counted = async (
 	answer: Promise<Record<string, unknown>>,
 ): Promise<Record<string, unknown>> => ({...(await answer)});
@@ -15293,7 +15012,6 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 		storage: {'tablodge.device': {name: 'Desk'}},
 	});
 	await switchOnReddit(harness);
-	// One post is already saved by a click, one is in the trash bin, and the page lists one post twice.
 	await harness.sendMessage(
 		{type: 'SITE_SOURCE_SAVE', source: 'reddit', ...savedPost('aaa111')},
 		redditSaved,
@@ -15357,7 +15075,6 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 		],
 	]);
 
-	// A second visit finds nothing missing, and adding again adds nothing.
 	assert.deepEqual(
 		await counted(
 			harness.sendMessage(
@@ -15373,7 +15090,6 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 	);
 	assert.equal(again.ok && again.added, 0);
 
-	// The content script's Undo takes the whole batch back.
 	const undone = await harness.sendMessage(
 		{type: 'SITE_SOURCE_UNDO', id: (added.ok && added.undoId) || ''},
 		redditSaved,
@@ -15411,7 +15127,6 @@ test('Not now keeps the saved page quiet until a new missing item appears', asyn
 	});
 	assert.equal(harness.state.bookmarks.length, 0, 'nothing was added');
 
-	// Removing the site forgets the answers.
 	await harness.sendMessage({
 		type: 'SET_SITE_SOURCE',
 		source: 'reddit',
@@ -15425,7 +15140,6 @@ test('Not now keeps the saved page quiet until a new missing item appears', asyn
 		mode: 'add',
 	});
 
-	// A Not now that arrives after the site went off stores nothing.
 	await harness.sendMessage({
 		type: 'SET_SITE_SOURCE',
 		source: 'reddit',
@@ -15610,7 +15324,6 @@ test('the saved pages of YouTube, X, Instagram, and GitHub add their missing ite
 			[[page.stored, `source-${page.id}`]],
 		);
 
-		// Another site's page cannot add to this one.
 		const elsewhere = await harness.sendMessage(
 			{type: 'SITE_SOURCE_CATCH_UP_ADD', source: page.id, links},
 			page.id === 'github' ? fromYoutube : redditSaved,
@@ -15645,7 +15358,6 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 			: undefined;
 	};
 
-	// Off until the site is added, and only for a site whose adapter supports it.
 	assert.equal((await keepOff('x', true)).ok, true);
 	assert.deepEqual(await status(), {id: 'x', enabled: false, wanted: false});
 	await switchOnYoutube(harness);
@@ -15673,7 +15385,6 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 		keepOffSite: true,
 	});
 	assert.equal(await mode(), true);
-	// Another site's page is not told X's choice, and a web page cannot change it.
 	assert.equal(await mode(fromYoutube), false);
 	const fromPage = await harness.sendMessage(
 		{type: 'SET_SITE_SOURCE_KEEP_OFF', source: 'x', keepOffSite: false},
@@ -15691,7 +15402,6 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 		enabled: false,
 	});
 	assert.equal(await mode(), false);
-	// Remove gave the access back, so adding the site again asks for it again.
 	harness.grantOrigins(['https://x.com/*', 'https://twitter.com/*']);
 	await harness.sendMessage({
 		type: 'SET_SITE_SOURCE',
