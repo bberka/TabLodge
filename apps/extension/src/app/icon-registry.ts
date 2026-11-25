@@ -268,7 +268,6 @@ export type IconEntry = IconInfo & {component: LucideIcon};
 export const DEFAULT_COLUMN_ICON: IconId = 'bookmark';
 export const DEFAULT_FOLDER_ICON: IconId = 'folder';
 
-// Keyed by id, so adding an id to ICON_IDS without an entry here fails to compile.
 const COMPONENTS: Record<IconId, LucideIcon> = {
 	bookmark: Bookmark,
 	folder: Folder,
@@ -541,9 +540,6 @@ const BY_ID = new Map<string, IconEntry>(ICONS.map((icon) => [icon.id, icon]));
 export const isIconId = (value: unknown): value is IconId =>
 	typeof value === 'string' && BY_ID.has(value);
 
-/**
-The icon for a stored id; unknown, missing or removed ids fall back to `fallback`.
-*/
 export function getIcon(
 	id: string | null | undefined,
 	fallback: IconId = DEFAULT_COLUMN_ICON,
@@ -551,9 +547,6 @@ export function getIcon(
 	return BY_ID.get(id ?? '') ?? BY_ID.get(fallback)!;
 }
 
-/**
-Ranks icons with the shared fuzzy matcher; see `searchIconInfos`.
-*/
 export function searchIcons(query: string): readonly IconEntry[] {
 	return searchIconInfos(query).map((info) => BY_ID.get(info.id)!);
 }

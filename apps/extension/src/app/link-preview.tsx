@@ -17,9 +17,6 @@ const MARGIN = 8;
 
 const PreviewsContext = createContext(false);
 
-/**
-Tells the rows below whether previews are switched on, so they need no prop for it.
-*/
 export function LinkPreviewProvider({
 	enabled,
 	children,
@@ -34,11 +31,6 @@ export const useLinkPreviewsOn = () => use(PreviewsContext);
 
 type Shown = {rect: DOMRect; preview: LinkPreviewData};
 
-/**
-Shows what the sync server read from a page, in a small card, when the pointer rests on the link or it has keyboard
-focus for a moment. The card never takes focus and goes away on leaving, on Escape, and on scrolling. It does not
-change what the link does.
-*/
 export function LinkPreview({
 	url,
 	children,
@@ -133,9 +125,7 @@ function PreviewCard({shown, url}: {shown: Shown; url: string}) {
 	let host = url;
 	try {
 		host = new URL(url).hostname.replace(/^www\./, '');
-	} catch {
-		// Show the address as saved.
-	}
+	} catch {}
 
 	return (
 		<div

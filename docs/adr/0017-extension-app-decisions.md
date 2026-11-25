@@ -120,3 +120,97 @@ Status: accepted, 2026-11-23. Issue #442.
 ### Drag previews
 
 * **The preview is built offscreen, then removed.** `drag-preview.ts:setSessionDragImage`: the card goes to `setDragImage`, and is removed right after the browser snapshots it.
+
+### Duplicate bookmarks
+
+* **Removal is capped.** One removal trashes at most 500 copies, the trash bin's item limit (`duplicate-bookmarks-dialog.tsx:REMOVE_AT_ONCE`).
+
+### Duplicate tabs
+
+* **Only exact duplicates close.** Duplicates match exactly on the canonical web address, so a different query or fragment is a different page. Pinned tabs and the tab viewed in each window are never closed; when a group has one, every unprotected copy goes. Otherwise the most recently used copy stays (`duplicate-tabs.ts:findDuplicateTabs`).
+* **A tab the browser will not reopen is skipped.** The rest still come back (`duplicate-tabs-action.ts:reopen`).
+* **A tab whose window is gone opens in the current window** (`duplicate-tabs-action.ts:reopen`).
+* **A tab closed meanwhile is not a failure.** It is skipped and not counted as an error (`duplicate-tabs-action.ts:closeDuplicateTabs`).
+
+### Favicons
+
+* **The icon source depends on the browser.** Chromium serves cached site icons at `_favicon/`. Firefox has no such service, so it shows the tab's own icon where known, else an icon remembered from an earlier tab of the site. With a sync server connected, the server is asked about a site the browser does not know; the extension never asks a site itself (`favicon.tsx:faviconUrl`).
+* **Remembered icons load once per page.** The device's icons (remembered tab icons on Firefox, server icons on both) are read once per page and kept current (`favicon.tsx:NO_ICONS`).
+* **The default globe counts as no icon.** Chromium answers an unknown site with its default globe, never an error. The globe is read once per page from an address no site can have, and an icon equal to it counts as missing (`favicon.tsx:defaultIcon`).
+* **Only links on screen ask.** An icon is asked about when it scrolls into view, so a long list asks only about what is shown (`favicon.tsx:visibleCallbacks`).
+* **The server is asked once, and only without a browser icon.** Once the element is on screen the server is asked about the site once, and not at all when the browser already has an icon (`favicon.tsx:useServerIcon`).
+* **Unknown is missing on Firefox.** Firefox has no browser icon to look at, so an unknown site counts as missing (`favicon.tsx:useServerIcon`).
+* **A stored icon yields to the browser.** On Chromium a stored icon replaces the browser's only when the browser has none (`favicon.tsx:Favicon`).
+* **The tab's own icon comes first without a service.** Without an icon service the tab's own icon is the first choice (`favicon.tsx:Favicon`).
+
+### Finder
+
+* **One command list for every finder.** The dashboard, the new tab page, and the palette window or overlay share one list. Each page supplies how to run each command and leaves out only what cannot work there, with the reason next to it (`finder-commands.ts:CommandHandlers`).
+* **The empty filter shows eight.** The first eight commands are what the finder lists before anything is typed, so their order is visible to the user (`finder-commands.ts:COMMANDS`).
+* **Firefox has no private library.** Firefox keeps the add-on out of private windows, so there is no private library to manage there (`finder-commands.ts:NOT_ON_FIREFOX`).
+
+### Menus and palette
+
+* **Private windows list no copies.** `copies` is empty in a private window (`finder-menu.ts:ItemActionContext`).
+* **Firefox cannot open a private window.** `privateWindow` is false there (`finder-menu.ts:ItemActionContext`).
+* **Back keeps the caret.** In the actions filter a key goes back to the results only with the caret at the start and nothing selected, so the caret still moves through typed text. Backspace goes back only on an empty filter (`finder-menu.ts:leavesActionMenu`).
+
+### Focus view hint
+
+* **The column limit follows the setting.** `FOCUS_HINT_COLUMNS` matches the largest "Columns per row" setting: past it, a row cannot hold every column (`focus-hint-rule.ts:FOCUS_HINT_COLUMNS`).
+* **Dismissal stays on this device.** It is remembered per browser profile and not synced, since another device may have another screen (`focus-hint.tsx:readFocusHintDismissed`).
+* **Without storage the hint returns.** It can come back on the next visit (`focus-hint.tsx:readFocusHintDismissed`).
+
+### Help
+
+* **The licences page is written at build time.** `scripts/build.ts` writes the page this link opens into the package (`help.tsx:Help`).
+
+### Drag and clipboard
+
+* **The drag kind comes from the types.** Browsers hide drag data until the drop, so `dragPayloadKind` judges what a drag carries from its types alone (`interaction-actions.ts:dragPayloadKind`).
+* **Stray link drops are swallowed.** Only valid drop targets (bookmark columns, Unfiled) call preventDefault. Any other link drag gets the "no drop" cursor, and a stray drop is swallowed so the page does not navigate to the dragged link. Text fields keep native drops (`interaction-actions.ts:shouldBlockDocumentDrop`).
+* **A single saved tab keeps its title in the anchor.** Its title is only in the html anchor, beside its url in `text/uri-list` (`interaction-actions.ts:parseDraggedLink`).
+* **A group drag carries a list.** A single tab drops as a link. A named group drops as a titled list and also carries `SESSION_DRAG_TYPE`, so TabLodge's own columns add every link (`interaction-actions.ts:buildLinkDragData`).
+
+### Lazy dialogs
+
+* **Big dialogs load on first open.** Backup, import, share, snapshots and trash are loaded when first opened, so a page does not download or parse them just to show its list. Once opened, a dialog stays mounted so it can animate closed (`lazy-dialogs.tsx:lazyDialog`).
+
+### Link opening
+
+* **One rule for opening a saved link.** It is shared by the dashboard, the side panel and the finder. An explicit menu choice wins over the setting, and on the pinned TabLodge tab "current" becomes "new". A bookmark click may resolve to 'menu' and any click to 'none'; a surface without a menu or an idle click says so (`canMenu`, `canIdle`), so 'menu' opens in the current tab and 'none' acts as the default setting. The finder sets both, because Enter on a result must never do nothing (`link-target.ts:resolveLinkTarget`).
+* **No private window in Firefox.** Firefox builds set `incognito: 'not_allowed'`, so the option is never offered there (`link-target.ts:canOpenPrivateWindow`).
+* **A refused private window reaches the user.** The browser refuses when policy turns private windows off, so the rejection goes to the caller, which tells the user (`link-target.ts:openInPrivateWindow`).
+* **The palette's current tab is its own window.** From the palette window, "current" means the active tab of that window, which comes to the front (`link-target.ts:openLink`).
+* **Own pages keep the pinned tab.** Settings and Help replace the current tab, except on the pinned TabLodge tab, which must stay put and opens a new tab (`link-target.ts:openOwnPage`).
+
+### Messages
+
+* **A reloaded worker gets a reload message.** The worker is gone when the extension was reloaded or updated while the page stayed open, so the page asks for a reload instead of showing a raw error (`message-client.ts:sendMessage`).
+
+### Session naming
+
+* **The ask resolves three ways.** It resolves a name, or undefined when left empty (the worker then uses its fallback name), or null when cancelled, in which case nothing is saved. Without the `ask` style it resolves at once, and the dialog is rendered once per page (`name-session-dialog.tsx:useSessionNameAsk`).
+* **The worker decides whether to ask.** A setting in the page can be stale, so the worker's answer wins (`name-session-dialog.tsx:useSessionNameAsk`).
+* **The prompt window renames the sessions.** It opens after a save that started without a page. The sessions already exist with the fallback name; Save renames them, and Cancel, Escape or closing the window keeps that name (`name-session.tsx:NameSessionPrompt`).
+
+### Finder palette
+
+* **One ranking and one way to open results.** The global finder (Ctrl/Cmd+K) has one search box, one ranking in `shared/global-search.ts`, and one way of opening results, so every surface opens a result the same way (`finder.tsx:FinderPalette`).
+* **The palette window acts on the window it was opened over.** Links, searches and session restores go to that window, the one in front when the shortcut was pressed, and the palette closes after the action succeeded (`finder.tsx:useFinder`).
+* **Typing stays responsive.** The input is not blocked while a big library is searched: results follow the query when React has time (`finder.tsx:useFinder`).
+* **Close order depends on the surface.** Over the dashboard the palette closes first; in its own window it closes once the action worked (`finder.tsx:useFinder`).
+* **The dashboard may be leaving.** Over the dashboard the page may already be navigating away, but in the palette window the user is still looking (`finder.tsx:useFinder`).
+* **Readers open where the palette was opened.** The palette window is not where the reader belongs, so the page opens in the window the palette was opened over (`finder.tsx:useFinder`).
+* **Escape is handled once.** Escape goes up one level before it closes the palette, and the window and dialog handlers skip a handled key (`finder.tsx:useFinder`).
+* **Focus is brought back only when needed.** The window the palette was opened over comes to the front, except after a restore into a new window, which already has focus (`finder.tsx:useFinder`).
+* **A closed window is not a failure.** The window may have closed meanwhile; the restore itself worked, so the error is ignored (`finder.tsx:useFinder`).
+* **Focus view needs the rail first.** The Focus view renders one column at a time, so the rail item is opened first (`finder.tsx:revealColumn`).
+* **The count is announced once.** Moving through results announces each option, so this live status says only how many a new search found (`finder.tsx:ResultList`).
+* **The search box stays the combobox.** The actions menu is a second level: the search box keeps the combobox role and filters the actions, and the breadcrumb names where the user is (`finder.tsx:ActionMenu`).
+* **The palette window focuses its input itself.** It has no dialog to move focus into the input (`finder.tsx:PaletteBody`).
+* **The list fills the palette window.** The dialog caps the list height. The palette window fills its height instead: the list takes the spare room and scrolls when it overflows, so the shortcut bar stays at the bottom edge (`finder.tsx:PaletteBody`).
+* **The key bar shows what fits.** One row at any width: only the keys for the highlighted row show, the least needed hidden first, and `?` lists them all (`finder.tsx:PaletteBody`).
+* **Only a popup closes on blur.** The palette window closes when another window takes focus, but only a real popup window does this; the same page opened as a tab by address stays open. A short wait skips the blur the browser sends while the window is still being focused (`finder.tsx:useCloseWhenUnfocused`).
+* **The overlay is a frame.** The palette can be a frame over a web page (see `palette-overlay.ts`): closing asks the page to remove the frame (`finder.tsx:FinderPaletteWindow`).
+* **Tab stays in the frame.** Tab cycles through the frame's controls and never reaches the page (`finder.tsx:FinderPaletteWindow`).
