@@ -1,4 +1,3 @@
-// The dialogs of the private library lock settings: turn the lock on, change its password, remove it.
 import {useState, type ReactNode} from 'react';
 import {Lock} from 'lucide-react';
 import {
@@ -502,17 +501,11 @@ export function ResetDialog({
 	);
 }
 
-/**
-Shown in place of a private page while the saved library has no password: the library does not open until one is set.
-*/
 export function SetLockForm({
 	onDone,
 	sync = false,
 }: {
 	onDone: (info: PrivateLockInfo) => void;
-	/**
-	Also turn private sync on with this password.
-	*/
 	sync?: boolean;
 }) {
 	const [draft, setDraft] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
@@ -563,9 +556,6 @@ export function SetLockForm({
 	);
 }
 
-/**
-Takes the password the sync server's private library uses as this library's lock.
-*/
 export function JoinServerForm({
 	onDone,
 }: {
@@ -617,7 +607,3 @@ export function JoinServerForm({
 		</form>
 	);
 }
-
-/**
-Settings panel for the lock. Regular windows show the status and point to a private window, because the key lives with the private worker.
-*/

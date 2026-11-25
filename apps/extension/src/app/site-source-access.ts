@@ -25,11 +25,6 @@ async function requestSiteAccess(
 	};
 }
 
-/**
-Asks for the sites' permissions in one prompt and turns them on in this browser: Settings › Sources › Add a site,
-Allow again, Turn on, and the dashboard's Turn on for sites that are on in another browser. Call it straight from the
-click or key press: Firefox refuses the permission request after another await.
-*/
 export async function turnOnSiteSources(
 	sources: readonly SiteSource[],
 ): Promise<ActionResult<'SET_SITE_SOURCE'>> {
@@ -49,10 +44,6 @@ export async function turnOnSiteSources(
 	return result;
 }
 
-/**
-Switches a site off in every browser and gives its site permission back here: Settings › Sources › Remove, and the
-answer yes to the stop question when its source column is deleted.
-*/
 export async function removeSiteSource(source: SiteSource) {
 	const result = await send('SET_SITE_SOURCE', {
 		source: source.id,

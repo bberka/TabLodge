@@ -1,6 +1,3 @@
-// Form pieces for choosing and entering a password, built on the rules in passcode.ts.
-// PasscodeSetup is the "choose one" form (value, confirmation, a hint while a weak one is typed, the loss warning,
-// acknowledgement); PasscodeEntry is the single field for unlocking. Both keep the value in the caller's state, never in storage.
 import {useId, useState} from 'react';
 import {CircleAlert, Eye, EyeOff} from 'lucide-react';
 import {Checkbox, Input, Label} from '../shared/ui';
@@ -25,9 +22,6 @@ export const EMPTY_PASSCODE_DRAFT: PasscodeDraft = {
 	acknowledged: false,
 };
 
-/**
-Why the draft cannot be used yet, or null when it can. The first problem wins, in the order the form shows them.
-*/
 export function passcodeDraftProblem(draft: PasscodeDraft): string | null {
 	return (
 		validateCredential(draft.value) ??
@@ -81,9 +75,6 @@ function ShowHideField({
 	shown?: boolean;
 	onToggleShown?: () => void;
 	problem?: string | null;
-	/**
-	A note under the field while the value is acceptable but weak; it never blocks.
-	*/
 	hint?: string | null;
 	describedBy?: string;
 	autoComplete: string;
@@ -116,7 +107,6 @@ function ShowHideField({
 					/>
 				)}
 			</div>
-			{/* Always in the page, so a screen reader announces what it later says (a problem or the weak password hint). */}
 			<p
 				id={describedBy}
 				role="status"
@@ -131,10 +121,6 @@ function ShowHideField({
 	);
 }
 
-/**
-Choose a password: the value with show/hide, a confirmation, live checks, a hint while a weak one is typed, and the
-warning that a lost one cannot be recovered.
-*/
 export function PasscodeSetup({
 	draft,
 	onChange,
@@ -146,7 +132,6 @@ export function PasscodeSetup({
 }) {
 	const id = useId();
 	const [shown, setShown] = useState(false);
-	// Stay quiet until something is typed, then check as the person types.
 	const valueProblem =
 		draft.value.length > 0 ? validateCredential(draft.value) : null;
 	const confirmProblem =
@@ -203,9 +188,6 @@ export function PasscodeSetup({
 	);
 }
 
-/**
-One field to enter an existing password, with show/hide. Its length is not checked: a short one from an older version opens.
-*/
 export function PasscodeEntry({
 	value,
 	onChange,

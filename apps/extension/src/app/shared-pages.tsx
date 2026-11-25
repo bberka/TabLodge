@@ -31,10 +31,6 @@ export type SharedPagesState = {
 	reload: () => Promise<void>;
 };
 
-/**
-What the connected sync server says about shared pages, asked each time `open` turns true, with its pages when
-`list` is set. Always `none` in a private window, whose libraries are never shared.
-*/
 export function useSharedPages(open: boolean, list = false): SharedPagesState {
 	const [server, setServer] = useState<SharedPagesServer>();
 	const [pages, setPages] = useState<SharedPage[]>([]);
@@ -92,10 +88,6 @@ export async function copyPageLink(url: string, showStatus: ShowStatus) {
 const sizeLabel = (bytes: number) =>
 	bytes < 1000 ? `${bytes} B` : `${Math.ceil(bytes / 1000)} kB`;
 
-/**
-Shared pages with their links: open, copy, and Delete, which asks first because the server cannot bring a page
-back.
-*/
 export function SharedPagesList({
 	pages,
 	showStatus,

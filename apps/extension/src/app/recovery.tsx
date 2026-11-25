@@ -1,6 +1,3 @@
-// Recovery UI shared by the dashboard, side panel and Settings: the "restore your last session" banner, the
-// recent-snapshots dialog, the trash bin dialog, and the backup list. Every action is a message to the service
-// worker, which keeps all of this data in local extension storage.
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {
 	AppWindow,
@@ -67,7 +64,6 @@ import {
 } from './recovery-core';
 import {cn} from '@/lib/utils';
 
-// Short badge text, with the full explanation shown on hover.
 const REASON_LABELS: Record<
 	SnapshotReason,
 	[label: string, explanation: string]
@@ -201,9 +197,6 @@ function SnapshotRow({
 	);
 }
 
-/**
-The "Recent snapshots" dialog: crash-recovery snapshots with time and counts; restore all or one window, save as a session, delete.
-*/
 export function SnapshotsDialog({
 	open,
 	onOpenChange,
@@ -215,9 +208,6 @@ export function SnapshotsDialog({
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
 	onSessionsChanged?: () => unknown;
-	/**
-	Ask before deleting a snapshot or clearing them all (the Settings page does; other pages use Undo alone).
-	*/
 	confirmDestructive?: boolean;
 }) {
 	const {data, error, reload} = useSnapshots(open);
@@ -385,7 +375,6 @@ export function SnapshotsDialog({
 	);
 }
 
-// Dialogs whose list scrolls between a fixed title and fixed buttons: edge-to-edge lines mark where the list starts and ends.
 const SCROLL_HEADER = '-mx-6 mb-4 border-b border-border pb-4 pl-6 pr-14';
 const SCROLL_FOOTER = '-mx-6 mt-4 border-t border-border px-6 pt-4';
 
@@ -407,9 +396,6 @@ function FilterLabel({
 	);
 }
 
-/**
-Which side of TabLodge a deleted item belongs to, for the Sessions / Bookmarks filter.
-*/
 const trashSide = (item: TrashSummary): Exclude<TrashFilter, 'all'> =>
 	item.kind === 'bookmark' || item.kind === 'column' ? 'bookmarks' : 'sessions';
 
@@ -421,9 +407,6 @@ const KIND_LABELS: Record<TrashKind, string> = {
 	folder: 'Session folder',
 };
 
-/**
-The trash bin: deleted sessions, saved links, bookmarks and columns; restore, delete permanently, or empty it.
-*/
 export function TrashDialog({
 	open,
 	onOpenChange,
@@ -436,17 +419,10 @@ export function TrashDialog({
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
 	onChanged?: () => unknown;
-	/**
-	Show only session or bookmark items at first (the user can switch).
-	*/
 	initialFilter?: TrashFilter;
-	/**
-	Ask before deleting an item for good or emptying the trash bin (the Settings page does; other pages use Undo alone).
-	*/
 	confirmDestructive?: boolean;
 }) {
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	// The item stays set while the dialog fades out, so its text does not change on Cancel.
 	const [deleting, setDeleting] = useState<TrashSummary>();
 	const [askDeleteOpen, setAskDeleteOpen] = useState(false);
 	const [items, setItems] = useState<TrashSummary[] | null>(null);
@@ -607,7 +583,6 @@ export function TrashDialog({
 						</p>
 					)}
 					{shown && shown.length > 0 && (
-						// Only the list scrolls, so the title and the buttons stay in view however long it gets.
 						<ScrollArea
 							type="auto"
 							className="-mx-2"
@@ -816,12 +791,8 @@ function BackupRow({
 
 type UsageText = {snapshots: string; backups: string; trash: string};
 
-// Storage keys whose changes alter the usage line or the backup list (regular and private libraries).
 const RECOVERY_KEY = /\.(?:trash|backups|snapshots)$/;
 
-/**
-Explains Add versus Restore behind a help button, so the dialog shows no standing paragraph.
-*/
 function BackupsHelpButton() {
 	return (
 		<Popover>
@@ -841,7 +812,6 @@ function BackupsHelpButton() {
 				align="start"
 				aria-label="About backups"
 				className="w-80 space-y-2 p-3 text-xs leading-5"
-				// Escape closes the help only, not the dialog around it.
 				onEscapeKeyDown={(event) => {
 					event.stopPropagation();
 				}}
@@ -865,10 +835,6 @@ function BackupsHelpButton() {
 	);
 }
 
-/**
-Settings › Recovery & backups below the settings rows: storage use on one line, Back up now, and the ways into the
-backup list, recent snapshots and the trash bin.
-*/
 export function RecoveryTools({
 	showStatus,
 	onDataChanged,
@@ -876,9 +842,6 @@ export function RecoveryTools({
 	onOpenTrash,
 }: {
 	showStatus: ShowStatus;
-	/**
-	Called after something changed the saved sessions or bookmarks (a restored backup).
-	*/
 	onDataChanged: () => unknown;
 	onOpenSnapshots: () => void;
 	onOpenTrash: () => void;
@@ -890,7 +853,6 @@ export function RecoveryTools({
 	const [backupsError, setBackupsError] = useState('');
 	const [listOpen, setListOpen] = useState(false);
 	const [busy, setBusy] = useState('');
-	// While Backups is open its feedback and Undo show inside it: the page toast sits behind the modal.
 	const listOpenRef = useRef(false);
 	const [notice, setNotice] = useState<{
 		message: string;
@@ -913,7 +875,6 @@ export function RecoveryTools({
 		if (open) {
 			refreshQuietly();
 		} else {
-			// Closing keeps an Undo that is still offered, as a page toast.
 			if (notice?.action) {
 				showStatus(notice.message, false, {action: notice.action});
 			}
@@ -925,7 +886,6 @@ export function RecoveryTools({
 
 	const undoNotice = () => {
 		const action = notice?.action;
-		// A newer action still running would have its own notice replaced.
 		if (!action || busy !== '') {
 			return;
 		}
@@ -935,9 +895,7 @@ export function RecoveryTools({
 		void action.onClick();
 	};
 
-	// A deleted row takes focus with it; Undo is the nearest useful place for it.
 	const focusUndoRef = useRef(false);
-	// Waits for the delete to finish, while Undo is still disabled.
 	useEffect(() => {
 		if (!(notice?.action && focusUndoRef.current && busy === '')) {
 			return;
@@ -946,14 +904,12 @@ export function RecoveryTools({
 		focusUndoRef.current = false;
 		undoRef.current?.focus();
 	}, [notice, busy]);
-	// What the confirmation asks about; it stays set while the dialog fades out, so its text does not change.
 	const [pending, setPending] = useState<
 		| {kind: 'snapshots'}
 		| {kind: 'restore'; backup: BackupSummary}
 		| {kind: 'delete'; backup: BackupSummary}
 	>({kind: 'snapshots'});
 	const [pendingOpen, setPendingOpen] = useState(false);
-	// A confirmed delete waits for the confirmation to hand focus back, so it cannot take focus from Undo afterwards.
 	const pendingDeleteRef = useRef<BackupSummary>(undefined);
 	const ask = (next: typeof pending) => {
 		setPending(next);
@@ -967,7 +923,6 @@ export function RecoveryTools({
 			send('GET_STORAGE_USAGE'),
 			send('GET_BACKUPS'),
 		]);
-		// Reads overlap (after an action, on storage changes); an older one must not undo a newer one.
 		if (read !== latestReadRef.current) {
 			return;
 		}
@@ -992,7 +947,6 @@ export function RecoveryTools({
 			setBackupsError(messageOf(reason) || 'Could not read the backups.');
 		});
 	}, [refresh]);
-	// The trash bin and snapshot dialogs (and their Undo) change these lists too, so watch storage instead of each action.
 	useEffect(() => {
 		refreshQuietly();
 		let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1048,7 +1002,6 @@ export function RecoveryTools({
 			}
 		});
 
-	// Adds a backup's sessions and bookmarks to what is here, the way importing its file does, instead of replacing.
 	const mergeBackup = (backup: BackupSummary) =>
 		run(`merge:${backup.id}`, async () => {
 			const data = await send('GET_BACKUP_DATA', {id: backup.id});
@@ -1167,7 +1120,6 @@ export function RecoveryTools({
 			<Dialog open={listOpen} onOpenChange={openList}>
 				<DialogContent
 					size="lg"
-					// Ctrl/Cmd+Z runs the notice's Undo, as it does for the page toast, unless a confirmation is on top.
 					onKeyDown={(event) => {
 						if (
 							!(
@@ -1197,7 +1149,6 @@ export function RecoveryTools({
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody>
-						{/* No box of its own, so an empty region adds no gap above the list. */}
 						<div role="status" aria-live="polite" className="contents">
 							{notice && (
 								<div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
@@ -1253,7 +1204,6 @@ export function RecoveryTools({
 							<ScrollArea
 								type="auto"
 								className="-mx-2"
-								// The floor keeps a row in view on very short windows, where the dialog itself scrolls.
 								viewportClassName="max-h-[max(9rem,min(32rem,calc(100dvh-23rem)))] px-2"
 							>
 								<ul className="space-y-2 py-0.5" aria-label="Backups">

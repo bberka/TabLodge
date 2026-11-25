@@ -96,10 +96,6 @@ const NO_SESSIONS: Session[] = [];
 const NO_ORIGINS: readonly string[] = [];
 const UNFILED = 'bookmark-unfiled';
 
-/**
-Opens a saved link from the side panel. The panel itself must never navigate, so "this tab" means
-the active tab of the panel's window rather than `openLink`'s page navigation.
-*/
 async function openSavedLink(
 	url: string,
 	kind: 'bookmark' | 'session',
@@ -171,11 +167,6 @@ function useWindowTabs() {
 	return tabs;
 }
 
-/**
-The active tab's id while TabLodge may read it. Opening the panel grants nothing: access comes from the toolbar
-button, the right-click menu, or a shortcut used on that tab, until it navigates away. An empty script tells the two
-apart, so Keep a copy is only offered where it can work. Never in a private window.
-*/
 function useReadableTab(tab: chrome.tabs.Tab | undefined) {
 	const [readable, setReadable] = useState<number>();
 	const id = tab?.id;
@@ -208,9 +199,6 @@ function useReadableTab(tab: chrome.tabs.Tab | undefined) {
 	return readable;
 }
 
-/**
-A row with a primary button and a "more" menu; the same actions open on right-click.
-*/
 function ActionRow({
 	label,
 	actions,
@@ -219,9 +207,6 @@ function ActionRow({
 }: {
 	label: string;
 	actions: MenuAction[];
-	/**
-	A function receives `openMenu`, which opens the row's ⋯ menu.
-	*/
 	children: ReactNode | ((openMenu: () => void) => ReactNode);
 	selected?: boolean;
 }) {
@@ -257,9 +242,6 @@ function ActionRow({
 	);
 }
 
-/**
-Rows drawn per section and sections drawn per panel at first (a library can hold thousands); the rest load on demand.
-*/
 const ROW_PAGE = 30;
 const SECTION_PAGE = 12;
 
@@ -275,9 +257,6 @@ function Collapsible({
 	count: number;
 	open: boolean;
 	onToggle: () => void;
-	/**
-	Draws the first `limit` rows.
-	*/
 	children: (limit: number) => ReactNode;
 	extra?: ReactNode;
 }) {
@@ -444,7 +423,6 @@ function SidePanel() {
 		kind: 'bookmark' | 'session',
 		openMenu?: () => void,
 	) {
-		// Modified clicks keep the browser's own behavior (new tab, new window).
 		if (
 			event.button !== 0 ||
 			event.ctrlKey ||
@@ -530,7 +508,6 @@ function SidePanel() {
 				id: 'keep-copy',
 				label: 'Keep a copy',
 				icon: ACTION_ICONS.keepCopy,
-				// Only the open tab, and only while TabLodge may read it (see useReadableTab).
 				hidden:
 					readableTabId === undefined ||
 					readableTabId !== activeTab?.id ||

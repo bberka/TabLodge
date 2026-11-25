@@ -95,19 +95,13 @@ import {type TagEdit, TagsField} from './bookmark-tags';
 import {keptCopyMessage, openPageCopy} from './page-copies';
 import {cn} from '@/lib/utils';
 
-// Keep the icon registry out of the popup's first paint; it is loaded right after, before anyone can click Bookmark.
 const loadColumnPicker = async () => import('./bookmark-column-picker');
 
-/**
-Stable fallback so memoized values do not see a new array on every render.
-*/
 const NO_SESSIONS: Session[] = [];
 const NO_ORIGINS: readonly string[] = [];
 
-// Older Chromium builds and some forks lack the side panel API; Firefox opens its sidebar instead.
 const hasSidePanel = canOpenSidePanel;
 
-// Web tabs from chrome.tabs.query, which always carries an id for tabs in normal windows.
 type WebTab = chrome.tabs.Tab & {id: number; url: string};
 
 function Popup() {
@@ -128,7 +122,6 @@ function Popup() {
 	const [picker, setPicker] = useState<Awaited<
 		ReturnType<typeof loadColumnPicker>
 	> | null>(null);
-	// The columns for the active page, asked for as soon as the popup opens so the dialog never waits for the library.
 	const [earlyColumns, setEarlyColumns] = useState<
 		ActionResult<'GET_BOOKMARK_PROMPT'> | undefined
 	>();
@@ -144,9 +137,7 @@ function Popup() {
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
 	const [groupName, setGroupName] = useState('');
 	const [allowPinnedOnce, setAllowPinnedOnce] = useState(false);
-	// Read ahead of the click: sidePanel.open must run inside the user gesture, without awaiting anything first.
 	const [windowId, setWindowId] = useState<number | undefined>();
-	// False on pages that cannot be saved (new tab, browser pages); stays true until the active tab is read.
 	const [pageSavable, setPageSavable] = useState(true);
 	const [sharedPageUrl, setSharedPageUrl] = useState<string>();
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(
@@ -240,7 +231,6 @@ function Popup() {
 				const highlighted = valid.filter(
 					(tab) => tab.highlighted && (includePinnedTabs || !tab.pinned),
 				);
-				// The two halves of the active split view can both be highlighted; together they are one tab-strip slot, not a selection.
 				const slots = new Set(
 					highlighted.map((tab) =>
 						(tab.splitViewId ?? -1) >= 0
@@ -262,7 +252,6 @@ function Popup() {
 		return () => {
 			alive = false;
 		};
-		// ShowStatus is recreated every render; the tab list only reloads when these two change.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the two inputs on purpose
 	}, [chooseOpen, includePinnedTabs]);
 
@@ -270,7 +259,6 @@ function Popup() {
 		scope: SaveScope,
 		options: {tabIds?: number[]; groupName?: string} = {},
 	) {
-		// "Choose tabs and title" already has a title field, so only the quick buttons ask.
 		let typedName = options.groupName;
 		if (options.tabIds === undefined) {
 			const answer = await askSessionName({scope});
@@ -334,9 +322,7 @@ function Popup() {
 				if (active) {
 					setEarlyColumns(result);
 				}
-			} catch {
-				// Clicking Bookmark falls back to the full library.
-			}
+			} catch {}
 		})();
 
 		return () => {
@@ -387,8 +373,6 @@ function Popup() {
 				return;
 			}
 
-			// A column that claims this site takes the page without asking.
-			// A click before either read has landed asks for the columns itself.
 			let ready = state ?? early;
 			if (!ready) {
 				const fetched = await send('GET_BOOKMARK_PROMPT', {url});
@@ -565,7 +549,6 @@ function Popup() {
 		}
 	}
 
-	// Ctrl/Cmd keeps the saved tabs, Shift opens a new window, as on the TabLodge page.
 	async function restoreSession(
 		group: Session,
 		event: MouseEvent<HTMLButtonElement>,
@@ -600,7 +583,6 @@ function Popup() {
 		}
 	}
 
-	// Info opens the Help page, switching to it when it is already open.
 	async function openHelp() {
 		const url = chrome.runtime.getURL('help.html');
 		try {
@@ -613,17 +595,12 @@ function Popup() {
 				window.close();
 				return;
 			}
-		} catch {
-			/*
-			Open a new Help tab instead.
-			*/
-		}
+		} catch {}
 
 		await openPage(url);
 	}
 
 	function openSidePanel() {
-		// Firefox opens the sidebar in the current window and needs no window id.
 		if (windowId === undefined && !isFirefox) {
 			return;
 		}
@@ -650,10 +627,6 @@ function Popup() {
 		window.close();
 	}
 
-	// Chrome sizes the popup to its content (max 800x600) and 100vh is circular there, so the
-	// popup has a fixed size: a stable header and footer with the body scrolling in between.
-	// The private-window banner uses part of the height limit, so its frame is shorter.
-	// Keep the popup's fixed frame while the saved state arrives.
 	if (!state && !error) {
 		return (
 			<main

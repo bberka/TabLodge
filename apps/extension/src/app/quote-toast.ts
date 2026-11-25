@@ -1,25 +1,10 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference -- the worker project has no DOM types, and this function runs in a page
 /// <reference lib="dom" />
-/**
-A message on a web page, at the bottom by default: the confirmation of a "Save quote" click, or the Undo after a
-palette restore that moved a session to the trash. The service worker passes this function to
-chrome.scripting.executeScript under an activeTab grant, so it runs in the page's isolated world, is
-serialized as source, and must not use anything declared outside it (no imports, no helpers).
-
-It sits in a closed shadow root with every style set on the element, like the palette overlay, so the page's CSS cannot
-reach it. It never takes focus: the message is announced through a status region, and Undo is a normal button that Tab
-reaches. Undo sends `undo.type` with `undo.id`, which the worker accepts only from the tab it showed this toast in. The
-toast closes on its own, but not while the pointer or focus is on it, and Escape closes it while it has focus.
-*/
 export function showQuoteToast(toast: {
 	message: string;
 	failed: boolean;
 	undo?: {type: 'QUOTE_UNDO' | 'TRASH_UNDO'; id: string; done: string};
 	theme: 'system' | 'light' | 'dark';
-	/**
-	The edges to sit at (from `toastEdges`, as the worker cannot pass this function an import) and how long to stay,
-	absent for never: chrome.scripting drops null and undefined arguments, so a null here arrives missing.
-	*/
 	edges: {
 		top?: string;
 		bottom?: string;
@@ -156,7 +141,6 @@ export function showQuoteToast(toast: {
 		box.append(undoButton);
 	}
 
-	// Under Messages stay: Until dismissed nothing closes it by itself, so it has a button that does.
 	if (toast.closeMs === undefined) {
 		const closeButton = button('Close');
 		closeButton.addEventListener('click', close);
@@ -179,7 +163,6 @@ export function showQuoteToast(toast: {
 
 	root.append(box);
 	(document.body ?? document.documentElement).append(host);
-	// A live region announces text that changes after it is on the page, so the message goes in a moment later.
 	setTimeout(() => {
 		text.textContent = toast.message;
 	}, 50);

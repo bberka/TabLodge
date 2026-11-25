@@ -1,14 +1,9 @@
-// Small recovery helpers shared by the pages: formatting, the open-dialog event, and the Undo toasts. The heavy
-// dialogs live in recovery.tsx and are loaded only when opened.
 import {useCallback, useEffect, useState} from 'react';
 import type {ActionSuccess, RestoreResult} from '../shared/types';
 import {messageOf, plural, send, type ShowStatus} from './common';
 import {sessionRestoreMessage} from './session-restore-message';
 import {claimUndo} from './message-client';
 
-/**
-A date and time in the user's locale, such as "Oct 25, 2026, 2:32 PM".
-*/
 export function whenText(time: number): string {
 	return new Date(time).toLocaleString(undefined, {
 		dateStyle: 'medium',
@@ -16,9 +11,6 @@ export function whenText(time: number): string {
 	});
 }
 
-/**
-A byte count such as "1.4 MB".
-*/
 export function bytesText(bytes: number): string {
 	if (bytes < 1024) {
 		return `${bytes} B`;
@@ -29,25 +21,16 @@ export function bytesText(bytes: number): string {
 		: `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
-Window event that asks the page to open the snapshots or trash dialog (sent by menus and palette commands).
-*/
 export const RECOVERY_EVENT = 'tablodge:recovery';
 export type TrashFilter = 'all' | 'sessions' | 'bookmarks';
 export type RecoveryEventDetail = {
 	type: 'snapshots' | 'trash';
-	/**
-	The trash bin opens showing only this side (from the Sessions or Bookmarks menu).
-	*/
 	filter?: TrashFilter;
 };
 export function emitRecoveryEvent(detail: RecoveryEventDetail) {
 	globalThis.dispatchEvent(new CustomEvent(RECOVERY_EVENT, {detail}));
 }
 
-/**
-Opens the dialog a menu or palette command asked for.
-*/
 export function useRecoveryEvents(
 	onOpen: (
 		type: RecoveryEventDetail['type'],
@@ -65,9 +48,6 @@ export function useRecoveryEvents(
 	}, [onOpen]);
 }
 
-/**
-Undo for a delete: puts the item back from the trash, then lets the page reload its data.
-*/
 export async function undoFromTrash(
 	trashId: string | undefined,
 	showStatus: ShowStatus,
@@ -86,10 +66,6 @@ export async function undoFromTrash(
 	}
 }
 
-/**
-The toast after restoring a session from the popup or side panel. With Remove restored tabs on, what was removed went
-to the trash and Undo brings it back, failures and skipped tabs included.
-*/
 export function reportSessionRestore(
 	result: RestoreResult,
 	name: string,
@@ -111,10 +87,6 @@ export function reportSessionRestore(
 	);
 }
 
-/**
-A success toast with an Undo button that restores `trashId` from the trash. `undo` replaces that click, for a delete
-that also changed something the trash does not hold; `trashId` still decides whether there is an Undo.
-*/
 export function offerTrashUndo(
 	message: string,
 	trashId: string | undefined,
@@ -136,9 +108,6 @@ export function offerTrashUndo(
 	);
 }
 
-/**
-A success toast with an Undo button that runs `UNDO` for an `undoId` from the service worker, then lets the page reload its data.
-*/
 export function offerUndo(
 	message: string,
 	undoId: string | undefined,
@@ -168,9 +137,6 @@ export function offerUndo(
 	);
 }
 
-/**
-A success toast with an Undo button that closes the tabs just opened (the ones that still exist).
-*/
 export function offerCloseTabsUndo(
 	message: string,
 	tabIds: number[],
@@ -188,7 +154,6 @@ export function offerCloseTabsUndo(
 							try {
 								await chrome.tabs.remove(tabIds);
 							} catch {
-								// Some of them were already closed; close the rest one by one.
 								await Promise.all(
 									tabIds.map(async (id) =>
 										chrome.tabs.remove(id).catch(() => undefined),
@@ -204,9 +169,6 @@ export function offerCloseTabsUndo(
 	);
 }
 
-/**
-Reports a snapshot restore with an Undo that closes the tabs it opened.
-*/
 export function reportSnapshotRestore(
 	result: ActionSuccess<'RESTORE_SNAPSHOT'>,
 	showStatus: ShowStatus,
@@ -219,9 +181,6 @@ export function reportSnapshotRestore(
 	);
 }
 
-/**
-Saves a snapshot, or one of its windows, as sessions and reports the result. Returns whether it saved.
-*/
 export async function saveSnapshotAsSession(
 	id: string,
 	windowIndex: number | undefined,

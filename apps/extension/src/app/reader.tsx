@@ -18,18 +18,12 @@ import {
 	useStatus,
 } from './common';
 
-// The reader for a kept copy: reader.html?url=<address>. Blocks are text, rendered as React text nodes, so nothing
-// from the page can run here.
-
 const keptDate = (time: number) =>
 	new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'long',
 		timeStyle: 'short',
 	}).format(time);
 
-/**
-Consecutive list items become one list.
-*/
 function renderBlocks(blocks: readonly CopyBlock[]) {
 	const out: ReactNode[] = [];
 	let items: string[] = [];
@@ -41,7 +35,6 @@ function renderBlocks(blocks: readonly CopyBlock[]) {
 		out.push(
 			<ul key={`list-${key}`} className="list-disc space-y-1.5 ps-6">
 				{items.map((text, index) => (
-					// A kept copy never changes, so its position is a stable key.
 					<li key={`${key}-${index}`}>{text}</li>
 				))}
 			</ul>,
@@ -104,7 +97,6 @@ function renderBlocks(blocks: readonly CopyBlock[]) {
 	return out;
 }
 
-// The page shows one copy, named in its own address.
 const url = webUrl(new URLSearchParams(location.search).get('url')) ?? '';
 const pageTitle = document.title;
 
