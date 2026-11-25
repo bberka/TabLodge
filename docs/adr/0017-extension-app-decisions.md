@@ -392,7 +392,7 @@ Status: accepted, 2026-11-23. Issue #442.
 
 ### Page toast
 
-* **Toasts are injected by the worker.** The worker passes this function to `chrome.scripting.executeScript` (`quote-toast.ts:showQuoteToast`).
+* **Toasts are injected by the worker.** The worker passes `showQuoteToast` to `chrome.scripting.executeScript`, which serializes it. It must stay self-contained: it cannot reference imports or helpers outside the function, so extracting one would break the injected toast (`quote-toast.ts:showQuoteToast`).
 * **Edges and timing are sent as values.** `chrome.scripting` drops null and undefined arguments, so an absent duration means never (`quote-toast.ts:showQuoteToast`).
 * **Messages stay until dismissed.** A toast with no timeout has a button that closes it (`quote-toast.ts:showQuoteToast`).
 * **Live regions announce late.** Text that changes after it is on the page is announced when it is set a moment later (`quote-toast.ts:showQuoteToast`).
@@ -441,8 +441,8 @@ Status: accepted, 2026-11-23. Issue #442.
 ### Save target
 
 * **"New session" is a fixed value.** It is the session picker's create-new choice, like the new column choice (`save-target.tsx:NEW_SESSION`).
-* **No switch without sessions.** Renders nothing when there is no session to choose, so the dialog keeps its plain column field (`save-target.tsx:SaveTargetChoice`).
-* **The session choice can create one.** It is offered even with no saved session (`save-target.tsx:SaveTargetChoice`).
+* **No switch without sessions, unless it can create one.** With no saved session, `SaveTargetChoice` renders nothing unless `allowNewSession` is true, so the dialog keeps its plain column field (`save-target.tsx:SaveTargetChoice`).
+* **The session choice can create one.** With `allowNewSession` set, it is offered even with no saved session (`save-target.tsx:SaveTargetChoice`).
 
 ### Saved URLs
 
