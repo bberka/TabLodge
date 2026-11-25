@@ -52,7 +52,7 @@ This record covers the last comments in `apps/extension/src/shared/`: source col
 * **Search stays one icon until needed,** and stays open while it holds a query. Escape closes it from inside, so focus goes back to the icon button that opens it (`ui.tsx:ExpandingSearch`).
 * **The result region stays mounted in both states,** so a screen reader treats later text as an update (`ui.tsx:ExpandingSearch`).
 * **The search announcement says the count,** such as "3 bookmarks found," and says nothing when the query is empty (`ui.tsx:ExpandingSearchProps`).
-* **Destructive confirmations are for the Settings page only.** Dashboard, new-tab, and side-panel actions run at once with an Undo toast instead (`ui.tsx:ConfirmationDialog`).
+* **Destructive confirmations are for the Settings page.** Dashboard, new-tab, and side-panel actions run at once with an Undo toast instead. The exception is an action the server cannot undo, such as deleting a shared page: it asks first wherever it runs ([UI rules](../agents/ui.md#destructive-actions)) (`ui.tsx:ConfirmationDialog`).
 * **A dialog's close callback runs before focus returns** to what opened it (`ui.tsx:ConfirmationDialog`).
 * **The theme mirrors the stored theme and accent into localStorage,** so pages with a pre-paint boot script can apply them before React loads (`theme.tsx:applyDocumentTheme`, `shell/theme-boot.ts`).
 * **The provider starts from what the boot script applied,** so the first render does not reset it (`theme.tsx:ThemeProvider`).
@@ -70,7 +70,7 @@ This record covers the last comments in `apps/extension/src/shared/`: source col
 
 ### Small helpers
 
-* **Script scrolling is smooth** unless the user asks for reduced motion. The CSS `scroll-behavior` rule does not affect `scrollIntoView` (`motion.ts:scrollBehavior`).
+* **Script scrolling is smooth** unless the user asks for reduced motion (`motion.ts:scrollBehavior`). An explicit `smooth` ignores the CSS `scroll-behavior` rule. Under reduced motion `scrollBehavior()` returns `auto`, and then `scrollIntoView` uses the target's computed CSS `scroll-behavior`, so a `scroll-behavior: smooth` rule on a container still makes that scroll smooth.
 * **Generated files download through one helper** (`download.ts:downloadFile`).
 * **Callbacks keep their identity** and always call the newest functions, so a long list does not re-render (`use-stable.ts:useStableCallbacks`).
 * **Radio arrow keys wrap around,** as in the WAI-ARIA radio group pattern. Home and End jump to the ends (`radio-keys.ts:radioTargetIndex`).
