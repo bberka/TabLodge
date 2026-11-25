@@ -148,16 +148,8 @@ edited in place, so everything else is still where the index says.
 */
 export type UndoDelta = {
 	undoDelta: 1 | 2 | 3;
-	/**
-	The index as it was stored when the checkpoint began (from version 2 on, a layout 10 one without its sessions).
-	*/
 	index: Raw;
 	records: Raw;
-	/**
-	From version 2 on: the index lists no sessions and the replaced bookmarks record is not in `records`. The old
-	session list and the old bookmarks are given as what differs from the commit the action ended on, whose `rev` is
-	the list lengths each patch records.
-	*/
 	sessions?: ListPatch;
 	bookmarks?: ListPatch;
 };
@@ -196,9 +188,6 @@ export function createLibraryState(
 		The newest layout this instance understands. Tests pin it to 10 to be the version before layout 11.
 		*/
 		layoutVersion?: number;
-		/**
-		Serialized characters and records per `set`; tests shrink them to force several batches.
-		*/
 		writeBatchChars?: number;
 		writeBatchCount?: number;
 	} = {},
@@ -284,10 +273,6 @@ export function createLibraryState(
 
 	const pageCache = new Map<string, {hash: string; entries: SessionEntry[]}>();
 
-	/**
-	The index with every session entry: a layout 11 index keeps them in pages, which are read here. A page is read
-	once per content: the pages of the latest index stay in memory, so a commit reads only what it changed.
-	*/
 	async function loadIndex(entry: Raw, extra?: Raw): Promise<LibraryIndex> {
 		const index = parseIndex(entry);
 		if (index.format === 10) {
@@ -343,16 +328,10 @@ export function createLibraryState(
 		};
 	}
 
-	/**
-	The session entries (id, name, folder, times) of an index as stored, without reading any session.
-	*/
 	async function readSessionEntries(entry: Raw): Promise<SessionEntry[]> {
 		return known(entry) ? (await loadIndex(entry)).sessions : [];
 	}
 
-	/**
-	Reads the pieces that hold the bookmarks and returns them in order, or what was wrong with them.
-	*/
 	async function readParts(parts: readonly PageRef[], extra?: Raw) {
 		const problems: LibraryProblem[] = [];
 		const pieces: unknown[][] = [];
@@ -1221,12 +1200,6 @@ export function createLibraryState(
 		await backend.set({[STATE_KEY]: {...current, garbage: []}});
 	}
 
-	/**
-	Moves a layout 10 library to layout 11: the session entries go into pages and the bookmarks into chunks, which
-	are new keys, so the stored library stays whole until the one write that switches the index. The index and the
-	bookmarks record it replaces stay for a week (`PREUPGRADE_KEY`, `migratedFrom.kept`). Throws when a step fails;
-	the layout 10 library is untouched and keeps working.
-	*/
 	async function upgrade(): Promise<{
 		status: 'none' | 'newer' | 'current' | 'upgraded';
 	}> {

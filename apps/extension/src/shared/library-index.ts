@@ -62,10 +62,6 @@ export type SessionEntry = {
 	tabSync?: true;
 };
 
-/**
-One stored piece the index points at: a chunk of bookmarks, a page of session entries, or (layout 10) the whole
-bookmarks record. `sync` is true when the piece carries a `$sync` sidecar.
-*/
 export type PageRef = {
 	key: string;
 	hash: string;
@@ -82,16 +78,10 @@ export type MigrationNote = {
 	sessions: number;
 	tabs: number;
 	bookmarks: number;
-	/**
-	Keys an upgrade replaced and keeps until `keepUntil`.
-	*/
 	kept?: string[];
 };
 
 export type LibraryIndex = {
-	/**
-	10 keeps the session entries and one bookmarks record inside the index; 11 keeps them in pages and chunks.
-	*/
 	format: 10 | 11;
 	schemaVersion: number;
 	layout: 'records';
@@ -100,9 +90,6 @@ export type LibraryIndex = {
 	folders: unknown[];
 	bookmarkColumns: unknown[];
 	settings: unknown;
-	/**
-	Every session entry. In format 11 the index itself holds none: `loadIndex` fills this from the pages.
-	*/
 	sessions: SessionEntry[];
 	sessionPages: PageRef[];
 	bookmarkParts: PageRef[];
@@ -184,10 +171,6 @@ function parsePageRefs(value: unknown, prefix: string): PageRef[] {
 	return refs;
 }
 
-/**
-The index as stored. A layout 10 index carries its session entries; a layout 11 index leaves `sessions` empty for
-the caller to fill from `sessionPages`.
-*/
 export function parseIndex(entry: Raw): LibraryIndex {
 	const paged = Number(entry.schemaVersion) >= LAYOUT_VERSION;
 	if (!isCount(entry.rev)) {
@@ -283,9 +266,6 @@ export function checkedSessions(sessions: SessionEntry[]): SessionEntry[] {
 export const bookmarkCount = (index: LibraryIndex) =>
 	index.bookmarkParts.reduce((sum, part) => sum + part.count, 0);
 
-/**
-The index as it is written to `tablodge.state`.
-*/
 export function storedIndex(index: LibraryIndex, garbage: string[]): Raw {
 	const common = {
 		layout: 'records',
@@ -455,10 +435,6 @@ export type Plan = {
 	bookmarks: PlannedPart[];
 };
 
-/**
-Cuts `items` into pieces of `PAGE_SIZE` by position. A piece whose content is the same as the previous piece at that
-position is reused, so an edit changes the piece it falls in and a move changes the pieces it passes.
-*/
 export function planParts(
 	items: readonly unknown[],
 	prefix: string,

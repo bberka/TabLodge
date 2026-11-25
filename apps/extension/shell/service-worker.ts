@@ -12324,7 +12324,6 @@ onLibraryChanged((changes, areaName) => {
 });
 
 async function followMenus(next: Raw, previous: Raw) {
-	// The index lists sessions in pages (or, before layout 11, as `sessions`); the old single entry held them as `groups`.
 	const sessionsOf = async (state: Raw) =>
 		state.layout === 'records'
 			? libraryState.readSessionEntries(state)

@@ -97,10 +97,6 @@ type HarnessOptions = {
 	By default the fixture is stored in the per-record layout.
 	*/
 	legacyLayout?: boolean;
-	/**
-	Start with the library in layout 10 (the index lists every session and one bookmarks record), as before the
-	update that pages them, so the worker has to upgrade it.
-	*/
 	layout10?: boolean;
 	incognitoContext?: boolean;
 	failedCreateUrls?: string[];
