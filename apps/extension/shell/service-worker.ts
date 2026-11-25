@@ -3608,7 +3608,6 @@ async function updateGroup(
 			group.description = normalizeSessionText(fields.description);
 		}
 
-		// `color` omitted keeps the current color; "" or anything that is not a color removes it.
 		if (fields.color !== undefined) {
 			const {color} = colorField(fields.color);
 			if (color) {
@@ -3626,7 +3625,6 @@ async function updateGroup(
 			const target = store.folders.find(
 				(folder) => folder.id === fields.folderId,
 			);
-			// A move that names no color of its own takes the folder's color when the folder asks for that.
 			if (
 				fields.color === undefined &&
 				group.folderId !== fields.folderId &&
@@ -3670,9 +3668,6 @@ async function archiveGroup(
 	});
 }
 
-/**
-Moves sessions that were not opened (or saved or edited) in the last `autoArchiveDays` days into the "Archived" folder. Nothing is deleted.
-*/
 function archiveStaleSessions(): Promise<void> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -3709,7 +3704,6 @@ async function setGroupOrder(
 				),
 			),
 		];
-		// The listed sessions are re-dealt into the stored positions they already occupied.
 		const slots = store.groups
 			.map((group, index) => (ids.includes(group.id) ? index : -1))
 			.filter((index) => index !== -1);
@@ -3787,7 +3781,6 @@ async function updateFolder(
 
 		const folderName = normalizeFolderName(name);
 		folder.name = folderName;
-		// `icon` omitted keeps the current icon; "" or an unknown id resets it to the default.
 		if (icon !== undefined) {
 			const {icon: nextIcon} = iconField(icon);
 			if (nextIcon) {
@@ -3797,7 +3790,6 @@ async function updateFolder(
 			}
 		}
 
-		// `color` the same: omitted keeps it, "" or anything that is not a color removes it.
 		if (color !== undefined) {
 			const {color: nextColor} = colorField(color);
 			if (nextColor) {
@@ -3820,10 +3812,6 @@ async function updateFolder(
 	});
 }
 
-/**
-Deletes a session folder; its sessions move to Unfiled. A folder holds no data of its own, so it does not go to the
-trash bin: the short-lived Undo puts the folder and its sessions back.
-*/
 async function deleteFolder(
 	folderId: string,
 ): Promise<ActionResult<'DELETE_FOLDER'>> {
@@ -3900,11 +3888,6 @@ async function deleteTab(
 	});
 }
 
-/**
-Merges one session into another: the target keeps its name, folder and order, the source's links are added at its
-end except addresses it already holds (their notes fill empty notes on the kept copy), the source's description is
-added below the target's, and the source session is removed. Undo restores both.
-*/
 async function mergeGroups(
 	sourceGroupId: string,
 	targetGroupId: string,
@@ -3957,10 +3940,6 @@ async function mergeGroups(
 	);
 }
 
-/**
-Adds dropped links to a session, before or after `targetTabId` (or at its end). Addresses the session already holds
-are skipped. Undo removes the added links again.
-*/
 async function addLinksToSession(
 	groupId: string,
 	entries: LinkEntry[] = [],
@@ -8775,7 +8754,6 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 				: undefined;
 			const others = record.keys.filter((key) => key !== STORAGE_KEY);
 			const current = await library.get<Raw>(delta ? others : record.keys);
-			// A delta is only valid for the exact commit the action ended on; any later commit refuses it.
 			const stateChanged =
 				delta &&
 				(await libraryState.fingerprint()) !== record.after[STORAGE_KEY];
@@ -8828,7 +8806,6 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 				await writeUndo(remaining);
 			});
 			if (record.keys.includes(STORAGE_KEY)) {
-				// Settings may differ from what the alarms, toolbar, and menus were last set up for.
 				const store = await getStore();
 				await syncRecoveryAlarms(store.settings);
 				await syncToolbarAction(store.settings);
@@ -8889,16 +8866,9 @@ async function ensureAlarm(
 			periodInMinutes,
 			delayInMinutes: delayInMinutes ?? periodInMinutes,
 		});
-	} catch {
-		/*
-		Alarms are an optimization; events still capture snapshots.
-		*/
-	}
+	} catch {}
 }
 
-/**
-Creates, changes or clears the repeating alarms that match the settings (alarms may not survive a browser restart, so this runs on every start too).
-*/
 async function syncRecoveryAlarms(settings: Settings) {
 	if (privateContext) {
 		return;
@@ -8923,9 +8893,6 @@ async function syncRecoveryAlarms(settings: Settings) {
 	);
 }
 
-/**
-Everything the recovery features do when the browser starts: judge the previous run, catch up a missed backup, purge old trash.
-*/
 async function runStartupRecovery() {
 	try {
 		await evaluateStartup();
@@ -8941,16 +8908,11 @@ async function runStartupRecovery() {
 		if (settings.snapshotsEnabled) {
 			scheduleSnapshot();
 		}
-	} catch {
-		/*
-		Recovery is best effort and must never block startup.
-		*/
-	}
+	} catch {}
 }
 
 chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 	if (alarm.name === ALARM_PRIVATE_LOCK) {
-		// Reading the status locks the library once the idle time has passed.
 		void privateLockInfo().catch(() => undefined);
 		return;
 	}
@@ -8984,7 +8946,6 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 	void work?.catch(() => undefined);
 });
 
-// Tab and window changes schedule a debounced capture. Title-only updates are ignored (they are frequent and unimportant).
 const scheduleSnapshotSoon = () => scheduleSnapshot();
 chrome.tabs?.onCreated?.addListener?.(scheduleSnapshotSoon);
 chrome.tabs?.onMoved?.addListener?.(scheduleSnapshotSoon);
@@ -8992,7 +8953,6 @@ chrome.tabs?.onActivated?.addListener?.(scheduleSnapshotSoon);
 chrome.tabs?.onAttached?.addListener?.(scheduleSnapshotSoon);
 chrome.tabs?.onDetached?.addListener?.(scheduleSnapshotSoon);
 chrome.tabs?.onRemoved?.addListener?.((_tabId, info) => {
-	// A closing window is handled by windows.onRemoved.
 	if (!info?.isWindowClosing) {
 		scheduleSnapshot();
 	}
@@ -9018,19 +8978,14 @@ chrome.windows?.onRemoved?.addListener?.(() => {
 	}
 });
 
-// Alarms can be lost when the browser restarts and the worker may wake without onStartup, so re-check on every start.
 void readSettings()
 	.then((settings) => syncRecoveryAlarms(settings))
 	.catch(() => undefined);
 
-// An update moves the library to the per-record layout now, not at the first edit; later runs find it current.
 void mutate(async () => {
 	await libraryState.pruneRecoveryCopy();
 }).catch(() => undefined);
-// A lock pass that was cut off (the browser closed, the worker stopped) finishes as soon as the key is in memory.
 if (privateContext) {
-	// Private windows that closed while the worker was stopped lock the library as soon as it starts, before any page
-	// asks. A new window never counts as one of them, and the check shares one queue with unlocking in the lock.
 	void privateLock.lockWhenWindowsClosed().catch(() => undefined);
 	void resumePrivateLock()
 		.then(receiveSentLinks)
@@ -9049,7 +9004,6 @@ if (privateContext) {
 	chrome.windows?.onRemoved?.addListener?.((windowId) => {
 		void privateLock.lockWhenWindowsClosed(windowId).catch(() => undefined);
 	});
-	// Locking the screen locks the library too. The browser wakes the worker for this event.
 	chrome.idle?.onStateChanged?.addListener?.((state) => {
 		if (state === 'locked') {
 			void privateLock.lock().catch(() => undefined);
@@ -9057,9 +9011,6 @@ if (privateContext) {
 	});
 }
 
-/**
-Messages that work while the private library is locked: they read no library data.
-*/
 const PRIVATE_LOCK_OPEN_MESSAGES = new Set<string>([
 	'GET_PRIVATE_CONFIG',
 	'GET_PRIVATE_LOCK',
@@ -9107,7 +9058,6 @@ async function handlePrivateLockMessage(
 
 			case 'TOUCH_PRIVATE_LOCK': {
 				await privateLock.touch();
-				// Also what the Settings button "Finish" sends after an interrupted pass.
 				const status = await privateLock.status();
 				if (!status.locked && status.state !== 'encrypted') {
 					await resumePrivateLock();
@@ -9135,7 +9085,6 @@ async function handlePrivateLockMessage(
 				});
 				invalidateSettings();
 				void protectPrivateSync({value: credential}).catch(() => undefined);
-				// The set-a-password screen's choice to sync: its outcome shows in Settings › Sync, and the lock stands either way.
 				if (message.sync === true) {
 					await enablePrivateSync(credential).catch(() => undefined);
 				}
@@ -9168,7 +9117,6 @@ async function handlePrivateLockMessage(
 							return {ok: false as const, error: REWRAP_UNCONFIRMED_MESSAGE};
 						}
 
-						// The server keeps the old password, so the library goes back to it.
 						if (before) {
 							await mutate(async () => {
 								await privateLock.changeCredential(credential, {
@@ -9195,7 +9143,6 @@ async function handlePrivateLockMessage(
 					return {ok: false, error: 'Enter your password.'};
 				}
 
-				// Only while private sync is on: it needs the password. A key left from a server that is gone does not count.
 				const syncOn =
 					(await privateRead(PRIVATE_SYNC_ON_KEY).catch(() => undefined)) ===
 						true && (await regularSyncConfig()) !== undefined;
@@ -9227,7 +9174,6 @@ async function handlePrivateLockMessage(
 					};
 				}
 
-				// Stops private sync first, so nothing is written back while the library is emptied. The server's copy stays.
 				privateSync?.stop();
 				privateSync = undefined;
 				await privateLock.lock();
@@ -9361,7 +9307,6 @@ async function handlePrivateSyncMessage(
 
 			case 'PRIVATE_SYNC_DISABLE': {
 				await privateSync?.disconnect();
-				// Without a live client (no server any more, say) the key and the switch still go.
 				await mutate(async () => {
 					await rawLibrary.remove([PRIVATE_SYNC_KEY_KEY, PRIVATE_SYNC_ON_KEY]);
 				});
@@ -9390,10 +9335,6 @@ async function handlePrivateSyncMessage(
 	return {ok: true, privateSync: await privateSyncInfo()};
 }
 
-// Settings › Sources (src/app/site-sources.ts). The choices sync with the regular library's server; whether a site
-// runs here stays in this browser. A source's content script is registered only while the site is on and the
-// browser grants its optional host permission, and only by the regular worker: the permission and the registration
-// belong to the browser.
 const sourcesMutate = serialQueue();
 
 async function readSourcesState(): Promise<SiteSourcesState> {
@@ -9408,7 +9349,6 @@ function changeSourcesState(change: (state: SiteSourcesState) => void) {
 		await chrome.storage.local.set({
 			[SITE_SOURCES_KEY]: siteSourcesValue(state),
 		});
-		// The choices sync; a write made by sync itself is ignored there.
 		syncClient?.localChanged();
 		return state;
 	});
@@ -9451,9 +9391,6 @@ async function unregisterSource(source: SiteSource) {
 	}
 }
 
-/**
-Pages of the site already open when it is switched on get the script too, so the user need not reload them.
-*/
 async function injectSourceIntoOpenTabs(source: SiteSource) {
 	const tabs = await chrome.tabs.query({url: source.origins});
 	await Promise.all(
@@ -9470,12 +9407,6 @@ async function injectSourceIntoOpenTabs(source: SiteSource) {
 	);
 }
 
-/**
-Brings the registrations in line with the choices and the permissions, and safe to run any number of times. A site
-that is on and has its permission here runs here, which turns on a site chosen in another browser when this one
-already grants its access. One that ran here and lost its permission (revoked while the worker was stopped) goes off
-here and says why; the choice stays, so it stays on in other browsers.
-*/
 async function reconcileSources() {
 	if (privateContext) {
 		return;
@@ -9509,7 +9440,6 @@ async function reconcileSources() {
 	const dropped: SiteSource[] = [];
 	await changeSourcesState((next) => {
 		for (const source of started) {
-			// A Remove that ran while the permissions were checked wins.
 			if (sourceChoice(next, source).wanted) {
 				next.sites[source.id] = {enabled: true};
 			} else {
@@ -9523,10 +9453,6 @@ async function reconcileSources() {
 				: {enabled: false};
 		}
 	});
-	/*
-	Access revoked while the other sites were checked: the onRemoved handler saw the site still off and left it. Checked
-	again now that it is written as on, so either this check or that handler turns it off.
-	*/
 	const revoked: SiteSource[] = [];
 	for (const source of started) {
 		if (!dropped.includes(source) && !(await sourcePermitted(source))) {
@@ -9536,7 +9462,6 @@ async function reconcileSources() {
 
 	if (revoked.length > 0) {
 		await changeSourcesState((next) => {
-			// Its access went after it ran here, as with a revocation at any other time: Settings offers Allow again.
 			for (const source of revoked) {
 				next.sites[source.id] = sourceChoice(next, source).wanted
 					? {enabled: false, notice: 'revoked'}
@@ -9547,7 +9472,6 @@ async function reconcileSources() {
 
 	dropped.push(...revoked);
 	await Promise.all(dropped.map(async (source) => unregisterSource(source)));
-	// Not awaited: after a sync round this runs inside the library's queue, which open tabs must not hold up.
 	void Promise.all(
 		started
 			.filter((source) => !dropped.includes(source))
@@ -9555,10 +9479,6 @@ async function reconcileSources() {
 	).catch(() => undefined);
 }
 
-/**
-A site goes off here: its script, its permission, and its Not now answers go with it, so adding it again asks
-afresh.
-*/
 async function stopSource(source: SiteSource) {
 	await unregisterSource(source);
 	await chrome.permissions
@@ -9585,10 +9505,6 @@ async function readOutsideSettings(): Promise<Record<string, unknown>> {
 	};
 }
 
-/**
-Values from other browsers. One that is not valid here is left out, and one changed in this browser during the round
-stays as it is.
-*/
 async function applyOutsideSettings(
 	put: Record<string, unknown>,
 	was: Readonly<Record<string, unknown>>,
@@ -9609,7 +9525,6 @@ async function applyOutsideSettings(
 		const config = (await chrome.storage.local.get([PRIVATE_CONFIG_KEY]))[
 			PRIVATE_CONFIG_KEY
 		];
-		// Like SET_PRIVATE_ACCENT: the whole config, with the fields this browser has.
 		writes[PRIVATE_CONFIG_KEY] = {
 			...normalizePrivateConfig(config),
 			...(isRecord(config) && config),
@@ -9622,18 +9537,11 @@ async function applyOutsideSettings(
 	}
 }
 
-/**
-The choices as the sync client sees them: one per site that is on, as stored.
-*/
 async function readSyncSources(): Promise<SyncedSource[]> {
 	const {choices} = await readSourcesState();
 	return Object.entries(choices).map(([id, value]) => ({id, value}));
 }
 
-/**
-Choices from other devices. A site removed there goes off here too; one turned on there runs here once this browser
-grants its access.
-*/
 async function applySyncSources(
 	put: SyncedSource[],
 	remove: string[],
@@ -9643,7 +9551,6 @@ async function applySyncSources(
 	await changeSourcesState((next) => {
 		applied = applySyncedChoices(next, put, remove, was);
 	});
-	// Also a site off here (its access revoked): its Not now answers go with it.
 	await Promise.all(applied.removed.map(async (source) => stopSource(source)));
 	await reconcileSources();
 }
@@ -9668,8 +9575,6 @@ async function setSiteSource(
 		};
 	}
 
-	// Removing a site drops its choices in every browser, so adding it again starts with the site's own column and
-	// save. Turning it on keeps the choices another browser made.
 	const state = await changeSourcesState((next) => {
 		next.sites[source.id] = {enabled};
 		if (enabled) {
@@ -9765,17 +9670,10 @@ async function markSourcesPointed(
 	return {ok: true};
 }
 
-/**
-A private window takes source saves only after its setup chose the regular library; before setup, or with a
-separate private library (locked or not), it saves and undoes nothing and never reads a library.
-*/
 const privateSourcesOff = () =>
 	privateContext &&
 	!(privateConfig.configured && privateConfig.mode === 'shared');
 
-/**
-The source a content script's message speaks for: only the one whose site the sending page is on.
-*/
 function senderSource(id: unknown, sender: chrome.runtime.MessageSender) {
 	const source = siteSourceById(id);
 	return source && siteSourceForUrl(sender.tab?.url ?? sender.url) === source
@@ -9783,10 +9681,6 @@ function senderSource(id: unknown, sender: chrome.runtime.MessageSender) {
 		: undefined;
 }
 
-/**
-The note of a source save: the item's discussion page, for a site whose items link elsewhere. Only an address the
-site's own discussion rule accepts is kept, so a page cannot write anything else into the library.
-*/
 function sourceNote(source: SiteSource, href: unknown, url: string) {
 	const rule = source.discussion;
 	const discussion =
@@ -9796,10 +9690,6 @@ function sourceNote(source: SiteSource, href: unknown, url: string) {
 		: undefined;
 }
 
-/**
-The column a source saves into: the one chosen in Settings while it exists, otherwise the site's source column,
-added to the store when missing. Its fixed id makes two devices that create it at once write the same record.
-*/
 function sourceSaveColumn(
 	store: Store,
 	source: SiteSource,
@@ -9815,7 +9705,6 @@ function sourceSaveColumn(
 		return existing;
 	}
 
-	// The site's own pages saved by hand go here too, except an address another column already claims.
 	const claimable = source.columnSites.filter(
 		(site) => !columnForUrl(store.bookmarkColumns, `https://${site}/`),
 	);
@@ -9856,7 +9745,6 @@ async function saveFromSource(
 			[STORAGE_KEY],
 			async (): Promise<ActionResult<'SITE_SOURCE_SAVE'>> => {
 				const store = await getStore();
-				// The same rule as an import: an address in the library or in the trash counts as saved.
 				if (store.bookmarks.some((bookmark) => bookmark.url === url)) {
 					return {ok: true, outcome: 'exists'};
 				}
@@ -9904,10 +9792,6 @@ async function saveFromSource(
 	return result;
 }
 
-/**
-The items of a saved page that the library lacks: not in any column and not in the trash bin, as a click-save
-counts them.
-*/
 async function missingFromSource(
 	store: Store,
 	source: SiteSource,
@@ -9977,7 +9861,6 @@ async function addSourceCatchUp(
 				const now = Date.now();
 				const column = sourceSaveColumn(store, source, state, now);
 				const device = await savedHere();
-				// In the page's order, one after another, as the site lists them.
 				for (const link of added) {
 					const notes = sourceNote(source, link.discussion, link.url);
 					store.bookmarks.push({
@@ -10011,7 +9894,6 @@ async function dismissSourceCatchUp(
 		return {ok: true};
 	}
 
-	// In the sources queue as a whole, so a Remove that clears the answers can't be undone by this one finishing later.
 	await sourcesMutate(async () => {
 		if (!(await readSourcesState()).sites[source.id].enabled) {
 			return;
@@ -10027,16 +9909,8 @@ async function dismissSourceCatchUp(
 	return {ok: true};
 }
 
-/**
-How long a source save's result waits for the next page in its tab: a click on Hacker News' favorite loads
-another page before the first one can show the result.
-*/
 const PENDING_SOURCE_MS = 15_000;
 
-/**
-The last source save of each tab whose page has not shown its result yet, by tab id. It is kept from the moment
-the save starts, so a page that loads while the save still runs waits for it.
-*/
 const pendingSourceSaves = new Map<
 	number,
 	{
@@ -10089,11 +9963,6 @@ async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
 	return undoAction(id);
 }
 
-/**
-The undo id of each Save quote toast, and each palette restore toast, with the tab that shows it: Undo in a page may
-only take back what that page's toast reported (see QUOTE_UNDO and TRASH_UNDO). Session storage, because a toast set to
-stay until dismissed outlives the idle worker, and a restarted worker must still let its tab undo.
-*/
 const TOAST_UNDO_PREFIX = 'toastUndoTab:';
 
 async function bindToastUndo(
@@ -10127,12 +9996,6 @@ async function claimToastUndo(
 	}
 }
 
-/**
-Messages from code in a web page: the site content script and the toasts the worker draws on a page. They get the source
-actions (a save, the saved page catch-up, and their Undo), Undo of the toast's own quote or restore, and where toasts
-appear, and nothing else: no page can read or change the library through them, and the catch-up answers only how many of
-its site's links are missing.
-*/
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
 	sender: chrome.runtime.MessageSender,
@@ -10272,7 +10135,6 @@ chrome.permissions?.onRemoved?.addListener?.((removed) => {
 
 	void (async () => {
 		await changeSourcesState((next) => {
-			// The choice stays: access is this browser's, so the site stays on in the others.
 			for (const source of lost) {
 				if (next.sites[source.id].enabled) {
 					next.sites[source.id] = {enabled: false, notice: 'revoked'};
@@ -10364,8 +10226,6 @@ async function handleMessage(
 				return {ok: false, error: 'Choose a valid private storage mode.'};
 			}
 
-			// A lock only protects the saved separate library. Moving away from it would leave that data encrypted
-			// and unreachable, or show another library in its place, so the lock has to come off first.
 			if (
 				message.mode !== 'saved' &&
 				(await privateLock.readRecord()) !== undefined
@@ -10711,7 +10571,6 @@ async function handleMessage(
 		}
 
 		case 'GET_SNAPSHOTS': {
-			// Private windows take no snapshots, and in shared storage mode the library holds the regular windows' snapshots.
 			return privateContext
 				? {
 						ok: true,
@@ -10898,7 +10757,6 @@ async function handleMessage(
 						(await handOffNewTab(tabId, message.brave === true, false)),
 				};
 			} catch (error) {
-				// The new tab setting sits in the locked library; the page shows the lock screen instead.
 				if (error instanceof PrivateLockError && error.code === 'locked') {
 					return {ok: true, handedOff: false};
 				}
@@ -10913,9 +10771,6 @@ async function handleMessage(
 	}
 }
 
-/**
-Where a page toast sits and how long it stays, as the page script needs them (it cannot import `toast-prefs`).
-*/
 async function pageToastPlacement() {
 	const {toastPosition, toastDuration} = await readSettings();
 	const {top, bottom, left, right, transform} = toastEdges(
@@ -10982,7 +10837,6 @@ async function showTrashUndo(
 const EXTENSION_ORIGIN = chrome.runtime.getURL('');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-	// Anything not sent from an extension page came from the site content script in a web page.
 	const fromPage = sender.url?.startsWith(EXTENSION_ORIGIN) === true;
 	Promise.resolve(fromPage ? paletteSender(sender) : sender)
 		.then(async (effective) =>
@@ -11031,7 +10885,6 @@ chrome.commands.onCommand.addListener((command, tab) => {
 	}
 
 	if (command === 'open-palette') {
-		// The window is the feedback, so only a failure flashes the badge.
 		openPalette(tab).catch((error: unknown) => {
 			console.warn(
 				errorMessage(error) || `${APP_NAME} could not open the search palette.`,
@@ -11045,8 +10898,6 @@ chrome.commands.onCommand.addListener((command, tab) => {
 	}
 });
 
-// Address bar search: "tl <text>" lists matching open tabs, bookmarks, saved tabs and sessions, ranked by the
-// finder's scorer (src/app/omnibox.ts). The store it reads is cached until invalidateSettings drops it.
 async function omniboxCatalog() {
 	omniboxStore ??= getStore();
 	const [store, tabs] = await Promise.all([
@@ -11095,7 +10946,6 @@ async function omniboxEnter(
 
 			return;
 		} catch {
-			// The tab closed since the list was shown; search for it in the dashboard instead.
 			await searchDashboard(item.title);
 			return;
 		}
@@ -11118,7 +10968,6 @@ async function omniboxEnter(
 			disposition === 'currentTab'
 				? await chrome.tabs.query({active: true, lastFocusedWindow: true})
 				: [];
-		// The pinned TabLodge tab stays put: a link meant for the current tab opens beside it.
 		const keepsPinned =
 			store.settings.keepLodgePinned && active?.pinned && isLodgeTab(active);
 		if (isInteger(active?.id) && !keepsPinned) {
@@ -11133,7 +10982,6 @@ async function omniboxEnter(
 		return;
 	}
 
-	// Enter on the typed text itself opens the dashboard with that search.
 	await searchDashboard(text);
 }
 
@@ -11150,24 +10998,12 @@ chrome.omnibox?.onInputChanged?.addListener((text, suggest) => {
 		});
 });
 chrome.omnibox?.onInputEntered?.addListener((text, disposition) => {
-	omniboxEnter(text, disposition).catch(() => {
-		/*
-		The address bar has nowhere to report a failed open.
-		*/
-	});
+	omniboxEnter(text, disposition).catch(() => {});
 });
 
-/**
-Opens the side panel for the tab's window. Must run synchronously inside a user gesture
-(command, menu click), so it is not awaited behind other work.
-*/
 function openSidePanel(tab?: chrome.tabs.Tab) {
 	if (!chrome.sidePanel?.open) {
-		void sidebarAction?.open?.().catch(() => {
-			/*
-			The sidebar can only open from a user action; ignore refusals.
-			*/
-		});
+		void sidebarAction?.open?.().catch(() => {});
 		return;
 	}
 
@@ -11180,11 +11016,7 @@ function openSidePanel(tab?: chrome.tabs.Tab) {
 						chrome.sidePanel.open({windowId: focused.id!}),
 					)
 			: chrome.sidePanel.open({windowId});
-	void Promise.resolve(request).catch(() => {
-		/*
-		The panel can only open from a user gesture; ignore refusals.
-		*/
-	});
+	void Promise.resolve(request).catch(() => {});
 }
 
 async function syncToolbarAction(settings: Settings) {
@@ -11200,18 +11032,13 @@ async function syncToolbarAction(settings: Settings) {
 			await chrome.sidePanel.setPanelBehavior({
 				openPanelOnActionClick: sidePanelEnabled,
 			});
-		} catch {
-			/*
-			Side Panel may be unavailable on this Chromium build.
-			*/
-		}
+		} catch {}
 	}
 
 	if (!chrome.action?.setPopup) {
 		return;
 	}
 
-	// A browser that cannot open the panel from the toolbar button (Firefox, old Chromium) keeps the popup.
 	await chrome.action.setPopup({
 		popup:
 			settings.actionMode === 'popup' ||
@@ -11221,9 +11048,6 @@ async function syncToolbarAction(settings: Settings) {
 	});
 }
 
-/**
-Adds the tab to the session `groupId`, or to the first session when none is named.
-*/
 async function saveCurrentTabToGroup(
 	senderTab?: chrome.tabs.Tab,
 	groupId?: string,
@@ -11249,7 +11073,6 @@ async function saveCurrentTabToGroup(
 			return {ok: false, error: 'There is no eligible web tab to save.'};
 		}
 
-		// With no session chosen: the most recently updated one that is not archived (save-rules.ts).
 		const group = groupId
 			? findGroup(store, groupId)
 			: defaultTargetSession(store.groups, store.folders);
@@ -11268,7 +11091,6 @@ async function saveCurrentTabToGroup(
 
 		const nativeGroups = await getWindowGroups(window.id);
 		const now = Date.now();
-		// IsCapturable above guarantees a web URL.
 		const tabUrl = normalizeUrl(tab.url)!;
 		const title = pageTitle(tab.title, tabUrl, store.settings.cleanTitles);
 		const copies = store.groups
@@ -11318,7 +11140,6 @@ async function saveCurrentTabToGroup(
 			await writeStore(store);
 		}
 
-		// A skipped duplicate leaves its tab open, as the setting says.
 		if (duplicate) {
 			return {
 				ok: false,
@@ -11353,11 +11174,7 @@ async function saveCurrentTabToGroup(
 
 				try {
 					await chrome.tabs.remove(tab.id!);
-				} catch {
-					/*
-					The source tab may close during the save.
-					*/
-				}
+				} catch {}
 			}
 		}
 
@@ -11401,9 +11218,6 @@ async function openDashboardForTab(tab?: chrome.tabs.Tab) {
 	await openDashboard(windowId, '', settings.dashboardBehavior);
 }
 
-/**
-A menu action's result; a failure with `duplicate` is a skipped duplicate, which flashes its own badge and is never a success.
-*/
 type MenuOutcome = ActionFailure | {ok: true};
 type MenuClickData = chrome.contextMenus.OnClickData & {linkText?: string};
 const MENU_SAVE_SCOPES: Record<string, SaveScope> = {
@@ -11414,9 +11228,6 @@ const MENU_REBUILD_DELAY = 150;
 const BADGE_DURATION = 1500;
 
 let menuQueue: Promise<void> = Promise.resolve();
-/**
-Signature of the menus last built (or queued); storage changes that keep it skip the rebuild.
-*/
 let menuSignature = '';
 let menuRebuildTimer: ReturnType<typeof setTimeout> | undefined;
 const badgeTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -11424,9 +11235,6 @@ const badgeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
 	isRecord(value) && typeof value.then === 'function';
 
-/**
-Logs (never throws) an error reported through a contextMenus callback.
-*/
 function menuCallback(label: string, done?: () => void) {
 	return () => {
 		const error = chrome.runtime.lastError;
@@ -11440,9 +11248,6 @@ function menuCallback(label: string, done?: () => void) {
 	};
 }
 
-/**
-RemoveAll with a callback (Chrome 116–122 return nothing), also settling when an implementation returns a promise.
-*/
 function removeAllMenus(): Promise<void> {
 	return new Promise((resolve) => {
 		try {
@@ -11469,9 +11274,7 @@ function updateMenu(
 	properties: {checked?: boolean; enabled?: boolean; title?: string},
 ): Promise<void> {
 	return new Promise((resolve) => {
-		// A missing item (menus off, or mid-rebuild) is expected here, so its error is consumed silently.
 		const done = () => {
-			// Reading lastError marks it as handled, so Chrome does not log it as unchecked.
 			Boolean(chrome.runtime.lastError);
 			resolve();
 		};
@@ -11491,9 +11294,6 @@ function updateMenu(
 	});
 }
 
-/**
-The exact host name of the active tab (or `tab`), or null for non-web pages.
-*/
 async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 	try {
 		const target =
@@ -11506,10 +11306,6 @@ async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 	}
 }
 
-/**
-"Save this window", or "Save 3 selected tabs" while tabs are Ctrl/Shift-selected in the focused window (the
-toolbar item saves with "selected-or-window", so the title says what a click will save).
-*/
 async function saveWindowMenuTitle(settings: Settings) {
 	const highlighted = await chrome.tabs.query({
 		lastFocusedWindow: true,
@@ -11535,15 +11331,10 @@ async function excludeMenuState(settings: Settings, tab?: chrome.tabs.Tab) {
 		checked: Boolean(
 			origin && hostIsExcluded(origin, settings.excludedOrigins),
 		),
-		// A single-label host such as http://wiki/ cannot be an excluded-site entry, so the item stays off for it.
 		enabled: Boolean(origin && normalizeExcludedHost(origin)),
 	};
 }
 
-/**
- Rebuilds every menu item. Rebuilds are serialized, and each one creates its items synchronously right
- after removeAll settles, so two rebuilds can never interleave and hit duplicate ids.
- */
 function rebuildContextMenus(
 	source?: Pick<Store, 'settings' | 'bookmarkColumns' | 'groups' | 'folders'>,
 ): Promise<void> {
@@ -11605,9 +11396,6 @@ function rebuildContextMenus(
 	return menuQueue;
 }
 
-/**
-Debounced rebuild for bursts of storage writes (column drags, imports).
-*/
 function scheduleContextMenuRebuild() {
 	if (menuRebuildTimer !== undefined) {
 		clearTimeout(menuRebuildTimer);
@@ -11619,19 +11407,10 @@ function scheduleContextMenuRebuild() {
 	}, MENU_REBUILD_DELAY);
 }
 
-/**
-What the two dynamic toolbar items were last set to; cleared whenever the menus are rebuilt (new items start from defaults).
-*/
 let syncedMenuState = '';
 let menuGeneration = 0;
-/**
-The current title of the shared bookmark item: "Bookmark this tab to" while the tab strip's menu shows it.
-*/
 let pageBookmarkTitle: string = PAGE_BOOKMARK_TITLE.page;
 
-/**
-Keeps the toolbar menu's "Exclude this site" checkbox in step with the active tab.
-*/
 async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 	if (!chrome.contextMenus?.update) {
 		return;
@@ -11646,7 +11425,6 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 		const generation = menuGeneration;
 		const exclude = await excludeMenuState(settings, tab);
 		const title = await saveWindowMenuTitle(settings);
-		// Most activations leave both items as they are: skip the two updateMenu calls then.
 		const state = `${exclude.checked}|${exclude.enabled}|${title}`;
 		if (state === syncedMenuState && generation === menuGeneration) {
 			return;
@@ -11657,15 +11435,9 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 		if (generation === menuGeneration) {
 			syncedMenuState = state;
 		}
-	} catch {
-		/*
-		The checkbox is cosmetic; a click still reads the stored exclusions.
-		*/
-	}
+	} catch {}
 }
 
-// Column renames, reorders, additions and deletions (from any page, import or erase) and settings
-// changes all land in the stored state, so the menus follow it here.
 onLibraryChanged((changes, areaName) => {
 	const change = areaName === 'local' ? changes[STORAGE_KEY] : undefined;
 	if (!change || !isRecord(change.newValue)) {
@@ -11727,7 +11499,6 @@ chrome.windows?.onFocusChanged?.addListener?.((windowId) => {
 });
 
 function watchContextMenuShown() {
-	// Feature-detected: Chrome has no contextMenus.onShown (Firefox-style browsers do), so this is a no-op there.
 	const menus = chrome.contextMenus as ContextMenusWithOnShown | undefined;
 	try {
 		menus?.onShown?.addListener?.((info, tab) => {
@@ -11753,19 +11524,11 @@ function watchContextMenuShown() {
 			pageBookmarkTitle = title;
 			void updateMenu(MENU.pageBookmark, {title}).then(() => menus.refresh?.());
 		});
-	} catch {
-		/*
-		An incomplete contextMenus API must not stop the worker from starting.
-		*/
-	}
+	} catch {}
 }
 
 watchContextMenuShown();
 
-/**
-Most menu actions show no page toast (only Save quote does, see quoteFromMenu), so the toolbar badge flashes ✓ (= for a
-skipped duplicate, ! on failure) on the clicked tab. Every save reports through the same three marks (save-feedback.ts).
-*/
 function flashBadge(
 	tab: chrome.tabs.Tab | undefined,
 	result: boolean | SaveKind,
@@ -11794,7 +11557,7 @@ function flashBadge(
 			});
 			await action.setBadgeText({...target, text: badge.text});
 		} catch {
-			return; /* The tab may have closed. */
+			return;
 		}
 
 		badgeTimers.set(
@@ -11809,9 +11572,6 @@ function flashBadge(
 	})();
 }
 
-/**
-The badge for a save or menu result: a failure, a skipped duplicate (nothing stored, something skipped), or success.
-*/
 function saveKindOf(
 	result: MenuOutcome | void | {ok: true; count?: number; skipped?: number},
 ): SaveKind {
@@ -11827,9 +11587,6 @@ function saveKindOf(
 	return result.duplicate ? 'duplicate' : 'failed';
 }
 
-/**
-Reports a toolbar or shortcut save on the badge; a failure also goes to the console (a skipped duplicate is not one).
-*/
 function reportBadgeSave(
 	tab: chrome.tabs.Tab | undefined,
 	result: Parameters<typeof saveKindOf>[0] | undefined,
@@ -11843,9 +11600,6 @@ function reportBadgeSave(
 	flashBadge(tab, kind);
 }
 
-/**
-Runs a menu action: failures are logged with console.warn (never thrown) and every outcome flashes the badge.
-*/
 function runMenuAction(
 	tab: chrome.tabs.Tab | undefined,
 	fallback: string,
@@ -11870,9 +11624,6 @@ function runMenuAction(
 		});
 }
 
-/**
-A readable host label for a link without text.
-*/
 function linkHost(url: string) {
 	try {
 		return new URL(url).hostname.replace(/^www\./i, '') || url;
@@ -11881,9 +11632,6 @@ function linkHost(url: string) {
 	}
 }
 
-/**
-The clicked link's title: its text (info.linkText, Chromium builds that report it), a short selection, an open tab's title, then the host.
-*/
 async function menuLinkTitle(info: MenuClickData, url: string) {
 	const linkText = cleanText(info.linkText, '', 500);
 	const selection = cleanText(info.selectionText, '', 500);
@@ -11893,9 +11641,6 @@ async function menuLinkTitle(info: MenuClickData, url: string) {
 		: (await openBookmarkTitleMap()).get(url) || linkHost(url);
 }
 
-/**
-Adds a link to a bookmark column (or Unfiled). A duplicate (see save-rules.ts) is skipped and reported as one.
-*/
 async function bookmarkToColumn(
 	rawUrl: unknown,
 	title: string,
@@ -11920,11 +11665,6 @@ async function bookmarkToColumn(
 	return addBookmarks([{url, title}], columnId);
 }
 
-/**
-"Bookmark image to" and "Bookmark video to": the media's own address, or the page for a stream, into the chosen
-column or a new one. A duplicate (save-rules.ts) is skipped and reported as one; an address in the trash is left there, so
-the save does not bring back what was deleted.
-*/
 async function bookmarkMedia(
 	info: MenuClickData,
 	tab: chrome.tabs.Tab | undefined,
@@ -11973,9 +11713,6 @@ async function bookmarkMedia(
 		: bookmarkToColumn(plan.url, plan.title, columnId);
 }
 
-/**
-"New column": opens the dashboard's add-bookmark dialog prefilled with the link or page.
-*/
 async function openPrefilledBookmarkDialog(
 	rawUrl: unknown,
 	title: string,
@@ -11990,7 +11727,6 @@ async function openPrefilledBookmarkDialog(
 	}
 
 	const settings = await readSettings();
-	// BookmarkColumn=new asks the dialog to start a new column; pages that do not support it ignore the parameter.
 	const query = new URLSearchParams({
 		bookmarkUrl: url,
 		bookmarkTitle: cleanText(title, linkHost(url), 500),
@@ -12004,11 +11740,7 @@ async function openPrefilledBookmarkDialog(
 	return {ok: true};
 }
 
-/**
-The dashboard query for a selection search: `?q=` with the trimmed, single-spaced text.
-*/
 function dashboardSearchQuery(text: unknown) {
-	// The selection is searched as written: text that looks like an operator (-word, site:) becomes a quoted phrase.
 	const q = literalQuery(
 		cleanText(
 			typeof text === 'string' ? text.replaceAll(/\s+/g, ' ') : '',
@@ -12032,11 +11764,6 @@ async function searchDashboard(
 	return {ok: true};
 }
 
-/**
-"Save quote": saves the selection on the page (see saveQuote) and confirms it in a toast on the page, with Undo. The
-click grants activeTab, so no site access is needed. Where the page cannot be scripted (the Web Store, the PDF viewer)
-the toolbar badge flashes instead, and the reason for a failure goes to the console.
-*/
 async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	const pageUrl = info.pageUrl ?? tab?.url;
 	const title =
@@ -12089,9 +11816,7 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 				],
 			});
 			shown = injected?.result === true;
-		} catch {
-			// Not scriptable, or the tab closed: the badge says it instead.
-		}
+		} catch {}
 	}
 
 	if (!shown) {
@@ -12099,9 +11824,6 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	}
 }
 
-/**
-Toggles the active site in the excluded-sites list, through the same handlers as Settings.
-*/
 async function toggleExcludedSite(
 	tab?: chrome.tabs.Tab,
 ): Promise<Result<{origin: string; excluded: boolean}>> {
@@ -12117,7 +11839,6 @@ async function toggleExcludedSite(
 		};
 	}
 
-	// An excluded host (directly or through a parent domain) is un-excluded by removing every entry that covers it.
 	const settings = await readSettings();
 	const covering = settings.excludedOrigins.filter(
 		(entry) => origin === entry || origin.endsWith(`.${entry}`),
@@ -12164,7 +11885,6 @@ async function openExtensionPage(
 function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	const id = String(info.menuItemId);
 	let scope = MENU_SAVE_SCOPES[id];
-	// In the tab strip the clicked tab can sit outside the selection; then "Save selected tabs" saves that tab.
 	if (scope === 'selected' && tab?.highlighted === false) {
 		scope = 'this-tab';
 	}
@@ -12337,10 +12057,6 @@ chrome.contextMenus?.onClicked?.addListener((info, tab) =>
 	handleContextMenuClick(info, tab),
 );
 
-/**
-The locked area was removed before any release shipped it. Its storage keys can still sit in a development profile, so
-they go at startup and no orphaned encrypted entry stays behind.
-*/
 const REMOVED_LOCKED_KEYS = [
 	'tablodge.locked',
 	'tablodge.locked.key',
@@ -12359,10 +12075,8 @@ async function initializeExtension(openDashboardAtStartup = false) {
 	}
 
 	await removeLockedLeftovers().catch(() => undefined);
-	// Persists a pending schema migration once, through the mutation queue.
 	await mutate(async () => undefined);
 	if (openDashboardAtStartup) {
-		// The browser just started: judge how the previous run ended before anything is captured.
 		await runStartupRecovery();
 	}
 
@@ -12394,11 +12108,6 @@ async function initializeExtension(openDashboardAtStartup = false) {
 	await openDashboardForTab();
 }
 
-/*
-Offer to add pages bookmarked with the browser's own bookmark feature (star button, Ctrl/Cmd+D). Extensions cannot
-hook the star, so this watches bookmarks.onCreated and acts only when exactly one bookmark appears within a short
-window and it is for the page the user is on, which filters out sync, imports, pastes and other devices.
-*/
 const BROWSER_BOOKMARK_QUIET_MS = 1500;
 const BROWSER_IMPORT_KEY = 'browserBookmarkImporting';
 let browserBookmarkImporting = false;
@@ -12494,7 +12203,6 @@ chrome.bookmarks?.onCreated?.addListener((_id, node) => {
 		return;
 	}
 
-	// Folders count towards a burst (a pasted folder arrives as folder plus children) but are never offered.
 	browserBookmarkBurst.push(node);
 	clearTimeout(browserBookmarkTimer);
 	browserBookmarkTimer = setTimeout(
@@ -12519,5 +12227,4 @@ chrome.runtime.onStartup.addListener(() => {
 	void reconcileSources().catch(() => undefined);
 });
 
-// A worker that was stopped and started again by any event reopens the live socket and catches up.
 void wakeSync().catch(() => undefined);
