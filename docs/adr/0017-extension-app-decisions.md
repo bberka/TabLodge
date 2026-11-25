@@ -738,7 +738,7 @@ Status: accepted, 2026-11-23. Issue #442.
 
 * **Notices stack in a closed shadow root.** The newest sits nearest the corner, at most `MAX_TOASTS` show (a fourth closes the oldest), and each has its own timer and Undo (`source-toast.ts:showSourceToast`).
 * **An answer replaces its notice.** A notice that answers another is that notice's next text, so it replaces it in place (`source-toast.ts:showSourceToast`).
-* **Styles go on the element, not in CSS.** The page's CSS, its Content Security Policy and its Trusted Types rules cannot reach in, so every style is set through the element style object, as `palette-overlay.ts` does (`source-toast.ts:showSourceToast`).
+* **Styles go on the element, not in CSS.** The page's stylesheets do not select the toast's contents, because they sit in a closed shadow root. The page's Content Security Policy and Trusted Types rules still apply to the page. Every style is set through the element style object, not a style-attribute string that `style-src` would restrict, as `palette-overlay.ts` does (`source-toast.ts:showSourceToast`).
 * **The toast never takes focus.** Tab reaches its buttons at the end of the page. It stays while the pointer or focus is on it, and Escape closes it from there (`source-toast.ts:showSourceToast`).
 * **Closing with focus returns it.** It goes back to where it came from, never to the page body (`source-toast.ts:showSourceToast`).
 * **Buttons become the next step.** Once one runs, the others go and the button becomes Close or the next step's button (`source-toast.ts:run`).
