@@ -25,10 +25,6 @@ export type IconInfo = {
 	keywords: string;
 };
 
-/**
-What each icon is called and searched by. Free of any drawing code, so the phone app shares it with the extension.
-Keyed by id, so adding an id to ICON_IDS without an entry here fails to compile.
-*/
 export const ICON_INFO_DATA: Record<
 	IconId,
 	{category: IconCategory; keywords: string}
@@ -317,11 +313,6 @@ function isSubsequence(word: string, text: string) {
 	return index === word.length;
 }
 
-/**
-Ranks icons with the shared fuzzy matcher over name, keywords and category: whole words and prefixes first,
-then initials, letters in order and one-letter typos ("bokmark"). Every query word must match. When nothing
-matches, a loose subsequence of the id ("gtbr" for git-branch) is the last resort.
-*/
 export function searchIconInfos(query: string): readonly IconInfo[] {
 	if (searchTerms(query).length === 0) {
 		return ICON_INFOS;

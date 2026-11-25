@@ -1,7 +1,3 @@
-// The accent color. It is "default" (TabLodge's own indigo, which the stylesheet defines), a preset
-// id, "system" (the operating system's accent, read from the CSS AccentColor keyword and kept current),
-// or a custom "#rrggbb". Every accent except the default is applied as inline CSS variables on
-// <html>. shell/service-worker.ts reads the ids and the hex rule from accent-colors.ts.
 import {
 	ACCENT_MIRROR_KEY,
 	DARK_PAGE,
@@ -33,12 +29,8 @@ export {
 	type Rgb,
 } from './accent-colors';
 
-// What Chromium reports for AccentColor when the platform has no accent color to give (Linux without
-// a GTK accent, for one). It is not a real choice, so it counts as no accent.
 const NO_SYSTEM_ACCENT = '0,117,255';
 
-// The system accent color, or undefined where the browser or platform has none. The probe goes in `parent`, so a
-// script on a web page can measure inside its own shadow root and leave the page's tree alone.
 export function systemAccentColor(
 	parent: ParentNode = document.documentElement,
 ): Rgb | undefined {
@@ -64,7 +56,6 @@ export function systemAccentColor(
 	return color.join(',') === NO_SYSTEM_ACCENT ? undefined : color;
 }
 
-// The color an accent stands for, or undefined for "system" where there is none.
 export function accentColor(accent: string): Rgb | undefined {
 	if (accent === DEFAULT_ACCENT) {
 		return hexToRgb(DEFAULT_ACCENT_HEX);
@@ -80,9 +71,6 @@ const VARIABLES = [
 	'--brand-primary-foreground-dark',
 ] as const;
 
-// Sets the accent variables on <html>. Called before first paint by theme-boot.ts and again by the
-// theme provider. For the default accent, or a platform that has no system accent, the variables are
-// removed and the stylesheet's indigo shows.
 export function applyAccent(accent: string) {
 	const {style} = document.documentElement;
 	const color = accent === DEFAULT_ACCENT ? undefined : accentColor(accent);
@@ -104,10 +92,6 @@ export function applyAccent(accent: string) {
 
 const WATCH_INTERVAL_MS = 2000;
 
-// Calls onChange with the system accent now and whenever it changes. The browser fires no event
-// for this, so it is rechecked when the page regains focus or visibility, when the color scheme or
-// contrast mode changes, and every couple of seconds while the page is visible (the new tab page can
-// stay in view while the system accent is changed beside it).
 export function watchSystemAccent(
 	onChange: (color: Rgb | undefined) => void,
 ): () => void {
@@ -156,13 +140,10 @@ export function readSavedAccent(): string {
 	}
 }
 
-// A private window's own accent, mirrored into its (separate) localStorage by the theme provider.
-// "same" means the regular accent applies; a missing value means the user never chose, so the default applies.
 export const PRIVATE_ACCENT_SAME = 'same';
 export const PRIVATE_ACCENT_DEFAULT = 'teal';
 export const PRIVATE_ACCENT_MIRROR = 'tablodge.privateAccent';
 
-// Maps a stored private accent to the accent to show: undefined means "use the regular accent".
 export function resolvePrivateAccent(value: unknown): string | undefined {
 	if (value === PRIVATE_ACCENT_SAME) {
 		return undefined;
@@ -179,7 +160,6 @@ export function readPrivateAccent(): string | undefined {
 	}
 }
 
-// The accent this page shows: a private window's own accent when set, otherwise the saved one.
 export function readEffectiveAccent(): string {
 	return (
 		(chrome.extension?.inIncognitoContext ? readPrivateAccent() : undefined) ??
