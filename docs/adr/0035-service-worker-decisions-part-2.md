@@ -82,7 +82,7 @@ Status: accepted, 2026-11-25. Issue #442.
 * **The record is stored first,** so a failed or slow Downloads copy cannot lose it (`service-worker.ts:addBackup`).
 * **Automatic runs skip data identical to the newest backup** (`service-worker.ts:addBackup`, `service-worker.ts:dataSignature`).
 * **A Downloads copy is written as a data URL,** since a service worker has no Blob URLs (`service-worker.ts:downloadBackupCopy`).
-* **A safety backup comes before something destructive,** such as erase, a large import, or a bulk delete. It returns false when it could not be written, so the caller stops before losing data (`service-worker.ts:safetyBackup`).
+* **A safety backup comes before something destructive,** such as erase, a large import, or a bulk delete. It returns false when it could not be written. The callers that check the result stop before the destructive step: erase, deleting a bookmark column, restoring a backup, and importing a full backup. Others ignore the result and continue: the browser bookmark import, a large import, the two migration steps, and the sync host's backup before a server copy replaces the library (`service-worker.ts:safetyBackup`, `service-worker.ts:migrateStoreOnce`, `service-worker.ts:syncClient`).
 * **Restoring a backup brings back sessions, folders, bookmarks, and columns.** Settings stay as they are (`service-worker.ts:restoreBackup`).
 * **The JSON export has the Back up dialog's shape,** so Import reads it (`service-worker.ts:backupJson`).
 
