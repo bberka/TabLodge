@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, FlatList, ScrollView, StyleSheet, View} from 'react-native';
+import {Animated, FlatList, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {SyncProblemBanner} from '../../ui/sync-problem-banner';
 import type {Bookmark} from '../../../../extension/src/shared/types';
@@ -774,38 +774,34 @@ export function BookmarksScreen({
 										/>
 									)}
 									{!isSearching && !isListView && (
-										<ScrollView
-											horizontal
-											showsHorizontalScrollIndicator={false}
-										>
-											<Chips
-												items={[
-													...entries,
-													{
-														id: NEW_COLUMN_CHIP,
-														name: 'New column',
-														glyph: 'add' as const,
-														tint: colors.accent,
-													},
-												]}
-												selected={columnId}
-												onLongPress={(id) => {
-													if (id === NEW_COLUMN_CHIP) {
-														return;
-													}
+										<Chips
+											scroll
+											items={[
+												...entries,
+												{
+													id: NEW_COLUMN_CHIP,
+													name: 'New column',
+													glyph: 'add' as const,
+													tint: colors.accent,
+												},
+											]}
+											selected={columnId}
+											onLongPress={(id) => {
+												if (id === NEW_COLUMN_CHIP) {
+													return;
+												}
 
+												setPicked(id);
+												setMenuOpen(true);
+											}}
+											onSelect={(id) => {
+												if (id === NEW_COLUMN_CHIP) {
+													setSheet({kind: 'column'});
+												} else {
 													setPicked(id);
-													setMenuOpen(true);
-												}}
-												onSelect={(id) => {
-													if (id === NEW_COLUMN_CHIP) {
-														setSheet({kind: 'column'});
-													} else {
-														setPicked(id);
-													}
-												}}
-											/>
-										</ScrollView>
+												}
+											}}
+										/>
 									)}
 								</View>
 							</View>

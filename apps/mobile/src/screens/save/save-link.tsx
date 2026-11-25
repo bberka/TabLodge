@@ -347,6 +347,7 @@ export function SaveLinkForm({
 					<View style={styles.sessionChoice}>
 						<Text style={{color: colors.muted}}>Session</Text>
 						<Chips
+							scroll
 							items={[
 								{
 									id: NEW_SESSION,

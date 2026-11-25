@@ -1,9 +1,17 @@
 import {Ionicons} from '@expo/vector-icons';
-import {type ComponentProps, type ReactNode, useState} from 'react';
+import {
+	type ComponentProps,
+	type ReactNode,
+	useEffect,
+	useRef,
+	useState,
+} from 'react';
 import {
 	ActivityIndicator,
 	Platform,
 	Pressable,
+	ScrollView,
+	type ScrollViewInstance,
 	StyleSheet,
 	Switch as NativeSwitch,
 	Text,
@@ -12,6 +20,7 @@ import {
 	useColorScheme,
 	View,
 } from 'react-native';
+import {chipScrollX} from './chip-scroll';
 import {avatarColor, soften, TARGET, useColors, useShape} from './theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -223,6 +232,7 @@ export function Chips({
 	selected,
 	onSelect,
 	onLongPress,
+	scroll = false,
 }: {
 	items: Array<{
 		id: string;
@@ -234,11 +244,32 @@ export function Chips({
 	selected: string;
 	onSelect: (id: string) => void;
 	onLongPress?: (id: string) => void;
+	scroll?: boolean;
 }) {
 	const colors = useColors();
 	const shape = useShape();
-	return (
-		<View accessibilityRole="tablist" style={styles.chips}>
+	const rowRef = useRef<ScrollViewInstance>(null);
+	const [rowWidth, setRowWidth] = useState(0);
+	const [picked, setPicked] = useState<{x: number; width: number}>();
+	const followedRef = useRef(false);
+
+	useEffect(() => {
+		if (!scroll || followedRef.current || !picked) {
+			return;
+		}
+
+		followedRef.current = true;
+		rowRef.current?.scrollTo({
+			x: chipScrollX(picked, rowWidth),
+			animated: false,
+		});
+	}, [scroll, picked, rowWidth]);
+
+	const chips = (
+		<View
+			accessibilityRole="tablist"
+			style={scroll ? [styles.chips, styles.chipRow] : styles.chips}
+		>
 			{items.map((item) => {
 				const on = item.id === selected;
 				const tint = item.tint ?? colors.accent;
@@ -262,6 +293,13 @@ export function Chips({
 						]}
 						accessibilityActions={
 							onLongPress ? [{name: 'more', label: 'More actions'}] : undefined
+						}
+						onLayout={
+							on && scroll
+								? (event) => {
+										setPicked(event.nativeEvent.layout);
+									}
+								: undefined
 						}
 						onAccessibilityAction={() => {
 							onLongPress?.(item.id);
@@ -297,6 +335,23 @@ export function Chips({
 				);
 			})}
 		</View>
+	);
+
+	if (!scroll) {
+		return chips;
+	}
+
+	return (
+		<ScrollView
+			ref={rowRef}
+			horizontal
+			showsHorizontalScrollIndicator={false}
+			onLayout={(event) => {
+				setRowWidth(event.nativeEvent.layout.width);
+			}}
+		>
+			{chips}
+		</ScrollView>
 	);
 }
 
@@ -594,6 +649,7 @@ const styles = StyleSheet.create({
 	},
 	input: {flex: 1, fontSize: 16, minHeight: TARGET},
 	chips: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
+	chipRow: {flexWrap: 'nowrap'},
 	chip: {
 		minHeight: 40,
 		paddingHorizontal: 14,

@@ -89,6 +89,7 @@ export function RenameSheet({
 					<>
 						<Text style={{color: colors.muted}}>Folder</Text>
 						<Chips
+							scroll
 							items={folders.map((entry) => ({
 								id: entry.id,
 								name: entry.name,
