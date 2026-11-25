@@ -36,7 +36,7 @@ Status: accepted, 2026-11-25. Issue #442.
 ### Client and sync rounds (`client.ts`)
 
 * **Storage, network, and library come in through `SyncHost`.** The tests drive the client against the reference server in memory (`client.ts:SyncHost`).
-* **A round stamps local edits, pulls and applies the server's changes page by page, then pushes the outbox.** Library reads and writes run inside the worker's mutation queue (`host.mutate`). Network calls run between them, so a slow server does not hold up the app. Rounds never overlap: a request made during a round runs one more round after it (`client.ts:syncNow`, `client.ts:round`).
+* **A round stamps local edits, pulls the server's changes page by page, applies the complete pull, then pushes the outbox.** Library reads and writes run inside the worker's mutation queue (`host.mutate`). Network calls run between them, so a slow server does not hold up the app. Rounds never overlap: a request made during a round runs one more round after it (`client.ts:syncNow`, `client.ts:round`).
 * **Sync is on unless `false` is stored.** Only an explicit `false` turns settings sync off (`client.ts:SYNC_SETTINGS_KEY`).
 * **A private window's worker nudges the regular worker.** Split workers cannot message each other but share local storage, so the nudge key tells the regular worker, which runs sync, to send the change now (`client.ts:SYNC_NUDGE_KEY`).
 * **A fallback alarm every five minutes** reopens a closed live socket and catches up (`client.ts:SYNC_ALARM_MINUTES`).
@@ -79,7 +79,7 @@ Status: accepted, 2026-11-25. Issue #442.
 * **A change waits for its parent.** A tab waits for its session, a bookmark for its column, a session for its folder, unless the parent is known deleted. Applied without its parent, the library would drop or move it, and the next capture would send that loss back. Waiting changes sit in `held` (`engine.ts:receive`, `engine.ts:parentOf`).
 * **Parents apply first.** Each pass repeats while it applies something, so a folder, then its session, then its tabs all land (`engine.ts:receive`).
 * **A stamp far ahead is ignored.** The server should have refused it (`engine.ts:receive`).
-* **Tombstones are forgotten after 90 days,** the server's default retention (`engine.ts:TOMBSTONE_KEEP_MS`).
+* **Tombstones are forgotten after 90 days,** the server's default retention. `capture` removes them only while it runs, and keeps any whose key is still in the outbox, so they can outlast 90 days while sync is offline (`engine.ts:TOMBSTONE_KEEP_MS`, `engine.ts:capture`).
 * **Order keys keep the longest increasing run.** A move or insert changes only the records that moved or were added, in O(n log n) (`engine.ts:orderList`).
 * **`startResync` removes what it does not see.** Records synced before and not seen again by the end of the pull were deleted while this device was away (`engine.ts:startResync`, `engine.ts:finishResync`).
 * **`restartAfterServerReset` queues every record, deletes included.** The stamps decide record by record, so the server gets back what it lost and the device keeps what is newer (`engine.ts:restartAfterServerReset`).
