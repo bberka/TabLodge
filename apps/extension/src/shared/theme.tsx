@@ -31,7 +31,6 @@ type ThemeContextValue = {
 	theme: Theme;
 	setTheme: (theme: string) => Promise<void>;
 	accent: string;
-	// The system accent, kept current while the accent is "system".
 	systemColor: Rgb | undefined;
 	setAccent: (accent: string) => Promise<void>;
 	systemDark: boolean;
@@ -50,27 +49,19 @@ function applyDocumentTheme(theme: Theme, systemDark: boolean) {
 		theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
 }
 
-// Mirrors the stored theme and accent into localStorage so pages with a pre-paint boot script
-// (shell/theme-boot.ts) can apply them before React loads.
 const MIRROR_KEY = 'tablodge.uiTheme';
 function remember(key: string, value: string) {
 	try {
 		localStorage.setItem(key, value);
-	} catch {
-		/*
-		Optional.
-		*/
-	}
+	} catch {}
 }
 
 export function ThemeProvider({children}: {children?: ReactNode}) {
-	// Start from the theme a boot script may already have applied, so the first render does not reset it.
 	const [theme, setTheme] = useState<Theme>(() => {
 		const current = document.documentElement.dataset.theme;
 		return isTheme(current) ? current : 'system';
 	});
 	const [accent, setAccent] = useState(readSavedAccent);
-	// Only a private window has its own accent; regular windows ignore it.
 	const [privateAccent, setPrivateAccent] = useState(() =>
 		chrome.extension.inIncognitoContext ? readPrivateAccent() : undefined,
 	);
@@ -152,7 +143,6 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 		}
 	}, [shownAccent]);
 	useEffect(() => applyAccent(shownAccent), [shownAccent, systemColor]);
-	// Every page mounts this provider, so it also keeps focus from falling to <body> when an item is removed.
 	useEffect(() => installFocusRescue(), []);
 
 	const changeTheme = useCallback(

@@ -3,20 +3,5 @@
 	"apps/extension/shell/page-copy-capture.ts": 4,
 	"apps/extension/shell/service-worker.ts": 426,
 	"apps/extension/shell/site-source.ts": 24,
-	"apps/extension/shell/theme-boot.ts": 5,
-	"apps/extension/src/shared/browser.ts": 7,
-	"apps/extension/src/shared/dev-fixture.ts": 4,
-	"apps/extension/src/shared/device.ts": 8,
-	"apps/extension/src/shared/download.ts": 1,
-	"apps/extension/src/shared/escape-html.ts": 1,
-	"apps/extension/src/shared/focus-rescue.ts": 8,
-	"apps/extension/src/shared/load-more.tsx": 3,
-	"apps/extension/src/shared/motion.ts": 1,
-	"apps/extension/src/shared/radio-keys.ts": 1,
-	"apps/extension/src/shared/session-folders.ts": 5,
-	"apps/extension/src/shared/setting-scopes.ts": 5,
-	"apps/extension/src/shared/source-columns.ts": 6,
-	"apps/extension/src/shared/theme.tsx": 7,
-	"apps/extension/src/shared/ui.tsx": 7,
-	"apps/extension/src/shared/use-stable.ts": 1
+	"apps/extension/shell/theme-boot.ts": 5
 }

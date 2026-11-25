@@ -1,7 +1,3 @@
-/**
-The index a radio group moves to for a key press, or null when the key does nothing there.
-Arrow keys wrap around, as in the WAI-ARIA radio group pattern; Home and End jump to the ends.
-*/
 export function radioTargetIndex(
 	key: string,
 	current: number,

@@ -1,6 +1,3 @@
-/**
-Starts a download of a generated file.
-*/
 export function downloadFile(
 	content: BlobPart,
 	mime: string,
