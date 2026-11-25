@@ -371,6 +371,10 @@ body {
 		outline: 2px solid Highlight;
 		outline-offset: -2px;
 	}
+	label:has(> input[type='radio']:checked) {
+		outline: 2px solid Highlight;
+		outline-offset: -2px;
+	}
 	.tn-switch[data-state='checked'] > span {
 		background-color: Highlight;
 		border-color: Highlight;

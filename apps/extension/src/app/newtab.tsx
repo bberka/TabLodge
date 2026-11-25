@@ -2780,7 +2780,7 @@ function NewTab() {
 										key={item.id}
 										draggable={!isSystem}
 										data-drag-column={isSystem ? undefined : item.id}
-										className="relative shrink-0 md:block"
+										className="relative min-w-0 max-w-full shrink-0 md:block"
 										onDragStart={(event) => handleInternalDragStart(event)}
 										onDragEnd={() => {
 											handleInternalDragEnd();
