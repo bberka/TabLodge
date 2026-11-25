@@ -630,6 +630,7 @@ export async function hideAllUndoCheck(env: Env, theme: Theme) {
 				(await readDevStore(page)).settings.showAllBookmarks === false,
 			'the All column to be hidden',
 		);
+		await all.waitFor({state: 'detached'});
 		assert.equal(await all.count(), 0, 'the All column leaves the list');
 		assert.notEqual(
 			await page

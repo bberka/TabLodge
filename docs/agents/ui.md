@@ -18,7 +18,7 @@ Rules for every change to extension pages (`apps/extension/src`). Read whole fil
 
 Action that deletes, removes, resets, disconnects, or replaces something:
 
-- **Undo replaces the question.** An action that offers Undo shows no confirming dialog.
+- **Undo replaces the question**, except in Settings: an action that offers Undo shows no confirming dialog.
 - **Settings asks first**, including dialogs it opens: `ConfirmationDialog` that names what is lost, where Cancel changes nothing. Keep any Undo toast after it.
 - **Library views act at once** (dashboard, board, new tab, side panel, popup, palette) and offer **Undo** (`offerTrashUndo`, `offerUndo`, or `showStatus` action). No confirmation; shared Snapshots and Trash dialogs ask only with `confirmDestructive`, which Settings sets.
 - **A dialog that asks for a choice stays**, such as Delete column: where its bookmarks go, whether the source stops.
