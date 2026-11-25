@@ -1,10 +1,6 @@
 import {ArrowUpRight} from 'lucide-react';
 import {notePieces, PASSAGE_LABEL} from '../shared/note-links';
 
-/**
-A bookmark or saved tab note. A saved quote's passage link shows as a short "Go to passage" link; a plain click hands
-its address to `onOpen`, and a modified click keeps the browser's own behavior (new tab, new window).
-*/
 export function NoteText({
 	notes,
 	className,

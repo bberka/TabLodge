@@ -168,7 +168,6 @@ const settingsGroups = settingsFieldGroups({
 	sidePanel: toolbarOpensSidePanel,
 	privateWindows: canOpenPrivateWindow,
 }).map((group) => ({...group, icon: GROUP_ICONS[group.title] ?? Layers2}));
-// Words people may search for that live in the tools below the Recovery & backups settings.
 const RECOVERY_TOOLS_TEXT = [
 	'Storage used',
 	'Back up now',
@@ -194,7 +193,6 @@ const footerLinks = [
 	{label: 'Help', href: 'help.html', external: false},
 ];
 
-// Text of a settings row that the search box looks through: its label, help, and (for selects) option labels.
 const fieldSearchText = (field: SettingField) => [
 	field.label,
 	field.help,
@@ -202,7 +200,6 @@ const fieldSearchText = (field: SettingField) => [
 	...('options' in field ? field.options.map(([, label]) => label) : []),
 ];
 
-// The sections that are not generated from `settingsGroups`, with the extra words people may search for.
 const SHORTCUTS = {
 	title: 'Keyboard shortcuts',
 	help: `Review or change ${PROJECT.name} shortcuts on the browser’s extension-shortcuts page.`,
@@ -265,7 +262,6 @@ const settingsNavigationLabels: Record<string, string> = {
 const settingsNavigation = [
 	{title: APPEARANCE.title, icon: Sun},
 	{title: SHORTCUTS.title, icon: Keyboard},
-	// Firefox keeps the add-on out of private windows, so there is no private storage to choose.
 	...(isFirefox ? [] : [{title: PRIVATE_STORAGE_TITLE, icon: Database}]),
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
@@ -292,11 +288,9 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const loadedSettingsRef = useRef(false);
-	// Set to the latest resetGroup on each render, below.
 	const resetGroupRef = useRef(
 		async (_title: string, _fields: SettingField[]) => undefined as unknown,
 	);
-	// Saves still waiting for the service worker. A reload that lands meanwhile may predate them.
 	const savesInFlightRef = useRef(0);
 	const [status, showStatus] = useStatus();
 	const siteSources = useSiteSources(showStatus);
@@ -319,16 +313,11 @@ function Options() {
 	const [eraseSessions, setEraseSessions] = useState(false);
 	const [eraseBookmarks, setEraseBookmarks] = useState(false);
 	const [confirmDefaults, setConfirmDefaults] = useState(false);
-	// A confirmation for one row or section; it stays set while the dialog fades out, so its text does not change.
 	const [question, setQuestion] = useState<{
 		title: string;
 		description: string;
 		confirmLabel: string;
 		run: () => unknown;
-		/**
-		The section whose first control takes focus afterwards: the action removes the control that held it, and
-		Chrome fires no focusout for a removed element, so the focus rescue never sees it.
-		*/
 		section: string;
 	}>();
 	const [questionOpen, setQuestionOpen] = useState(false);
@@ -351,8 +340,6 @@ function Options() {
 			.catch(() => undefined);
 	}, []);
 	const dataRef = useRef<HTMLDivElement>(null);
-	// A link to a section (`options.html#settings-sync`) arrives before the sections exist, so the browser cannot
-	// jump to it. Once the settings have rendered, scroll there and move focus to the section, as the jump would.
 	const hashHandledRef = useRef(false);
 	useEffect(() => {
 		if (!state || hashHandledRef.current) {
@@ -374,7 +361,6 @@ function Options() {
 		target.scrollIntoView({block: 'start'});
 		target.focus({preventScroll: true});
 	}, [state]);
-	// The search box: `?q=` keeps the query across reloads; "/" and Ctrl/Cmd+K focus it, Escape clears it.
 	const searchRef = useRef<HTMLInputElement>(null);
 	const [templateDraft, setTemplateDraft] = useState<string | null>(null);
 	const [query, setQuery] = useState(() => initialSearchQuery(location.search));
@@ -512,7 +498,6 @@ function Options() {
 		setExcluded(state.settings.excludedOrigins || []);
 	}, [state]);
 
-	// Values come from the switch and select controls below, so they match the setting's type.
 	async function updateSetting(
 		name: keyof Settings,
 		value: boolean | string | number | string[],
@@ -534,7 +519,6 @@ function Options() {
 			return;
 		}
 
-		// Copies to Downloads need the optional permission; the browser asks for it here, straight from the click.
 		if (name === 'autoBackupToDownloads') {
 			if (value === true) {
 				let granted = false;
@@ -542,9 +526,7 @@ function Options() {
 					granted = await chrome.permissions.request({
 						permissions: ['downloads'],
 					});
-				} catch {
-					// A request the browser rejects counts as not granted.
-				}
+				} catch {}
 
 				setDownloadsGranted(granted);
 				if (!granted) {
@@ -557,11 +539,7 @@ function Options() {
 			} else {
 				try {
 					await chrome.permissions.remove({permissions: ['downloads']});
-				} catch {
-					/*
-					The permission may already be gone.
-					*/
-				}
+				} catch {}
 
 				setDownloadsGranted(false);
 			}
@@ -597,7 +575,6 @@ function Options() {
 		? bulk.valid.length > 0
 		: Boolean(siteHost) && !siteFieldError;
 
-	// Dialog state is reset on open, not on close, so the closing animation never shows an emptied form.
 	function openSiteDialog() {
 		setExcludedDraft('');
 		setSiteError('');
@@ -688,7 +665,6 @@ function Options() {
 			return;
 		}
 
-		// The appearance is stored apart from the other settings, so Undo puts it back too.
 		offerUndo(
 			'Default settings restored.',
 			result.undoId,
@@ -701,7 +677,6 @@ function Options() {
 		);
 	}
 
-	// Live counts for the Data section and its Erase menu.
 	const sessions = state?.groups || [];
 	const tabs = sessions.reduce(
 		(sum, group) => sum + (group.tabs?.length || 0),
@@ -724,7 +699,6 @@ function Options() {
 		...(bookmarkCount ? [plural(bookmarkCount, 'bookmark')] : []),
 		...(bookmarkColumns ? [plural(bookmarkColumns, 'bookmark column')] : []),
 	];
-	// A safety backup is taken first; Undo puts the data back.
 	async function eraseData(scope: EraseScope) {
 		if (eraseBusy) {
 			return;
@@ -772,7 +746,6 @@ function Options() {
 		);
 	}
 
-	// Search: every section lists its rows' searchable text; a matching section title keeps all its rows.
 	const titleHit = (title: string) => searching && matchesQuery(query, [title]);
 	const pick = <T,>(
 		title: string,
@@ -784,9 +757,6 @@ function Options() {
 				? sortByQuery(query, items, textOf)
 				: rankByQuery(query, items, textOf)
 			: [...items];
-	// A row whose `when` check fails does not apply at all (for example the custom new-tab address while TabLodge
-	// owns new tabs): it is hidden and left out of search. A row whose parent switch is off (`requires`, `enabled`)
-	// is hidden too, but search still shows it next to its parent, disabled, so it can be found.
 	const rowAvailable = (field: SettingField) =>
 		!field.when || field.when(settings as Settings);
 	const rowDisabled = (field: SettingField) =>
@@ -810,9 +780,6 @@ function Options() {
 			: !Object.is(value, defaultValue);
 	};
 
-	/**
-	Puts every changed setting of a section back to its default, in one save.
-	*/
 	const resetGroup = async (title: string, fields: SettingField[]) => {
 		if (!state || !defaultSettings) {
 			return;
@@ -885,13 +852,10 @@ function Options() {
 			scoreQuery(query, [title]),
 			...fields.map((field) => scoreQuery(query, fieldSearchText(field))),
 		);
-	// The tools below the Recovery & backups rows (storage line, Backups dialog, buttons) are searchable as a unit.
 	const recoveryTools =
 		!searching ||
 		titleHit(RECOVERY_TITLE) ||
 		matchesQuery(query, RECOVERY_TOOLS_TEXT);
-	// While searching, a matching row brings its parent switch and the rows that depend on it (and a matching
-	// dependent row brings its parent and siblings), so a setting is never shown without what controls it.
 	const withFamilies = (all: SettingField[], matched: SettingField[]) => {
 		if (!searching || matched.length === 0) {
 			return matched;
@@ -906,7 +870,6 @@ function Options() {
 		);
 		const seen = new Set<SettingField>();
 		const result: SettingField[] = [];
-		// Keep the ranking of the best match in each family, with the family in page order.
 		for (const field of matched) {
 			const root = parentOf(field) ?? field.name;
 			for (const member of family) {
@@ -1008,7 +971,6 @@ function Options() {
 					variant="outline"
 					className="w-full sm:w-32"
 					disabled={!state}
-					// Everything also holds settings, so it is never empty.
 					onClick={openDataShare}
 				>
 					<Download className="h-4 w-4" />
@@ -1338,7 +1300,6 @@ function Options() {
 											return;
 										}
 
-										// Arrow keys select as they move, as native radio buttons do.
 										event.preventDefault();
 										buttons[next].focus();
 										buttons[next].click();
@@ -1428,7 +1389,6 @@ function Options() {
 													title: `Reset ${group.title} to default?`,
 													description: `Every changed setting in ${group.title} goes back to its default. You can undo this right after.`,
 													confirmLabel: 'Reset',
-													// The latest resetGroup, so it reads the settings as they are when the user confirms.
 													run: async () =>
 														resetGroupRef.current(group.title, fields),
 													section: group.title,
@@ -1474,7 +1434,6 @@ function Options() {
 														.filter((label) => matchesAnyTerm(query, label))
 												: undefined
 										}
-										// `when` only decides whether the row exists, so it does not make a row dependent.
 										inset={Boolean(
 											field.requires || field.enabled || field.parent,
 										)}
@@ -1808,7 +1767,6 @@ function Options() {
 
 					void (async () => {
 						await question.run();
-						// After React commits; a search can hide the whole section once its last match is gone.
 						requestAnimationFrame(() => {
 							(
 								document.querySelector<HTMLElement>(
@@ -2095,9 +2053,6 @@ function Options() {
 	);
 }
 
-/**
-The current shortcut for each command (read with chrome.commands), and a button to the browser's page that changes them.
-*/
 function ShortcutsCard({
 	id,
 	title,
@@ -2123,7 +2078,6 @@ function ShortcutsCard({
 		};
 
 		read();
-		// Shortcuts are changed on another page; pick up the change when the user comes back.
 		globalThis.addEventListener('focus', read);
 		return () => {
 			alive = false;
@@ -2398,20 +2352,16 @@ function SettingRow({
 }: {
 	label: ReactNode;
 	help?: ReactNode;
-	/** Select options that matched the search while the label and help did not. */ hint?: string[];
+	hint?: string[];
 	highlight?: string;
 	inset?: boolean;
 	settingName: string;
-	/**
-	The reset button; it stays on the control's line and lines up with its first row.
-	*/
 	reset?: ReactNode;
 	children?: ReactNode;
 }) {
 	return (
 		<div
 			data-setting-row={settingName}
-			// A setting that depends on the one above sits on a line hanging from it.
 			className={cn(
 				'flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between',
 				inset && 'ml-2 border-l-2 border-border pl-4',
@@ -2436,7 +2386,6 @@ function SettingRow({
 					</p>
 				)}
 			</div>
-			{/* The control keeps one place in the tree whether or not the reset button shows: remounting it would close an open popover when a change makes the reset appear. */}
 			<div className="flex min-w-0 items-start gap-2 sm:shrink-0 sm:justify-end">
 				{Boolean(reset) && (
 					<span className="flex h-9 shrink-0 items-center">{reset}</span>
@@ -2449,7 +2398,6 @@ function SettingRow({
 	);
 }
 
-// A web address input that saves on blur or Enter; an address that is not http or https is reported instead of saved.
 function UrlSetting({
 	label,
 	placeholder,
@@ -2501,7 +2449,6 @@ function UrlSetting({
 	);
 }
 
-// A short text input that saves on blur or Enter.
 function TextSetting({
 	label,
 	placeholder,
@@ -2514,9 +2461,6 @@ function TextSetting({
 	placeholder: string;
 	value: string;
 	onCommit: (value: string) => void;
-	/**
-	Called with the text while typing, before it is saved.
-	*/
 	onDraft?: (value: string) => void;
 	disabled?: boolean;
 }) {
@@ -2550,7 +2494,6 @@ function TextSetting({
 	);
 }
 
-// "Next save: ..." line under the Session name setting; the service worker formats it with the current window's tabs.
 function SessionNamePreview({
 	style,
 	fallback,
@@ -2591,7 +2534,6 @@ function SessionNamePreview({
 	) : null;
 }
 
-// A small whole-number input that saves on blur or Enter; the text may be empty or out of range while typing.
 const CUSTOM_OPTION = 'custom';
 
 function NumberSelectSetting({
@@ -2612,7 +2554,6 @@ function NumberSelectSetting({
 	const [customPicked, setCustomPicked] = useState(false);
 	const isPreset = options.some(([option]) => Number(option) === value);
 	const showCustom = custom !== undefined && (customPicked || !isPreset);
-	// The select and the days field share one line on a phone and stack from `sm`, where the row is already crowded.
 	return (
 		<div className="flex items-center gap-2 sm:flex-col sm:items-end">
 			<Select

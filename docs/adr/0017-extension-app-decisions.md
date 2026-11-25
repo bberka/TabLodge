@@ -214,3 +214,108 @@ Status: accepted, 2026-11-23. Issue #442.
 * **Only a popup closes on blur.** The palette window closes when another window takes focus, but only a real popup window does this; the same page opened as a tab by address stays open. A short wait skips the blur the browser sends while the window is still being focused (`finder.tsx:useCloseWhenUnfocused`).
 * **The overlay is a frame.** The palette can be a frame over a web page (see `palette-overlay.ts`): closing asks the page to remove the frame (`finder.tsx:FinderPaletteWindow`).
 * **Tab stays in the frame.** Tab cycles through the frame's controls and never reaches the page (`finder.tsx:FinderPaletteWindow`).
+
+### Dashboard
+
+* **Tags sync is not overwritten by an unchanged editor.** Tags are sent only when the person changed them, so tags that sync brought in while the editor was open survive a save (`newtab.tsx:NewTab`).
+* **`?q=` prefills once.** The search comes from the "Search in TabLodge" menu and fills both searches on first render, then the address bar is cleaned (`newtab.tsx:NewTab`, `page-params.ts:initialSearchQuery`).
+* **Dragover does not re-render.** It fires many times a second, so an unchanged drop marker keeps the page still (`newtab.tsx:NewTab`).
+* **Empty session names fall back to the default.** The name from the session naming settings comes back when the field is left empty (`newtab.tsx:NewTab`).
+* **The save target sticks for the page's life.** The choice for Add bookmark and pasted links stays until the page closes (`newtab.tsx:NewTab`).
+* **Deleting a source column can stop its saves.** A column that site saves feed on this device also asks whether to stop those saves (`newtab.tsx:NewTab`).
+* **The dialog announces a grown column inside itself.** A site save can fill the column while the dialog is open, and the dialog says so where a screen reader hears it (`newtab.tsx:NewTab`).
+* **Grid rows stretch columns.** Columns in a row share the tallest height, unless the setting turns it off (`newtab.tsx:NewTab`).
+* **Only stored order can be moved.** A sort is a view of the stored order, so drag and move act on stored order only (`newtab.tsx:NewTab`).
+* **A batch moves in the order shown.** It arrives in the order on screen (`newtab.tsx:NewTab`).
+* **A capped column scrolls and loads more.** With the Board limit on, the column scrolls to load the next batch instead of growing the page (`newtab.tsx:NewTab`).
+* **Row height is estimated per density.** The estimate sizes the list before rows render (`newtab.tsx:NewTab`).
+* **Unchanged columns keep their arrays.** Bookmarks are grouped once per change, so a column whose bookmarks did not change keeps its memoized card list (`newtab.tsx:NewTab`).
+* **The All item lists columns in order.** Every column's bookmarks come in column order, with Unfiled last (`newtab.tsx:NewTab`).
+* **New tabs can be handed to the browser.** With "Use TabLodge for new tabs" off, the worker decides whether this tab was one, and only then is it sent on to the browser's page (`newtab.tsx:NewTab`).
+* **Source notices wait for the dashboard to stay.** A tab handed on would drop the toast unseen (`newtab.tsx:NewTab`).
+* **A failed hand-off shows the page.** It never leaves the tab blank (`newtab.tsx:NewTab`).
+* **Stray link drops are refused.** Bookmarks are added only by drops on a column or Unfiled; elsewhere the drop is swallowed (ADR 0017, shouldBlockDocumentDrop).
+* **One autoscroll watcher per page.** Every drag on the page, bookmarks and sessions alike, shares it (`newtab.tsx:NewTab`).
+* **Pasting outside a text field opens Add bookmark.** The title comes from the copied text, then an open tab on that page, then the domain; no page is fetched (`newtab.tsx:NewTab`, `newtab.tsx:pastedLinkTitles`).
+* **A bookmark left in Unfiled starts in the preferred column.** Unfiled has no column to show (`newtab.tsx:NewTab`).
+* **Empty lists clear tags and removed kinds.** A save with no tags or kinds clears what the bookmark had (`newtab.tsx:NewTab`).
+* **Column delete with bookmarks asks where they go.** An empty column is deleted at once; Undo restores the column and its bookmarks (`newtab.tsx:requestDeleteColumn`).
+* **A site save can fill an empty column during a dialog.** The dialog asks where those bookmarks go (`newtab.tsx:NewTab`).
+* **Focus is rescued after a move.** It waits for the Move dialog to close, then moves focus back to the page if it fell to the body (`newtab.tsx:keepFocusAfterMove`).
+* **Focus stays on the page after the bar goes.** The selection bar and its dialog are gone, so focus returns to the page (`newtab.tsx:NewTab`).
+* **Deletes are undoable from the trash.** Undo restores the bookmark from the trash (`newtab.tsx:deleteBookmark`).
+* **Keyboard alternative to dragging a bookmark.** One step earlier or later in its column (`newtab.tsx:moveBookmarkStep`).
+* **Keyboard alternative to dragging a column.** One step left or right (`newtab.tsx:moveColumnStep`).
+* **Keyboard alternative to dropping on a session.** Bookmarks can be added to a saved session without a drop (`newtab.tsx:addBookmarkToSession`).
+* **Session targets exist only while one exists.** The picker shows a session only when at least one is saved (`newtab.tsx:NewTab`).
+* **The pasted-links picker can create a session.** It can pick one even when none is saved (`newtab.tsx:NewTab`).
+* **Drag data is read before any await.** The browser clears it after the first await (`newtab.tsx:dropOnColumn`).
+* **Nothing drops on All.** All is a view of every column (`newtab.tsx:dropOnColumn`).
+* **A sorted column drops at its end.** It shows no slots (`newtab.tsx:dropOnColumn`).
+* **Sorted columns keep stored positions.** Bookmarks already there keep their stored position (`newtab.tsx:dropOnColumn`).
+* **Large batches get an Undo that closes them.** More than ten tabs at once (`newtab.tsx:NewTab`).
+* **Command handlers read the latest settings.** The finder's command list stays stable between renders (`newtab.tsx:NewTab`).
+* **This tab is no web page.** Its other tabs offer Keep a copy, so this one does not (`newtab.tsx:NewTab`).
+* **Private windows sync from their own Settings.** Sync now in a private window uses its separate library (`newtab.tsx:NewTab`).
+* **Private windows keep no snapshots.** Recent snapshots are not offered there (`newtab.tsx:NewTab`).
+* **Only a private window has a private library to lock.** (`newtab.tsx:NewTab`).
+* **`?command=` runs commands here.** The palette window passes a command that needs this page (`newtab.tsx:NewTab`).
+* **Commands wait for the page.** While a new tab is handed to the browser, the dashboard and its listeners are not up (`newtab.tsx:NewTab`).
+* **Commands run after the sessions area listens.** After this render, so events a command sends are heard (`newtab.tsx:NewTab`).
+* **The palette shortcut toggles the palette here.** The "Open the search palette" shortcut, pressed on this page, toggles it (`newtab.tsx:NewTab`).
+* **Focus search on a new tab opens the palette once.** Not for `?q=` links, which prefill the page search. A background tab focuses its input once visible (`newtab.tsx:NewTab`).
+* **Stable callbacks let memoized rows skip renders.** One set for every column and bookmark (`newtab.tsx:NewTab`).
+* **A stable shell while the handoff is blank.** The handoff stays blank; the shell shows while the initial state read is in flight (`newtab.tsx:NewTab`).
+* **The item drags, not the button.** Firefox does not drag buttons (`newtab.tsx:NewTab`).
+* **Session targets are read at menu open.** Not while rendering (`newtab.tsx:BoardActions`).
+* **Header buttons keep their own taps.** The header's clicks ignore the menu (`newtab.tsx:BookmarkColumn`).
+* **The scroll region is focusable.** Keyboard users can scroll it on its own (`newtab.tsx:BookmarkColumn`).
+* **One list feeds two menus.** The ⋯ menu and the right-click menu cannot drift apart (`newtab.tsx:BookmarkCard`).
+* **A passage link stays outside the card link.** A passage link cannot sit inside another link (`newtab.tsx:BookmarkCard`).
+
+### Settings
+
+* **Firefox has no private storage.** It keeps the add-on out of private windows (`options.tsx:Options`).
+* **Reset reads the latest group.** Set to the latest resetGroup on each render (`options.tsx:Options`).
+* **Reload waits for pending saves.** A reload that lands while saves are in flight may predate them (`options.tsx:Options`).
+* **Focus goes to the section after a removal.** The action removes the control that held focus, and Chrome fires no focusout for a removed element, so the focus rescue never sees it (`options.tsx:Options`).
+* **A section link waits for the sections.** It arrives before they exist, so the browser cannot jump; the page scrolls there and moves focus after render (`options.tsx:Options`).
+* **The downloads permission is asked from the click.** The browser asks for the optional permission from the user's gesture (`options.tsx:Options`).
+* **Dialog state resets on open.** The closing animation never shows an emptied form (`options.tsx:Options`).
+* **Appearance is stored apart.** Undo puts it back too (`options.tsx:Options`).
+* **Erasing takes a safety backup first.** Undo puts the data back (`options.tsx:Options`).
+* **Settings hidden by a rule are left out of search.** A row whose `when` fails does not apply at all, and a row whose parent is off is hidden but still found next to its parent, disabled (`options.tsx:Options`).
+* **Search keeps a family together.** A matching row brings its parent switch and dependents, so a setting never shows without the control that gates it (`options.tsx:Options`).
+* **Arrow keys select as they move.** As native radio buttons do (`options.tsx:Options`).
+* **Reset confirms against current values.** The latest resetGroup reads the settings as they are when the user confirms (`options.tsx:Options`).
+* **`when` does not make a row dependent.** It only decides whether the row exists (`options.tsx:Options`).
+* **Section hiding waits for commit.** A search can hide the whole section once its last match is gone (`options.tsx:Options`).
+* **Shortcuts refresh on return.** They change on another page, so the card reads again when the user comes back (`options.tsx:ShortcutsCard`).
+* **The control keeps its place in the tree.** Remounting would close an open popover when a change makes the reset button appear (`options.tsx:SettingRow`).
+
+### Page copies
+
+* **Copies live in the worker.** This module reads and opens them; the worker keeps them (`page-copies.ts:readerUrl`).
+* **One storage listener for every row.** Always empty in a private window, which keeps no copies (`page-copies.ts:usePageCopyUrls`).
+* **Injected functions are source text.** Each is a plain function declaration, since a method shorthand does not survive `chrome.scripting.executeScript` (`page-copy-inject.ts:takeCapturedCopy`).
+* **The page note cannot be styled by the page.** It is built in a closed shadow root, so the page's styles and scripts do not reach it (`page-copy-inject.ts:showPageNote`).
+
+### Address bar
+
+* **The address bar search is pure.** The worker gathers data and opens the result; this module only ranks (`omnibox.ts:omniboxIndex`).
+* **Descriptions are omnibox XML.** The dialect's `<match>` and `<dim>` markup is what the address bar shows (`omnibox.ts:omniboxSuggestions`).
+* **Few results per kind.** Bookmarks cannot push sessions off the list (`omnibox.ts:omniboxSuggestions`, `MAX_PER_KIND`).
+
+### Palette overlay
+
+* **The overlay runs in the page.** The worker passes this function to `chrome.scripting.executeScript`, so it is serialised like any injected code (`palette-overlay.ts:togglePaletteOverlay`).
+* **Focus stays in the palette.** Anything the page focuses behind it goes back to the frame (`palette-overlay.ts:onFocusIn`).
+
+### Palette window
+
+* **The palette window works on restricted pages.** It is a window of its own, not part of the page, so `window` in the address is the browser window that was in front (`palette.tsx:PalettePage`).
+* **Dashboard commands run on the dashboard.** They open it and run there (`palette.tsx:PalettePage`).
+* **Private windows keep no page copies.** (`palette.tsx:PalettePage`).
+* **A private library syncs from its own Settings.** (`palette.tsx:PalettePage`).
+* **Private windows keep no snapshots.** (`palette.tsx:PalettePage`).
+* **Only a private window has a private library to lock.** (`palette.tsx:PalettePage`).

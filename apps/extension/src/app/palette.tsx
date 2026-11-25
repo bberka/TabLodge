@@ -17,9 +17,6 @@ import {keptCopyMessage} from './page-copies';
 import {inPrivateWindow} from './private-config';
 import {paletteOverlay, paletteTabId, paletteWindowId} from './page-params';
 
-// The small window the service worker opens for the "Open the search palette" shortcut. It works on every page,
-// restricted ones included, because it is a window of its own and not part of the page. `window` in the address
-// is the browser window that was in front; links, searches and restores go there.
 function PalettePage() {
 	const windowId = paletteWindowId(location.search);
 	const tabId = paletteTabId(location.search);
@@ -34,7 +31,6 @@ function PalettePage() {
 			}
 		};
 
-		// Commands that need the dashboard open it, and it runs them there.
 		const onDashboard = (id: PageCommandId) => async () =>
 			open(`newtab.html?command=${id}`);
 		const handlers: CommandHandlers = {
@@ -44,7 +40,6 @@ function PalettePage() {
 					throw new Error(result?.error || 'Could not save this window.');
 				}
 			},
-			// Private windows never keep page copies.
 			'keep-copy': inPrivateWindow()
 				? undefined
 				: async () => {
@@ -64,7 +59,6 @@ function PalettePage() {
 			'new-bookmark': onDashboard('new-bookmark'),
 			'new-column': onDashboard('new-column'),
 			'new-folder': onDashboard('new-folder'),
-			// A private window's separate library syncs from its own Settings.
 			'sync-now': inPrivateWindow()
 				? undefined
 				: async () => {
@@ -86,11 +80,9 @@ function PalettePage() {
 			'backup-bookmarks': onDashboard('backup-bookmarks'),
 			'import-sessions': onDashboard('import-sessions'),
 			'backup-sessions': onDashboard('backup-sessions'),
-			// Private windows keep no snapshots.
 			'recent-snapshots': inPrivateWindow()
 				? undefined
 				: onDashboard('recent-snapshots'),
-			// Only a private window has a private library to lock.
 			'lock-private': inPrivateWindow()
 				? async () => {
 						const result = await send('LOCK_PRIVATE');
