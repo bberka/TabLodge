@@ -109,7 +109,7 @@ This record covers the search operators and the finder (`search-query.ts`, `fuzz
 
 ### Addresses (`web-url.ts`, `url-display.ts`, `tracking-parameters.ts`)
 
-* **The service worker keeps its own copy of `webUrl`,** because it is a classic script with no imports. The copy must mirror `normalizeUrl` (`web-url.ts:webUrl`).
+* **Shared helpers are imported, not copied.** The service worker builds into one classic script and imports shared code from `src/`, including `normalizeUrl` from `library-normalize.ts`. Helpers for pages and the import parsers live in `web-url.ts:webUrl`, which the worker does not use ([Extension rules](../agents/extension.md)).
 * **Display drops `https://`, `http://`, and `www.`, and a bare `/`,** only when `simplify` is set. Stored, copied, opened, and exported addresses never change (`url-display.ts:displayUrl`).
 * **Insecure links are flagged by a marker,** not by a changed address (`url-display.ts:isInsecureLink`).
 * **Local and home-network hosts are trusted** and do not get the marker unless `markLocal` is set (`url-display.ts:isLocalHost`, `url-display.ts:PRIVATE_IPV4`).
