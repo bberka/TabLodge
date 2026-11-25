@@ -1,38 +1,15 @@
-/*
-Saving a quote: text the user selected on a page goes into the note of that page's bookmark (or of its saved tab),
-followed by a text fragment link (`#:~:text=`) that scrolls to the passage and highlights it. Shared by the extension's
-"Save quote" menu item and the Android share sheet, so both write the same note.
-*/
 import {NOTES_MAX} from './library-normalize';
 import type {Bookmark, Session} from './types';
 
-/**
-Quotes longer than this many words, or than QUOTE_EXACT_CHARS, or spread over several lines, link as `start,end`:
-a long exact match breaks on any change to the page, and an exact match cannot span two paragraphs.
-*/
 const QUOTE_EXACT_WORDS = 8;
 const QUOTE_EXACT_CHARS = 80;
-/**
-How many words the start and the end of a `start,end` fragment take.
-*/
 const QUOTE_EDGE_WORDS = 4;
-/**
-A line with no spaces (Chinese, Japanese, a long token) is cut to this many characters at each end instead.
-*/
 const QUOTE_EDGE_CHARS = 30;
 
-/**
-One fragment term: percent-encoded, with `-`, `&` and `,` escaped as well, because they separate the parts of a text
-directive. encodeURIComponent already escapes `&` and `,`.
-*/
 export function encodeFragmentTerm(term: string) {
 	return encodeURIComponent(term).replaceAll('-', '%2D');
 }
 
-/**
-The page's own address: a text fragment directive (`:~:` and what follows) is dropped, and so is a hash left empty by
-that. Pages opened from a saved quote link report their address with it.
-*/
 export function pageAddress(url: string) {
 	const hashAt = url.indexOf('#');
 	if (hashAt === -1) {
@@ -48,9 +25,6 @@ export function pageAddress(url: string) {
 	return kept.endsWith('#') ? kept.slice(0, -1) : kept;
 }
 
-/**
-The first or last words of a line, at most `count`; a line without spaces is cut by characters instead.
-*/
 function edges(line: string, from: 'start' | 'end', count = QUOTE_EDGE_WORDS) {
 	const words = line.split(' ');
 	if (words.length > 1) {
@@ -68,9 +42,6 @@ function edges(line: string, from: 'start' | 'end', count = QUOTE_EDGE_WORDS) {
 		: line.slice(-QUOTE_EDGE_CHARS);
 }
 
-/**
-The quote's lines with their spacing collapsed, empty lines left out.
-*/
 function quoteLines(quote: string) {
 	return quote
 		.replaceAll('\u0000', '')
@@ -79,10 +50,6 @@ function quoteLines(quote: string) {
 		.filter(Boolean);
 }
 
-/**
-The page address with a text fragment for the quote: the whole quote when it is short and on one line, otherwise its
-first and last words as `start,end`.
-*/
 export function textFragmentLink(url: string, quote: string) {
 	const lines = quoteLines(quote);
 	const page = pageAddress(url);
@@ -100,7 +67,6 @@ export function textFragmentLink(url: string, quote: string) {
 	) {
 		directive = encodeFragmentTerm(first);
 	} else {
-		// On one line the start and the end must not overlap, so each takes at most half its words.
 		const count =
 			lines.length === 1
 				? Math.min(QUOTE_EDGE_WORDS, Math.floor(first.split(' ').length / 2))
@@ -113,9 +79,6 @@ export function textFragmentLink(url: string, quote: string) {
 	return `${page}${page.includes('#') ? '' : '#'}:~:text=${directive}`;
 }
 
-/**
-One saved quote in a note: each line of the quote after `> `, then the link to the passage on a line of its own.
-*/
 export function quoteEntry(url: string, quote: string) {
 	const lines = quoteLines(quote);
 	return [
@@ -126,10 +89,6 @@ export function quoteEntry(url: string, quote: string) {
 
 export type QuoteNote = {ok: true; notes: string} | {ok: false; error: string};
 
-/**
-The note with the quote added after what it already holds, separated by a blank line. Nothing is ever cut: a quote that
-would take the note past NOTES_MAX is refused, and the note stays as it was.
-*/
 export function appendQuote(
 	notes: string | undefined,
 	url: string,
@@ -164,10 +123,6 @@ export type QuoteTarget =
 	| {kind: 'tab'; group: Session; tabId: string}
 	| {kind: 'new'; url: string};
 
-/**
-Where a quote from this page goes: its bookmark, else a saved tab of it in a session, else a new bookmark. Addresses
-are compared without a text fragment directive.
-*/
 export function quoteTarget(
 	library: {bookmarks: readonly Bookmark[]; groups: readonly Session[]},
 	pageUrl: string,

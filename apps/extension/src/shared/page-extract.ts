@@ -1,15 +1,8 @@
-/*
-Turns a page into a readable copy (page-copy.ts). Mozilla's Readability finds the article; this module walks what it
-kept and writes text blocks, so no markup survives. The extension passes a clone of the open page's document; the
-Android app parses fetched HTML with linkedom and passes that. Only standard DOM calls on the given document are used,
-so the same code runs in both (ADR 8).
-*/
 import {Readability} from '@mozilla/readability';
 import type {CopyBlock, CopyBlockType, PageCopy} from './page-copy';
 
 const ELEMENT = 1;
 const TEXT = 3;
-// Never text a reader wants. Readability drops most of these, but the fallback below walks the raw body.
 const SKIPPED = new Set([
 	'script',
 	'style',
@@ -31,7 +24,6 @@ const SKIPPED = new Set([
 	'form',
 	'head',
 ]);
-// Page furniture, skipped only when Readability found no article and the whole body is read.
 const CHROME = new Set(['nav', 'header', 'footer', 'aside', 'menu', 'dialog']);
 const HEADINGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
 const BLOCKS = new Set([
@@ -65,9 +57,6 @@ const nameOf = (node: Node) =>
 
 const tidy = (text: string) => text.replaceAll(/\s+/g, ' ').trim();
 
-/**
-The text of an element that holds no blocks of its own, with line breaks kept.
-*/
 function inlineText(node: Node, skip: ReadonlySet<string>): string {
 	if (node.nodeType === TEXT) {
 		return node.textContent ?? '';
@@ -161,7 +150,6 @@ function walk(root: Node, skip: ReadonlySet<string>): CopyBlock[] {
 				case 'li':
 				case 'dt':
 				case 'dd': {
-					// The item's own words, then any list nested in it as items of their own.
 					let own = '';
 					const nested: Node[] = [];
 					for (const child of node.childNodes) {
@@ -209,10 +197,6 @@ function walk(root: Node, skip: ReadonlySet<string>): CopyBlock[] {
 	return blocks;
 }
 
-/**
-The readable copy of a page. `document` is changed while reading, so pass a clone or a freshly parsed one. A copy
-with no blocks means the page had no text to keep.
-*/
 export function extractPageCopy(
 	document: Document,
 	url: string,
@@ -224,9 +208,7 @@ export function extractPageCopy(
 		article = new Readability<Node>(document, {
 			serializer: (node) => node,
 		}).parse();
-	} catch {
-		// A page Readability cannot read still has a body to fall back on.
-	}
+	} catch {}
 
 	const found = article?.content;
 	const blocks = found
@@ -235,7 +217,6 @@ export function extractPageCopy(
 			? walk(document.body, new Set([...SKIPPED, ...CHROME]))
 			: [];
 	const title = tidy(article?.title ?? '') || pageTitle || url;
-	// The reader shows the title above the text, so a first heading that repeats it goes.
 	if (blocks[0]?.type === 'heading' && blocks[0].text === title) {
 		blocks.shift();
 	}
