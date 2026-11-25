@@ -14,7 +14,7 @@ Status: accepted, 2026-11-25. Issue #442.
 * **Native backups are passed through untouched.** A JSON restore keeps everything the service worker understands: notes, split pairs, folders, column order (`import-formats.ts:parseNative`).
 * **Every format is reduced to groups of links,** a session, a bookmark folder, or a list. Each format's own parser feeds the same shape (`import-formats.ts:ImportPreview`).
 * **Largest file: 45 MB,** also checked against the text length (`import-formats.ts:MAX_IMPORT_BYTES`).
-* **A file with more than 250,000 links is refused as a whole.** An import never drops part of its links (`import-formats.ts:MAX_IMPORT_LINKS`).
+* **A file with more than 250,000 links is refused as a whole.** An import never drops part of its links because of that check (`import-formats.ts:MAX_IMPORT_LINKS`). A browser bookmark tree is different: `parseBookmarkTree` stops silently after 10,000 nodes and does not reject the import, so a larger tree is imported only in part (`import-formats.ts:parseBookmarkTree`).
 * **Each format records how well its structure is known.** The level is checked against the tool's source or real files, or is a best-effort reading (`import-formats.ts:ImportFormatId`).
 * **Tags are read from any tool's shape.** They come in unchecked, and the caller normalizes them as bookmark tags are stored (`import-formats.ts:tagList`).
 * **Timestamps are read in seconds, milliseconds, or as date strings.** Dates before 1995 or far in the future are ignored (`import-formats.ts:toTimestamp`).
@@ -25,7 +25,7 @@ Status: accepted, 2026-11-25. Issue #442.
 
 ### Readers for other tools (`import-formats.ts`)
 
-These follow each tool's published exporter or API docs. They are best-effort, not checked against real files, and tags are not imported. A link's own note becomes its note.
+Each reader below follows the tool's published exporter or API docs, and its `confidence` says how well that was checked (`import-formats.ts:FormatConfidence`). Best-effort, not checked against real files: Linkwarden, Karakeep, Omnivore, Wallabag, Pinboard, Mastodon, and Toby when its list shape is not the verified one. The rest are verified: Session Buddy, Tab Session Manager, OneTab, Markdown, URL lists, bare JSON links, and the Netscape and CSV readers. Metadata differs per reader: Linkwarden, Karakeep, Wallabag, and Pinboard pass tags to the collector. Omnivore passes neither tags nor a link note, only the saved date.
 
 * **Session Buddy** reads v4 `nxs.json.v2` (collections, folders, links, epoch ms) and v3 `nxs.json.v1` (sessions, windows, tabs, ISO dates). Aliases of either shape are accepted (`import-formats.ts:parseSessionBuddy`).
 * **Tab Session Manager** stores lazily loaded tabs as an extension page that carries the real URL in `url=`. The reader unwraps it (`import-formats.ts:unwrapTsmUrl`, `import-formats.ts:parseTabSessionManager`).
