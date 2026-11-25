@@ -826,17 +826,13 @@ test('a checkpoint keeps only the replaced records and puts the library back, ac
 	second.bookmarks = [];
 	await store.write(second);
 	await store.write({...second, updatedAt: 9999});
-	const delta = store.endCheckpoint(checkpoint);
+	const delta = await store.endCheckpoint(checkpoint);
 	assert.ok(delta);
 	assert.notEqual(await store.fingerprint(), before);
 	assert.deepEqual(
 		Object.keys(delta.records).toSorted(),
-		[
-			`${BOOKMARKS_KEY_PREFIX}1`,
-			'tablodge.session.s1.1',
-			'tablodge.session.s4.1',
-		],
-		'only what the action replaced is copied',
+		['tablodge.session.s1.1', 'tablodge.session.s4.1'],
+		'only the sessions the action replaced are copied; the bookmarks come as a patch',
 	);
 	assert.ok(
 		JSON.stringify(delta).length < JSON.stringify(expected).length,
@@ -860,7 +856,7 @@ test('a checkpoint that could not copy a record gives no delta, and never fails 
 		url: 'https://x.example/',
 	});
 	await store.write(edited);
-	assert.equal(store.endCheckpoint(checkpoint!), null);
+	assert.equal(await store.endCheckpoint(checkpoint!), null);
 });
 
 test('a checkpoint on an action that changes nothing keeps the same fingerprint', async () => {
@@ -869,7 +865,10 @@ test('a checkpoint on an action that changes nothing keeps the same fingerprint'
 	await store.write(normalize(library(3)));
 	const before = await store.fingerprint();
 	const checkpoint = await store.beginCheckpoint();
-	assert.deepEqual(Object.keys(store.endCheckpoint(checkpoint!)!.records), []);
+	assert.deepEqual(
+		Object.keys((await store.endCheckpoint(checkpoint!))!.records),
+		[],
+	);
 	assert.equal(await store.fingerprint(), before);
 });
 
@@ -886,7 +885,7 @@ test('a checkpoint survives the library being removed', async () => {
 	await store.write(base);
 	const checkpoint = await store.beginCheckpoint();
 	await store.remove();
-	const delta = store.endCheckpoint(checkpoint!);
+	const delta = await store.endCheckpoint(checkpoint!);
 	assert.ok(delta);
 	await store.restoreCheckpoint(delta);
 	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
@@ -932,3 +931,90 @@ test('dropping garbage deletes only unreferenced record keys', async () => {
 	);
 	assert.deepEqual(stateOf(backend)!.garbage, []);
 });
+
+test('a checkpoint keeps one changed bookmark of 10,000, not the replaced record, and Undo puts every bookmark back', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend);
+	const base = normalize(library(3, 10_000));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	const edited = structuredClone(base);
+	(edited.bookmarks as Raw[])[4321].title = 'Renamed';
+	await store.write(edited);
+	const delta = await store.endCheckpoint(checkpoint!);
+	assert.ok(delta);
+	assert.equal(delta.bookmarks?.middle.length, 1);
+	assert.equal(delta.bookmarks?.head, 4321);
+	assert.ok(
+		JSON.stringify(delta).length < 20_000,
+		String(JSON.stringify(delta).length),
+	);
+	await store.restoreCheckpoint(delta);
+	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
+	assert.deepEqual(await store.verify(), []);
+});
+
+test('a checkpoint over a moved, added and removed bookmark and session restores them in place', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend);
+	const base = normalize(library(6, 40));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	const edited = structuredClone(base);
+	const marks = edited.bookmarks as Raw[];
+	marks.splice(30, 0, ...marks.splice(5, 1));
+	marks.splice(10, 1);
+	marks.unshift({id: 'new', columnId: 'c1', url: 'https://new.example/'});
+	const groups = edited.groups as Raw[];
+	groups.splice(1, 1);
+	groups.push(session('late', 2));
+	await store.write(edited);
+	const delta = await store.endCheckpoint(checkpoint!);
+	await store.restoreCheckpoint(delta!);
+	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
+});
+
+test('Undo refuses when the library moved on after the action', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend);
+	const base = normalize(library(3, 5));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	await store.write({...base, bookmarks: []});
+	const delta = await store.endCheckpoint(checkpoint!);
+	const later = {id: 'later', columnId: 'c1', url: 'https://later.example/'};
+	await store.write({...base, bookmarks: [later]});
+	await assert.rejects(store.restoreCheckpoint(delta!), LibraryDamagedError);
+	assert.deepEqual((await store.read())!.bookmarks, [later]);
+});
+
+test('an Undo entry stored by the version before still restores', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend);
+	const base = normalize(library(4, 5));
+	await store.write(base);
+	const checkpoint = await store.beginCheckpoint();
+	await store.write({...base, bookmarks: []});
+	const delta = (await store.endCheckpoint(checkpoint!))!;
+	const oldKey = `${BOOKMARKS_KEY_PREFIX}1`;
+	const old = {
+		undoDelta: 1 as const,
+		index: {
+			...delta.index,
+			sessions: parseIndexSessions(backend, 1),
+		},
+		records: {
+			...delta.records,
+			[oldKey]: {items: base.bookmarks},
+		},
+	};
+	await store.restoreCheckpoint(old as never);
+	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
+});
+
+function parseIndexSessions(backend: MemoryBackend, rev: number) {
+	return (stateOf(backend)!.sessions as Raw[]).map((entry) => ({
+		...entry,
+		rev,
+	}));
+}

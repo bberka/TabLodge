@@ -9010,7 +9010,7 @@ async function withUndo<K extends TabLodgeMessageType>(
 		result = await run();
 	} finally {
 		if (checkpoint) {
-			delta = libraryState.endCheckpoint(checkpoint);
+			delta = await libraryState.endCheckpoint(checkpoint);
 		}
 	}
 

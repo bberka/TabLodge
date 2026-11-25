@@ -58,6 +58,12 @@ import {
 	sessionKey,
 	STATE_KEY,
 } from './library-index';
+import {
+	applyPatch,
+	diffList,
+	type ListPatch,
+	parsePatch,
+} from './library-patch';
 import {carriedSync, keepOnly} from './library-sync';
 import {canonicalJson, hashText, isRecord, type Raw} from './library-values';
 
@@ -120,14 +126,21 @@ What Undo keeps of the library: the index as it was and only the records the act
 edited in place, so everything else is still where the index says.
 */
 export type UndoDelta = {
-	undoDelta: 1;
+	undoDelta: 1 | 2;
 	index: LibraryIndex;
 	records: Raw;
+	/**
+	From version 2 on: the index lists no sessions and the replaced bookmarks record is not in `records`. The old
+	session list and the old bookmarks are given as what differs from the commit the action ended on, whose `rev` is
+	the list lengths each patch records.
+	*/
+	sessions?: ListPatch;
+	bookmarks?: ListPatch;
 };
 
 export const isUndoDelta = (value: unknown): value is UndoDelta =>
 	isRecord(value) &&
-	value.undoDelta === 1 &&
+	(value.undoDelta === 1 || value.undoDelta === 2) &&
 	isRecord(value.index) &&
 	isRecord(value.records);
 
@@ -794,16 +807,47 @@ export function createLibraryState(
 	/**
 	Closes a checkpoint. Null when a copy it needed could not be taken.
 	*/
-	function endCheckpoint(checkpoint: Checkpoint): UndoDelta | null {
+	async function endCheckpoint(
+		checkpoint: Checkpoint,
+	): Promise<UndoDelta | null> {
 		const {collector} = checkpoint;
 		collectors.delete(collector);
-		return collector.complete
-			? {
-					undoDelta: 1,
-					index: collector.index,
-					records: Object.fromEntries(collector.records),
-				}
-			: null;
+		if (!collector.complete) {
+			return null;
+		}
+
+		try {
+			const {index} = collector;
+			const entry = await getOne(STATE_KEY);
+			const current =
+				isRecordsEntry(entry) && Number(entry.schemaVersion) <= LAYOUT_VERSION
+					? parseIndex(entry)
+					: null;
+			const records = new Map(collector.records);
+			const oldKey = bookmarksKey(index.bookmarks.rev);
+			const old = records.get(oldKey);
+			let bookmarks: ListPatch | undefined;
+			if (isRecord(old) && Array.isArray(old.items)) {
+				const latest = current
+					? await getOne(bookmarksKey(current.bookmarks.rev))
+					: undefined;
+				bookmarks = diffList(
+					old.items,
+					isRecord(latest) && Array.isArray(latest.items) ? latest.items : [],
+				);
+				records.delete(oldKey);
+			}
+
+			return {
+				undoDelta: 2,
+				index: {...index, sessions: []},
+				sessions: diffList(index.sessions, current?.sessions ?? []),
+				...(bookmarks && {bookmarks}),
+				records: Object.fromEntries(records),
+			};
+		} catch {
+			return null;
+		}
 	}
 
 	/**
@@ -822,7 +866,41 @@ export function createLibraryState(
 	Puts the library back as a checkpoint saw it, as a new commit that rewrites only what differs.
 	*/
 	async function restoreCheckpoint(delta: UndoDelta): Promise<void> {
-		const index = parseIndex(delta.index);
+		let raw: Raw = delta.index;
+		let patched: unknown[] | undefined;
+		if (delta.undoDelta === 2) {
+			const entry = await getOne(STATE_KEY);
+			const current =
+				isRecordsEntry(entry) && Number(entry.schemaVersion) <= LAYOUT_VERSION
+					? parseIndex(entry)
+					: null;
+			const sessions = parsePatch(delta.sessions);
+			const applied = sessions && applyPatch(current?.sessions ?? [], sessions);
+			if (!applied) {
+				throw new LibraryDamagedError(
+					'the library changed since the action, so Undo cannot run',
+				);
+			}
+
+			raw = {...raw, sessions: applied};
+			const bookmarksPatch = parsePatch(delta.bookmarks);
+			if (bookmarksPatch) {
+				const latest = current
+					? await getOne(bookmarksKey(current.bookmarks.rev))
+					: undefined;
+				patched = applyPatch(
+					isRecord(latest) && Array.isArray(latest.items) ? latest.items : [],
+					bookmarksPatch,
+				);
+				if (!patched) {
+					throw new LibraryDamagedError(
+						'the bookmarks changed since the action, so Undo cannot run',
+					);
+				}
+			}
+		}
+
+		const index = parseIndex(raw);
 		const groups: Raw[] = [];
 		for (const run of batches(
 			index.sessions,
@@ -847,9 +925,11 @@ export function createLibraryState(
 		}
 
 		const key = bookmarksKey(index.bookmarks.rev);
-		const stored = Object.hasOwn(delta.records, key)
-			? delta.records[key]
-			: await getOne(key);
+		const stored = patched
+			? {items: patched}
+			: Object.hasOwn(delta.records, key)
+				? delta.records[key]
+				: await getOne(key);
 		if (!isRecord(stored) || !Array.isArray(stored.items)) {
 			throw new LibraryDamagedError(`${key} is missing, so Undo cannot run`);
 		}
