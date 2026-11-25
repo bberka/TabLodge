@@ -54,13 +54,13 @@ Status: accepted, 2026-11-25. Issue #442.
 
 * **Keys name the message.** Each key is the `type` the pages send to the service worker (`types.ts:TabLodgeMessages`).
 * **Save scopes.** The `-tab` scopes are relative to the sender or the active tab (`types.ts:SaveScope`).
-* **Setting a private password also turns private sync on,** so the private library reaches the sync server with that password (`types.ts:ENABLE_PRIVATE_LOCK`).
+* **Private sync starts only when the message asks for it.** `ENABLE_PRIVATE_LOCK` with `sync: true` also enables private sync. Without it, or when sync cannot be enabled, the lock is set and the library does not reach the server. The worker ignores a failure there, and Settings › Sync shows the outcome (`types.ts:ENABLE_PRIVATE_LOCK`, `shell/service-worker.ts:ENABLE_PRIVATE_LOCK`).
 * **Duplicates.** Saving a tab whose address is already saved is refused by the duplicate setting, except when the message asks for it to be stored anyway (`types.ts:SAVE_TABS`).
 * **Previews change nothing.** A preview of a save or of a session name shows what would be captured, without a write (`types.ts:PREVIEW_SESSION_NAME`).
 * **Custom session order keeps the slots.** `SET_GROUP_ORDER` gives the visible sessions their new order in the slots they held, and switches the sort to custom. Hidden sessions stay where they were (`types.ts:SET_GROUP_ORDER`).
 * **Folder icon and color.** Omitted keeps the current value. An empty string resets the icon to the default and removes the color (`types.ts:UPDATE_FOLDER`).
 * **Moving a link drops its split.** The moved link and its partner lose split info (`types.ts:MOVE_TAB`).
-* **Undo of a move that emptied its source** names the trash entry that holds the source session. The link comes back with it (`types.ts:MOVE_TAB`, `types.ts:MERGE_GROUPS`).
+* **Undo of a move that emptied its source.** `restoreTrashId` names the trash entry of kind `tabs` that holds the source session, and `toGroupId` names that entry's deleted source session. The worker checks both before it restores, so a request that names anything else fails (`types.ts:MOVE_TAB`, `shell/service-worker.ts:restoreTrashId`).
 * **Adding links skips addresses the session already holds** (`types.ts:ADD_LINKS_TO_SESSION`).
 * **A new session from pasted links** uses the default folder, and an empty name gets the default from the naming settings. A repeated address is kept once (`types.ts:CREATE_SESSION_FROM_LINKS`).
 * **Changing a session from its window** keeps the notes of links the session still holds. Excluded sites, pinned tabs, and the duplicate setting apply as for a save (`types.ts:UPDATE_GROUP_FROM_WINDOW`).
@@ -68,7 +68,7 @@ Status: accepted, 2026-11-25. Issue #442.
 * **A quote goes to the note of the page's bookmark or saved tab.** A page with neither gets a new bookmark titled with the page title (`types.ts:SAVE_QUOTE`).
 * **Adding bookmarks can return an undo id** that removes them again (`types.ts:ADD_BOOKMARKS`).
 * **Removing duplicate bookmarks keeps one copy of each address outside the list,** and fails otherwise. At most 500 per message, which is the trash limit (`types.ts:REMOVE_DUPLICATE_BOOKMARKS`, `shell/service-worker.ts:TRASH_MAX_ITEMS`).
-* **Column update.** Omitted icon, color, or sites keep their value. An empty array clears the sites (`types.ts:UPDATE_BOOKMARK_COLUMN`).
+* **Column update.** Omitted `icon`, `color`, or `domains` keep their value. An empty `icon` resets it to the default, an empty `color` removes it, and an empty `domains` array clears the sites (`types.ts:UPDATE_BOOKMARK_COLUMN`).
 * **Deleting a column moves its bookmarks** to another column or to Unfiled, or deletes them when asked (`types.ts:DELETE_BOOKMARK_COLUMN`).
 * **Erasing data never touches settings or excluded sites** (`types.ts:ERASE_DATA`).
 * **Restoring a snapshot opens windows.** It opens every window, or only `windowIndex`, in new windows (`types.ts:RESTORE_SNAPSHOT`).
