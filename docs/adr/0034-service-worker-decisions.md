@@ -56,7 +56,7 @@ Status: accepted, 2026-11-25. Issue #442.
 * **The rest of the worker sees the library as one store.** Sessions live in their own keys behind it, and the logical key `STORAGE_KEY` is the whole library in the shape the single `tablodge.state` entry always had (`service-worker.ts:libraryState`, [ADR 25](0025-paged-library-layout.md)).
 * **Stored values are untrusted.** Only property reads happen before normalization (`service-worker.ts:getStore`).
 * **Read paths never write.** The schema migration is saved once, inside `mutate` (`service-worker.ts:migrateStoreOnce`).
-* **Migration runs once per worker run, and only while the library is still the old single entry.** It runs inside the mutation queue, so it cannot race a mutation or a concurrent read. If it fails the old layout keeps working, and the next try waits `MIGRATION_RETRY_MS` or a worker restart (`service-worker.ts:migrateStoreOnce`, `service-worker.ts:MIGRATION_RETRY_MS`).
+* **Migration runs once per worker run, in two steps.** A library still in the old single entry is moved to records. Separately, when `meta.upgradable` is true, the records layout is upgraded. Both run inside the mutation queue, so they cannot race a mutation or a concurrent read. It runs inside the mutation queue, so it cannot race a mutation or a concurrent read. If it fails the old layout keeps working, and the next try waits `MIGRATION_RETRY_MS` or a worker restart (`service-worker.ts:migrateStoreOnce`, `service-worker.ts:MIGRATION_RETRY_MS`).
 * **A restorable copy is kept through the usual recovery list** before migration, and is skipped when an interrupted attempt already took one (`service-worker.ts:migrateStoreOnce`).
 * **An unreadable migration result is refused and reported by `getStore`,** and never overwritten (`service-worker.ts:getStore`).
 * **Removing or skipping one tab of a split pair orphans its partner.** Delete, restore-and-remove, and import duplicates all do it (`service-worker.ts:deleteGroup`, `service-worker.ts:restoreGroup`, [ADR 30](0030-shared-types-decisions.md)).
@@ -65,7 +65,7 @@ Status: accepted, 2026-11-25. Issue #442.
 
 * **Changes made on this device go out in the next sync round.** A private window that shares the regular library asks the regular worker, which runs sync, through local storage (`service-worker.ts:nudgeSync`).
 * **Theme and accents sync between browsers,** as settings kept outside the library (`platform` in `setting-scopes.ts`). Pages store them themselves, and the private accent sits in the private config, whose other fields stay on this device (`service-worker.ts:OUTSIDE_SETTING_DEFAULTS`, [ADR 11](0011-setting-sync-scopes.md)).
-* **Only the regular worker syncs with a self-hosted server.** Private workers never sync, since their library is separate and may be temporary. The client runs its own library reads and writes inside the mutation queue (`service-worker.ts:syncClient`, [ADR 27](0027-shared-sync-decisions.md)).
+* **The regular `syncClient` is the one that syncs with the regular server.** Private sync is a separate client, `createPrivateSyncClient`. With configured saved storage, a regular server connection, and an unlocked library, `refreshPrivateSync()` creates it and `wakeSync()` wakes it, so private workers can sync. A library that is locked, or without saved storage, does not sync. The client runs its own library reads and writes inside the mutation queue (`service-worker.ts:syncClient`, [ADR 27](0027-shared-sync-decisions.md)).
 * **Sources belong to the browser,** so only the regular client carries them, never private sync (`service-worker.ts:syncClient`).
 * **Records from other devices are normalized like an import** before they are stored (`service-worker.ts:syncClient`).
 * **Private sync uses the regular connection.** A new server or token, or none, starts it over (`service-worker.ts:regularSyncConfig`).
@@ -77,7 +77,7 @@ Status: accepted, 2026-11-25. Issue #442.
 ### This device's name (`service-worker.ts:thisDevice`, `service-worker.ts:readDeviceName`)
 
 * **The device name is what the browser gives its sessions and bookmarks** when it saves them: the one set in Settings, else the browser and system. It is read once at start and again when the setting changes, and saves wait for the first read (`service-worker.ts:readDeviceName`, [ADR 33](0033-shared-remaining-decisions.md)).
-* **A failed first read keeps the default name,** so later saves do not fail with it (`service-worker.ts:readDeviceName`).
+* **A failed first read is handled in two places only.** `savedHere()` catches the rejection and keeps the default name. Other paths that await `deviceReady`, such as `captureTabs()`, do not catch it, so a tab save after a failed first read fails (`service-worker.ts:readDeviceName`, `service-worker.ts:savedHere`).
 
 ### Shared pages and link previews (`service-worker.ts:linkPreview`, `service-worker.ts:handleSharedPagesMessage`)
 
