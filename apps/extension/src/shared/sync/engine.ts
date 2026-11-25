@@ -1,16 +1,3 @@
-/*
-The device side of sync, as pure functions over a stored `SyncState` and the library's records. The worker runs
-them around its network calls:
-
-	capture   stamps every record that changed since the last capture and queues it (the outbox)
-	outgoing  the queued changes to push
-	settle    takes the push results; a change leaves the queue once the server has an answer for it
-	receive   applies pulled changes that win, and reports whether the library must be rewritten
-
-The state remembers, per record, the stamp, order key, and content hash it last agreed on with the server (the
-"shadow"). Comparing the library with it is how local edits are found, so the rest of the worker needs no sync
-code. Network calls happen between these steps, outside the worker's mutation queue.
-*/
 import {canonicalJson, hashText, isRecord} from '../library-values';
 import type {PushResult} from './change-log';
 import {recordKey, supersedes, type SyncChange} from './changes';
@@ -33,45 +20,18 @@ export type SyncState = {
 	device: string;
 	clock: Clock;
 	cursor: number;
-	/**
-	The server's purge marker from the last pull, sent back with the next one.
-	*/
 	purged: number;
-	/**
-	The highest server cursor this device has seen, from pulls and from its own pushes. A server that answers with
-	less was restored from an older backup or replaced.
-	*/
 	known?: number;
-	/**
-	False until the first full pull, so a new device takes the server's copy of records both sides have.
-	*/
 	joined: boolean;
 	shadow: Record<string, ShadowEntry>;
-	/**
-	Records with a local change the server has not answered yet.
-	*/
 	outbox: string[];
-	/**
-	During a resync: synced records not seen again yet. Whatever is left at the end was deleted remotely.
-	*/
 	unseen?: string[];
-	/**
-	Pulled changes waiting for the record they belong in (a tab's session, a bookmark's column, a session's folder).
-	Applied without it, the library would drop or move them and the next capture would send that loss back.
-	*/
 	held?: SyncChange[];
-	/**
-	The optional record kinds (trash, notes, tags, Sources, settings since 0.3.0) the last pull took. One it skipped is pulled from the start
-	once it is taken.
-	*/
 	pulled?: Array<'trash' | 'note' | 'tag' | 'source' | 'setting'>;
 };
 
 export type Records = Map<string, LibraryRecord>;
 
-/**
-Tombstones are forgotten after this long, matching the server's default retention.
-*/
 const TOMBSTONE_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
 
 export const newSyncState = (device: string): SyncState => ({
@@ -106,16 +66,11 @@ const without = (shadow: SyncState['shadow'], keys: ReadonlySet<string>) =>
 				Object.entries(shadow).filter(([key]) => !keys.has(key)),
 			);
 
-/**
-Order keys for a list of siblings. Keys that are already in order (the longest increasing run) stay, so a move
-or an insert changes only the records that moved or were added.
-*/
 export function orderList(
 	keys: readonly string[],
 	current: (key: string) => string | undefined,
 ): string[] {
 	const known = keys.map((key) => current(key));
-	// Longest strictly increasing subsequence of the known keys, in O(n log n).
 	const tails: number[] = [];
 	const previous = Array.from({length: keys.length}, () => -1);
 	for (const [index, key] of known.entries()) {
@@ -198,9 +153,6 @@ function orderKeys(
 	return keys;
 }
 
-/**
-Stamps every record that differs from what was last agreed with the server, and queues it.
-*/
 export function capture(
 	state: SyncState,
 	records: Records,
@@ -274,9 +226,6 @@ export function capture(
 	};
 }
 
-/**
-The queued changes, at most `limit`, with their current values.
-*/
 export function outgoing(
 	state: SyncState,
 	records: Records,
@@ -305,10 +254,6 @@ export function outgoing(
 	});
 }
 
-/**
-Takes the server's answers to a push. A change leaves the queue unless the record was edited again since it was
-sent. Returns how many changes the server refused (`stale` or `clock`), which the app reports.
-*/
 export function settle(
 	state: SyncState,
 	sent: readonly SyncChange[],
@@ -327,17 +272,12 @@ export function settle(
 		}
 	}
 
-	// The cursor stays: the push's own changes come back in the next pull and are recognised by their stamps.
 	return {
 		state: {...state, outbox: state.outbox.filter((key) => !done.has(key))},
 		refused,
 	};
 }
 
-/**
-Applies pulled changes that win over this device's version. Returns the new state and records, and whether any
-record changed (the library must then be rewritten).
-*/
 export function receive(
 	state: SyncState,
 	records: Records,
@@ -396,7 +336,6 @@ export function receive(
 		}
 	};
 
-	// A change waits while its parent is neither in the library nor known to be deleted.
 	const waits = (change: SyncChange) => {
 		const parent = parentOf(change);
 		return (
@@ -409,7 +348,6 @@ export function receive(
 		try {
 			clock = observe(clock, change.h, now);
 		} catch {
-			// A stamp from a clock far ahead; the server should have refused it.
 			continue;
 		}
 
@@ -417,7 +355,6 @@ export function receive(
 		waiting.push(change);
 	}
 
-	// Parents first: repeat while a pass applies something, so a folder, then its session, then its tabs all land.
 	for (let progress = true; progress;) {
 		const still: SyncChange[] = [];
 		for (const change of waiting) {
@@ -450,9 +387,6 @@ export function receive(
 	};
 }
 
-/**
-The record a change belongs in, when the library cannot hold it without that record.
-*/
 function parentOf(change: SyncChange): string | undefined {
 	if (change.deleted) {
 		return undefined;
@@ -488,11 +422,6 @@ function newestPerRecord(changes: readonly SyncChange[]): SyncChange[] {
 	return [...newest.values()];
 }
 
-/**
-Starts over after finding the server behind this device, which happens when it was restored from an older backup
-or replaced. The device pulls everything again and queues every record it knows, deletes included: the stamps
-decide record by record, so the server gets back whatever it lost and the device keeps whatever is newer.
-*/
 export function restartAfterServerReset(state: SyncState): SyncState {
 	return {
 		...state,
@@ -503,10 +432,6 @@ export function restartAfterServerReset(state: SyncState): SyncState {
 	};
 }
 
-/**
-Starts over from cursor 0 after the server said `resync`. Records synced before and not seen again by the end of
-the pull were deleted while this device was away; `finishResync` removes them.
-*/
 export function startResync(state: SyncState): SyncState {
 	return {
 		...state,
@@ -538,9 +463,6 @@ export function finishResync(
 	};
 }
 
-/**
-Records in display order: each order group sorted by order key.
-*/
 export function inOrder(state: SyncState, records: Records): LibraryRecord[] {
 	const position = (key: string) => state.shadow[key]?.o ?? '';
 	return [...records]

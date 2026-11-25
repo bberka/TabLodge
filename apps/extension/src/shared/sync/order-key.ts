@@ -1,19 +1,7 @@
-/*
-Order keys (fractional indexes) for siblings such as sessions in a folder or bookmarks in a column. Plain string
-order is list order and a new key always fits between two others, so moving an item rewrites only its own key.
-
-The scheme is the one from rocicorp/fractional-indexing (CC0). A key is an integer part and a fraction, both in
-base 62. The first character gives the integer part's length ("a" to "z" for positive integers of 1 to 26
-digits, "Z" down to "A" for negative ones), so adding items at either end only increments or decrements the
-integer and keys grow with the logarithm of the list length. Inserting between neighbours uses the fraction,
-which never ends in "0".
-*/
-
 const DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const ZERO = DIGITS[0];
 const LAST = DIGITS.at(-1)!;
 const SMALLEST_INTEGER = 'A' + ZERO.repeat(26);
-// Long enough for any real list; a key this long means something keeps inserting at one spot.
 const MAX_KEY_LENGTH = 64;
 const DIGITS_PATTERN = /^[\da-z]*$/i;
 
@@ -27,9 +15,6 @@ function integerLength(head: string): number | undefined {
 		: undefined;
 }
 
-/**
-The key split into its integer part and fraction, or undefined for anything that is not a key.
-*/
 function split(key: string): [string, string] | undefined {
 	const length = integerLength(key[0] ?? '');
 	if (
@@ -52,9 +37,6 @@ export const isOrderKey = (value: unknown): value is string =>
 const digit = (text: string, index: number) =>
 	index < text.length ? DIGITS.indexOf(text[index]) : 0;
 
-/**
-A fraction strictly between two fractions; `high` undefined means 1.
-*/
 function midpoint(low: string, high: string | undefined): string {
 	if (high !== undefined) {
 		let shared = 0;
@@ -80,9 +62,6 @@ function midpoint(low: string, high: string | undefined): string {
 		: DIGITS[lowDigit] + midpoint(low.slice(1), undefined);
 }
 
-/**
-The next integer part, or undefined past the largest one.
-*/
 function increment(integer: string): string | undefined {
 	const head = integer[0];
 	const digits = [...integer.slice(1)];
@@ -110,9 +89,6 @@ function increment(integer: string): string | undefined {
 	);
 }
 
-/**
-The previous integer part, or undefined before the smallest one.
-*/
 function decrement(integer: string): string | undefined {
 	const head = integer[0];
 	const digits = [...integer.slice(1)];
@@ -141,9 +117,6 @@ function decrement(integer: string): string | undefined {
 	);
 }
 
-/**
-A key that sorts after `before` and before `after`. Leave either out for the start or the end of the list.
-*/
 export function keyBetween(before?: string, after?: string): string {
 	const low = before === undefined ? undefined : split(before);
 	const high = after === undefined ? undefined : split(after);
@@ -188,9 +161,6 @@ export function keyBetween(before?: string, after?: string): string {
 		: integer + midpoint(fraction, undefined);
 }
 
-/**
-Keys for a list of `count` items in order, used when a list gets its keys for the first time.
-*/
 export function spreadKeys(count: number): string[] {
 	const keys: string[] = [];
 	for (let index = 0; index < count; index += 1) {

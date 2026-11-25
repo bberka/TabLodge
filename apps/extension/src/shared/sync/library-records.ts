@@ -1,27 +1,3 @@
-/*
-How a library splits into sync records and goes back together. Each folder, session (without its tabs), saved tab,
-bookmark column, bookmark, and portable setting is one record. Order is not part of a record's value: siblings
-share an order group and the sync engine gives each one an order key.
-
-A bookmark's note is a `note` record of its own, keyed by the bookmark id, so a version that predates notes never
-sees one: it skips a kind it does not know, while it would drop an unknown field from the bookmark and send that loss
-back. A server that cannot hold notes leaves them on the device (see the sync client). Tags and removed kinds travel
-the same way as a `tag` record ({tags, hiddenKinds}), for the same reason (ADR 8).
-
-Settings are `preference` records keyed by the setting, for the ones 0.3.0 already synced, and `setting` records for
-every other one: 0.3.0 drops a preference id it does not know and sends that loss back, while it skips a kind it does
-not know (ADR 10). A `setting` record this version does not know is held in `heldSettings` and sent back as it came.
-Settings a host keeps outside the library, such as the extension's theme, are `setting` records too: the host hands
-them in, and `assemble` leaves the ones it names out of the library, while a host that names none holds them like any
-other unknown setting.
-
-Sources settings (which sites are on, each one's column and save mode) are `source` records keyed by the site id, for
-the same reason. They live outside the library, so the host hands them in and takes them back as they are: a site or
-a field this version does not know still goes back unchanged.
-
-Some fields belong to one device and never travel: the browser window a session came from, its window position,
-and when it was last opened here. `assemble` keeps this device's values for them.
-*/
 import type {
 	Bookmark,
 	BookmarkColumn,
@@ -39,10 +15,6 @@ import {canonicalJson, isRecord} from '../library-values';
 import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
 import {recordKey} from './changes';
 
-/**
-The settings 0.3.0 syncs, as `preference` records. This list is closed: a setting added later travels as a `setting`
-record (`SETTING_KEYS`), which 0.3.0 skips instead of erasing.
-*/
 const PORTABLE_PREFERENCES = [
 	'closeOnSave',
 	'emptyWindowAfterSave',
@@ -111,17 +83,11 @@ const PORTABLE_PREFERENCES = [
 	'mobileApp',
 ] as const satisfies ReadonlyArray<keyof Settings>;
 
-// Every library setting has a scope: a new key without one in `setting-scopes.ts` fails to compile here.
 const scopes: Record<
 	Exclude<keyof Settings, 'heldSettings'>,
 	(typeof LIBRARY_SETTINGS)[keyof typeof LIBRARY_SETTINGS]
 > = LIBRARY_SETTINGS;
 
-/**
-Every other setting that syncs, as a `setting` record: each key of `DEFAULT_SETTINGS` that is neither a 0.3.0
-preference nor scoped to the device in `setting-scopes.ts`. Like preferences, these follow the user to every
-connected device unless settings sync is turned off on one.
-*/
 export const SETTING_KEYS: ReadonlyArray<keyof Settings> = (
 	Object.keys(scopes) as Array<keyof typeof scopes>
 ).filter(
@@ -143,11 +109,6 @@ export type LibraryRecord = {
 	value: unknown;
 };
 
-/**
-A `setting` record that still holds its default, from `DEFAULT_SETTINGS` or the host's `defaults` for settings it
-keeps outside the library. Never synced, it is not sent: a phone or a new browser holds every default without anyone
-choosing it, and sent first it would overwrite the values another device chose.
-*/
 export function isUntouchedDefault(
 	record: LibraryRecord,
 	defaults: Readonly<Record<string, unknown>> = {},
@@ -165,9 +126,6 @@ export function isUntouchedDefault(
 	);
 }
 
-/**
-The order group of a record kind; tabs are ordered within their session.
-*/
 export function orderGroup(
 	kind: TombstoneKind,
 	parentId?: string,
@@ -204,9 +162,6 @@ export function orderGroup(
 	}
 }
 
-/**
-One site's Sources choices as they sync: present while the site is on, with a value the host reads itself.
-*/
 export type SyncedSource = {id: string; value: Record<string, unknown>};
 
 const sessionCache = new WeakMap<Session, LibraryRecord[]>();
@@ -252,10 +207,6 @@ function bookmarkRecords(source: Bookmark): LibraryRecord[] {
 	return records;
 }
 
-/**
-The library's records in display order, keyed by `recordKey`, the trash entries small enough to send, the Sources
-choices, and the settings the host keeps outside the library.
-*/
 export function splitLibrary(
 	store: Store,
 	trash: readonly TrashEntry[] = [],
@@ -285,7 +236,6 @@ export function splitLibrary(
 	}
 
 	for (const key of PORTABLE_PREFERENCES) {
-		// A missing value has nothing to send; a change always carries a value or a delete.
 		if (store.settings[key] !== undefined) {
 			add({kind: 'preference', id: key, value: store.settings[key]});
 		}
@@ -319,9 +269,6 @@ export function splitLibrary(
 	return records;
 }
 
-/**
-The Sources choices among `records`. A value that is not an object is left out.
-*/
 export function sourcesOf(records: Iterable<LibraryRecord>): SyncedSource[] {
 	const sources: SyncedSource[] = [];
 	for (const record of records) {
@@ -333,9 +280,6 @@ export function sourcesOf(records: Iterable<LibraryRecord>): SyncedSource[] {
 	return sources;
 }
 
-/**
-The trash entries among `records`, newest first. A record that is not a trash entry is left out.
-*/
 export function trashOf(records: Iterable<LibraryRecord>): TrashEntry[] {
 	const entries: TrashEntry[] = [];
 	for (const record of records) {
@@ -349,11 +293,6 @@ export function trashOf(records: Iterable<LibraryRecord>): TrashEntry[] {
 	return entries.toSorted((a, b) => b.deletedAt - a.deletedAt);
 }
 
-/**
-A library from records in display order, with this device's own fields and settings taken from `local`. Record
-values came from other devices, so the result must still go through the worker's normalization. `outside` names the
-settings the host keeps outside the library, which it takes from the records itself.
-*/
 export function assemble(
 	records: Iterable<LibraryRecord>,
 	local: Store,

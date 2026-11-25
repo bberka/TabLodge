@@ -1,6 +1,3 @@
-/*
-The calls a device makes for shared pages (see shared-pages.ts), used by the extension's worker and the Android app.
-*/
 import {isRecord} from '../library-values';
 import {callServer, type SyncConfig, SyncError, type SyncHost} from './client';
 import {
@@ -18,15 +15,9 @@ import {
 export type SharedPage = {
 	id: string;
 	title: string;
-	/**
-	UTF-8 bytes of the page.
-	*/
 	size: number;
 	createdAt: number;
 	updatedAt: number;
-	/**
-	The public link: the server address the device connected with, plus /p/<id>.
-	*/
 	url: string;
 	source: string;
 	mode: SharedPageMode;
@@ -99,11 +90,6 @@ async function ask(
 	return body;
 }
 
-/**
-Whether the server takes shared pages: `old` for a server from before them, `offline` when it cannot be reached or
-refused the token. `keepsIds` says it also keeps the id and source a device sends (`shared-page-import`), so a page
-can carry its own link.
-*/
 export async function sharedPagesSupport(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
@@ -130,11 +116,6 @@ export async function sharedPagesSupport(
 	}
 }
 
-/**
-Uploads a page made by `shareHtmlPage` and returns its new link. Each upload is a new link; the old one stays until
-it is deleted. Send `id` and `source` only to a server that keeps them (`keepsIds`): a page built with its own link
-must get the id that link names.
-*/
 export async function uploadSharedPage(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
@@ -198,9 +179,6 @@ export async function updateSharedPage(
 	return page;
 }
 
-/**
-Every page on the server, newest first.
-*/
 export async function listSharedPages(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
@@ -210,9 +188,6 @@ export async function listSharedPages(
 	return pages.flatMap((entry) => parsePage(entry, target.url) ?? []);
 }
 
-/**
-Deletes a page, so its link answers 404. A page that is already gone counts as deleted.
-*/
 export async function deleteSharedPage(
 	send: SyncHost['fetch'],
 	target: SyncConfig,

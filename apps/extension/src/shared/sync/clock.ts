@@ -1,20 +1,9 @@
-/*
-Hybrid logical clock for sync stamps. A stamp's `h` is the wall time in milliseconds and a counter, both fixed
-width base 36, so plain string order is causal order. Two writes with the same `h` are ordered by device id.
-Wall time never goes backwards on a device, and a stamp received from another device moves the clock past it,
-so a device whose system clock is behind still writes stamps that win over what it has seen.
-*/
-
 const WALL_WIDTH = 11;
 const COUNTER_WIDTH = 5;
 const MAX_WALL = 36 ** WALL_WIDTH - 1;
 const MAX_COUNTER = 36 ** COUNTER_WIDTH - 1;
 const STAMP_PATTERN = /^[\da-z]{16}$/;
 
-/**
-A stamp from a clock more than this far ahead of the receiver is refused, so one device with a wrong clock
-cannot win every later edit.
-*/
 export const MAX_CLOCK_DRIFT_MS = 24 * 60 * 60 * 1000;
 
 export type Clock = {wall: number; counter: number};
@@ -36,9 +25,6 @@ function formatStamp({wall, counter}: Clock): string {
 	);
 }
 
-/**
-The smallest stamp at a wall time, for comparing stamps with a time as strings.
-*/
 export const stampAt = (wall: number) => formatStamp({wall, counter: 0});
 
 export function parseStamp(h: string): Clock | undefined {
@@ -52,9 +38,6 @@ export function parseStamp(h: string): Clock | undefined {
 	};
 }
 
-/**
-The clock after a local write at `now`, and the stamp that write carries.
-*/
 export function tick(clock: Clock, now: number): {clock: Clock; h: string} {
 	const wall = Math.max(clock.wall, Math.floor(now));
 	const next = {wall, counter: wall === clock.wall ? clock.counter + 1 : 0};
@@ -65,10 +48,6 @@ export function tick(clock: Clock, now: number): {clock: Clock; h: string} {
 	return {clock: next, h: formatStamp(next)};
 }
 
-/**
-The clock after seeing a stamp written elsewhere, so the next `tick` comes after it. Throws `ClockDriftError` for a stamp too far ahead of `now`
-and a `TypeError` for one that is not a stamp.
-*/
 export function observe(clock: Clock, h: string, now: number): Clock {
 	const remote = parseStamp(h);
 	if (!remote) {
@@ -82,9 +61,6 @@ export function observe(clock: Clock, h: string, now: number): Clock {
 	return formatStamp(remote) > formatStamp(clock) ? remote : clock;
 }
 
-/**
-Negative when `a` was written before `b`. Equal stamps from the same device are the same write.
-*/
 export function compareStamps(a: Stamp, b: Stamp): number {
 	if (a.h !== b.h) {
 		return a.h < b.h ? -1 : 1;

@@ -1,8 +1,3 @@
-/*
-Whether a sync server and this app can work together, from what the server says about itself at /v1/status. A
-different protocol stops sync; a missing feature only leaves its part on the device. Both apps show the result in
-Settings › Sync with the same words.
-*/
 import {isRecord} from '../library-values';
 import {PROTOCOL_VERSION} from './change-log';
 import {
@@ -11,19 +6,12 @@ import {
 	SHARED_PAGES_FEATURE,
 } from './shared-pages';
 
-/**
-The server's own account of itself. `version` is null for a server from before it reported one, and `0.0.0` for one
-built from unreleased source.
-*/
 export type ServerInfo = {
 	protocol: number;
 	version: string | null;
 	features: string[];
 };
 
-/**
-Reads a /v1/status answer. Undefined when it does not look like a TabLodge sync server.
-*/
 export function parseServerInfo(body: unknown): ServerInfo | undefined {
 	if (!isRecord(body) || !Number.isSafeInteger(body.protocol)) {
 		return undefined;
@@ -35,7 +23,6 @@ export function parseServerInfo(body: unknown): ServerInfo | undefined {
 			typeof body.version === 'string' && body.version.length <= 40
 				? body.version
 				: null,
-		// A server old enough to have no list supports none of the optional parts.
 		features: Array.isArray(body.features)
 			? body.features.filter(
 					(feature): feature is string => typeof feature === 'string',
@@ -44,16 +31,10 @@ export function parseServerInfo(body: unknown): ServerInfo | undefined {
 	};
 }
 
-/**
-The first server release that speaks each protocol version. Add the new entry when `PROTOCOL_VERSION` moves.
-*/
 export const PROTOCOL_RELEASES: Readonly<Record<number, string>> = {
 	1: '0.2.0',
 };
 
-/**
-Which side to update when the server speaks another protocol, or undefined when they match.
-*/
 export function updateSide(
 	serverProtocol: number,
 ): 'server' | 'app' | undefined {
@@ -70,10 +51,6 @@ export function incompatibleMessage(side: 'server' | 'app'): string {
 		: 'This app is older than your sync server. Update TabLodge.';
 }
 
-/**
-What each optional server feature does for this app, and the first server release that has it. The regular
-library's Settings › Sync lists the ones the connected server lacks.
-*/
 export const SERVER_FEATURES: ReadonlyArray<{
 	name: string;
 	since: string;
@@ -145,13 +122,9 @@ export function missingFeatures(
 	return SERVER_FEATURES.filter(({name}) => !info.features.includes(name));
 }
 
-/**
-The oldest release that has every feature in `missing`.
-*/
 export function releaseWithAll(
 	missing: ReadonlyArray<{since: string}>,
 ): string | undefined {
-	// Release numbers stay below 1000 (see androidVersionCode in scripts/release-version.ts).
 	const rank = (version: string) =>
 		version.split('.').reduce((total, part) => total * 1000 + Number(part), 0);
 	let newest: string | undefined;
@@ -164,9 +137,6 @@ export function releaseWithAll(
 	return newest;
 }
 
-/**
-The server's version as Settings shows it.
-*/
 export function versionText(version: string | null): string {
 	if (version === null) {
 		return 'not reported (an older release)';
@@ -175,9 +145,6 @@ export function versionText(version: string | null): string {
 	return version === '0.0.0' ? 'an unreleased build' : version;
 }
 
-/**
-How the connected server and this app get along, read from a sync status that a page took from storage.
-*/
 export type Compat = {
 	url: string | null;
 	incompatible?: 'server' | 'app';
@@ -199,19 +166,10 @@ export function readCompat(status: {
 		url: status.url,
 		incompatible,
 		server,
-		// A server that cannot sync at all has nothing else worth listing.
 		missing: server && !incompatible ? missingFeatures(server) : [],
 	};
 }
 
-/**
-The banner both apps show at the top of their main screens while the server and this app do not match: sync stopped,
-or features missing. Settings › Sync has the details. Undefined when there is none.
-
-A stopped sync stays until the problem is gone. Missing features can be dismissed: `dismissed` is what
-`dismissKey` gave when the user did, and the banner stays hidden until the server version or the missing features
-change.
-*/
 export function problemBanner(
 	compat: Compat,
 	dismissed?: unknown,
@@ -236,15 +194,8 @@ export function problemBanner(
 	};
 }
 
-/**
-Where each app keeps the dismissed missing-features banner, on the device only: it never syncs.
-*/
 export const SYNC_DISMISSED_KEY = 'tablodge.sync.dismissed';
 
-/**
-What dismissing the missing-features banner remembers: the server version and the features it lacks. Undefined while
-there is nothing to dismiss, including a stopped sync, which cannot be dismissed.
-*/
 export function dismissKey(compat: Compat): string | undefined {
 	if (compat.incompatible || compat.missing.length === 0) {
 		return undefined;
