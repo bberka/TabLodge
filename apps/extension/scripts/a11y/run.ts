@@ -28,6 +28,7 @@ import {
 	columnMoveCheck,
 	duplicateBookmarksCheck,
 	focusViewCheck,
+	hideAllUndoCheck,
 	statisticsCheck,
 } from './bookmark-board.ts';
 import {
@@ -161,6 +162,7 @@ async function main() {
 			importPastedCheck,
 			protectedBackupCheck,
 			duplicateBookmarksCheck,
+			hideAllUndoCheck,
 			importScrollingCheck,
 			importNewColumnCheck,
 			pasteNewColumnCheck,
