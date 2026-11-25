@@ -602,6 +602,67 @@ export async function focusViewCheck(env: Env, theme: Theme) {
 	);
 }
 
+export async function hideAllUndoCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(`Hide All from this list offers Undo (${theme})`, async () => {
+		const page = await openPage(context, extensionId, 'newtab');
+		await seed(page);
+		const fixture = createDevFixture(await readDevStore(page));
+		fixture.settings = {
+			...fixture.settings,
+			bookmarkBoardView: 'focus',
+			showAllBookmarks: true,
+		};
+		await writeDevStore(page, fixture);
+		await page.reload();
+		await setTheme(page, theme);
+
+		const rail = page.getByRole('navigation', {name: 'Bookmark columns'});
+		const all = rail.getByRole('button', {name: /^All/});
+		await all.waitFor();
+		await openMenuItemByKeyboard(
+			page,
+			page.getByRole('button', {name: 'Options for All', exact: true}),
+			'Hide All from this list',
+		);
+		await until(
+			async () =>
+				(await readDevStore(page)).settings.showAllBookmarks === false,
+			'the All column to be hidden',
+		);
+		await all.waitFor({state: 'detached'});
+		assert.equal(await all.count(), 0, 'the All column leaves the list');
+		assert.notEqual(
+			await page
+				.locator(':focus')
+				.evaluate((element) => (element as {tagName: string}).tagName),
+			'BODY',
+			'focus stays on the page when the column goes',
+		);
+
+		const undo = page.getByRole('button', {name: 'Undo', exact: true});
+		await undo.waitFor();
+		await captureEvidence(page, `hide-all-undo-${theme}.png`);
+		await undo.focus();
+		await page.keyboard.press('Enter');
+		await until(
+			async () => (await readDevStore(page)).settings.showAllBookmarks === true,
+			'Undo to show All again',
+		);
+		await all.waitFor();
+		assert.equal(await all.count(), 1, 'Undo brings the All column back');
+
+		const reset = createDevFixture(await readDevStore(page));
+		reset.settings = {
+			...reset.settings,
+			bookmarkBoardView: 'board',
+			showAllBookmarks: true,
+		};
+		await writeDevStore(page, reset);
+		await page.close();
+	});
+}
+
 export async function boardLayoutCheck(env: Env, theme: Theme) {
 	const {context, extensionId, axeSource} = env;
 	await check(

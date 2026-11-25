@@ -529,6 +529,23 @@ function NewTab() {
 		}
 
 		await reload();
+		showStatus('All is hidden.', false, {
+			action: {
+				label: 'Undo',
+				async onClick() {
+					const shown = await send('UPDATE_SETTINGS', {
+						settings: {showAllBookmarks: true},
+					});
+					if (!shown?.ok) {
+						showStatus(shown?.error || 'Could not show All again.', true);
+						return;
+					}
+
+					await reload();
+					showStatus('All is shown again.', false, {toast: true});
+				},
+			},
+		});
 	}, [reload, showStatus]);
 	const dashboardWidth = settings.dashboardWidth ?? 'default';
 	const dashboardMaxWidthClass =
