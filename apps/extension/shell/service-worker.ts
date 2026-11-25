@@ -257,9 +257,6 @@ import {
 	takeOutForPrivate,
 } from '../src/shared/send-to-private';
 
-// Types come from the shared model via import() type queries rather than an `import type` statement, which
-// would leave an `export {}` behind. The value imports above are bundled into the classic script by the
-// build, and by tests/worker-source.ts for the tests.
 type ActionFailure = import('../src/shared/types').ActionFailure;
 type LinkPreviewData = import('../src/shared/types').LinkPreviewData;
 type TabLodgeMessageType = import('../src/shared/types').TabLodgeMessageType;
@@ -299,19 +296,11 @@ type PrivateConfig = import('../src/shared/types').PrivateConfig;
 type PrivateLockInfo = import('../src/shared/types').PrivateLockInfo;
 
 type Result<T extends object = {}> = ({ok: true} & T) | ActionFailure;
-/**
- A browser window fetched with `populate: true`: it always has an id and its tabs. `title` is not part
- of the Chrome API but is read when a browser provides it.
- */
 type PopulatedWindow = chrome.windows.Window & {
 	id: number;
 	tabs: chrome.tabs.Tab[];
 	title?: string;
 };
-/**
-CaptureTabs reports duplicates it skipped on the session it creates (or on an empty placeholder), with the ids of
-the open tabs they came from so a save can offer to add them anyway.
-*/
 type CaptureResult =
 	| (Session & {skipped?: number; rejectedTabIds?: number[]; more?: Session[]})
 	| {
@@ -337,9 +326,6 @@ type BookmarkMergeResult = {
 	bookmarksUpdated: number;
 };
 type ImportInput = Raw | null | undefined;
-/**
-The callback forms of `removeAll` and `update` return nothing in Chrome's types, but some browsers return a promise as well.
-*/
 type CallbackMenuApi = {
 	removeAll(callback: () => void): unknown;
 	update(
@@ -348,9 +334,6 @@ type CallbackMenuApi = {
 		callback: () => void,
 	): unknown;
 };
-/**
-`contextMenus.onShown`/`refresh` exist only in some Chromium-based browsers and are feature-detected.
-*/
 type ContextMenusWithOnShown = typeof chrome.contextMenus & {
 	onShown?: chrome.events.Event<
 		(
@@ -361,9 +344,6 @@ type ContextMenusWithOnShown = typeof chrome.contextMenus & {
 	refresh?: () => void;
 };
 
-/**
-The string `id` of a record, or "" for anything else.
-*/
 const recordId = (value: unknown) =>
 	isRecord(value) && typeof value.id === 'string' ? value.id : '';
 const errorMessage = (error: unknown) =>
@@ -371,31 +351,20 @@ const errorMessage = (error: unknown) =>
 		? error.message
 		: undefined;
 
-/**
-Display name for menus and messages; the manifest's short_name is the one place it is set.
-*/
 const APP_NAME =
 	chrome.runtime.getManifest().short_name ?? chrome.runtime.getManifest().name;
-// Persistent identifiers (storage keys, export formats, menu ids) use the "tablodge" prefix and are
-// independent of the display name: changing one would orphan saved data.
 const STORAGE_KEY = STATE_KEY;
 const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 const PRIVATE_PREFIX = 'tablodge.private.';
 const privateContext = Boolean(chrome.extension?.inIncognitoContext);
-// The same worker runs in Chromium (a service worker) and in Firefox (an event page). Differences the code cannot
-// find by looking for an API are keyed off this; the addresses of extension pages tell the two apart.
 const IS_FIREFOX = chrome.runtime.getURL('').startsWith('moz-extension:');
-// The page a starting window or an emptied window opens: Chromium maps `chrome://newtab/` to the new-tab page,
-// Firefox refuses `chrome:` and `about:newtab` addresses, so a window starts blank and a tab starts without an address.
 const START_WINDOW_URL = IS_FIREFOX ? 'about:blank' : 'chrome://newtab/';
 const NEW_TAB_PAGE_URL = IS_FIREFOX ? undefined : 'chrome://newtab/';
-// Chromium's Side Panel and Firefox's sidebar both show sidepanel.html; either opens only from a user action.
 const {sidebarAction} = chrome as typeof chrome & {
 	sidebarAction?: {open?: () => Promise<void>};
 };
 const HAS_SIDE_PANEL =
 	Boolean(chrome.sidePanel) || Boolean(sidebarAction?.open);
-// The tab strip's right-click menu: Firefox, and Chromium 150 or newer.
 const HAS_TAB_MENU = hasTabMenu({
 	listsTabContext: Boolean(chrome.contextMenus?.ContextType?.TAB),
 	isFirefox: IS_FIREFOX,
@@ -430,10 +399,6 @@ const privateConfigReady = chrome.storage.local
 		privateConfig = normalizePrivateConfig(saved[PRIVATE_CONFIG_KEY]);
 	});
 
-/**
-The ids of the private windows that exist now (extension pages count as windows too). chrome.windows needs no
-permission. Only the private worker sees them: a regular worker has no private windows to list.
-*/
 async function privateWindowIds() {
 	const all = await chrome.windows.getAll();
 	return all.flatMap((win) =>
@@ -441,14 +406,6 @@ async function privateWindowIds() {
 	);
 }
 
-/*
-The optional password lock of the saved separate private library (src/shared/private-lock.ts). The lock record
-is in local storage, the data key only in session storage. Every read and write of the library passes `rawLibrary`
-below, which seals and opens values there, so nothing above it knows the lock exists.
-
-The private worker is not woken when the last private window closes, so the lock also compares the private windows
-that were open while unlocked with the ones that exist whenever the key is read (see judgePrivateWindows).
-*/
 const privateLock = createPrivateLock({
 	local: chrome.storage.local,
 	session: chrome.storage.session,
@@ -459,9 +416,6 @@ const privateLock = createPrivateLock({
 });
 const ALARM_PRIVATE_LOCK = 'tablodge-private-lock';
 
-/**
-The lock state for this worker's library, or null when none applies (regular windows, shared and temporary storage, no lock set).
-*/
 async function lockGate(): Promise<Gate | null> {
 	await privateConfigReady;
 	return privateContext && privateConfig.mode === 'saved'
@@ -469,10 +423,6 @@ async function lockGate(): Promise<Gate | null> {
 		: null;
 }
 
-/**
-The key to seal or open the values of one storage part with, undefined when the part is not sealed.
-Throws while the library is locked.
-*/
 function keyFor(gate: Gate | null, prefix: string) {
 	if (!gate || prefix === '') {
 		return undefined;
@@ -485,8 +435,6 @@ function keyFor(gate: Gate | null, prefix: string) {
 	return gate.key;
 }
 
-// Web Locks are partitioned between normal and private contexts, but extension storage is shared.
-// The two workers use Lamport's bakery lock, with one slot each and normal winning ticket ties.
 const ownLockKey = `tablodge.lock.${privateContext ? 'private' : 'normal'}`;
 const otherLockKey = `tablodge.lock.${privateContext ? 'normal' : 'private'}`;
 const lockResetReady = chrome.storage.session.remove(ownLockKey);
@@ -573,7 +521,6 @@ async function withSharedLibraryLock<T>(
 		return operation();
 	}
 
-	// Nested recovery queues, and concurrent queues within this worker, share one acquisition.
 	if (sharedLockUsers++ === 0) {
 		sharedLockReady = sharedLockTail.then(acquireSharedLibraryLock);
 	}
@@ -620,8 +567,6 @@ function storageParts(keys: string[]) {
 	].filter((part) => part.keys.length > 0);
 }
 
-// Each split worker owns its mutation queue. Mode changes join that queue so a write cannot change libraries midway.
-// This is the plain key/value view of the library's storage area; `library` below adds the logical state key.
 const rawLibrary = {
 	async get<T = Record<string, unknown>>(keys: string[]): Promise<T> {
 		await privateConfigReady;
@@ -645,7 +590,6 @@ const rawLibrary = {
 		const gate = await lockGate();
 		for (const {area, prefix, keys} of storageParts(Object.keys(values))) {
 			const key = keyFor(gate, prefix);
-			// While the lock is being removed new writes stay plain, so that pass can finish.
 			const seal = key && gate?.state !== 'decrypting' ? key : undefined;
 			const entries = await Promise.all(
 				keys.map(async (name): Promise<[string, unknown]> => [
@@ -677,11 +621,6 @@ const rawLibrary = {
 	},
 };
 
-/**
-How the rest of the worker sees the library. The logical key STORAGE_KEY is the whole library in the shape the
-single `tablodge.state` entry always had (`groups`, `bookmarks`, ...), whichever way it is stored: sessions live
-in their own keys behind it (see src/shared/library-state.ts). Other keys pass straight through.
-*/
 const libraryState = createLibraryState({
 	async get(keys) {
 		return rawLibrary.get(keys);
@@ -749,9 +688,6 @@ const library = {
 	},
 };
 
-/**
-A change as the rest of the worker sees it: a sealed value is ciphertext, so it is reported as absent rather than as data.
-*/
 function withoutSealedValues(change: chrome.storage.StorageChange) {
 	return isSealed(change.newValue) || isSealed(change.oldValue)
 		? {
@@ -818,12 +754,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		await replacePrivateConfig(next);
 	});
 	mutationQueue = update.catch(() => undefined);
-	// Private sync runs only with separate saved storage.
 	void update.then(wakeSync).catch(() => undefined);
 });
-/**
-Lock state for pages. Regular windows get the status too (the key is in shared session storage) but cannot change it.
-*/
 async function privateLockInfo(): Promise<PrivateLockInfo> {
 	await privateConfigReady;
 	const status = await privateLock.status();
@@ -839,7 +771,6 @@ async function privateLockInfo(): Promise<PrivateLockInfo> {
 	};
 }
 
-// The alarm checks the idle timeout while the library is unlocked, so pages lock even if nothing reads the library.
 let privateLockAlarmArmed = false;
 function syncPrivateLockAlarm(status: {
 	enabled: boolean;
@@ -862,16 +793,12 @@ function syncPrivateLockAlarm(status: {
 	}
 }
 
-/**
-Anything the worker kept from the unlocked library goes when the key does.
-*/
 chrome.storage.onChanged.addListener((changes, area) => {
 	if (!(area === 'session' && Object.hasOwn(changes, LOCK_SESSION_KEY))) {
 		return;
 	}
 
 	invalidateSettings();
-	// The private library opened or closed: private sync follows it.
 	void wakeSync().catch(() => undefined);
 	if (changes[LOCK_SESSION_KEY].newValue !== undefined) {
 		return;
@@ -893,9 +820,6 @@ function privateLockFailure(error: unknown): ActionFailure | undefined {
 	return undefined;
 }
 
-/**
-Finishes a lock pass that was cut off, inside the mutation queue. Does nothing while locked or when none is pending.
-*/
 function resumePrivateLock() {
 	return mutate(async () => {
 		if (
@@ -918,14 +842,8 @@ const DASHBOARD_URL = chrome.runtime.getURL('newtab.html');
 
 let mutationQueue: Promise<unknown> = Promise.resolve();
 
-// Notification counters and unread markers sites put in front of their titles: "(1) YouTube", "(12+) Feed",
-// "[3] Inbox", "● Untitled", "* Draft". Only a leading run is removed, so titles that merely contain "(2)" stay.
 const TITLE_JUNK = /^(?:\s*(?:\(\d{1,5}\+?\)|\[\d{1,5}\+?\]|[*•●✱]))+\s+/u;
 
-/**
-A tab's title as TabLodge stores it: cleaned like any text, and with leading notification counters removed unless
-"Clean page titles" is off. A title that is nothing but a counter is kept as it was.
-*/
 function pageTitle(
 	value: unknown,
 	fallback: unknown,
@@ -952,11 +870,7 @@ async function openBookmarkTitleMap(clean = true) {
 				);
 			}
 		}
-	} catch {
-		/*
-		Page titles are optional; use readable URL labels if tab metadata is unavailable.
-		*/
-	}
+	} catch {}
 
 	return titles;
 }
@@ -980,15 +894,11 @@ async function bestBookmarkTitle(value: unknown, url: string, clean = true) {
 	return importedBookmarkTitle(value, url, openTitles);
 }
 
-/**
-True when `host` is an entry or one of its subdomains ("mail.google.com" for "google.com", not "notgoogle.com").
-*/
 function hostIsExcluded(host: string, entries: readonly string[]): boolean {
 	return entries.some((entry) => host === entry || host.endsWith(`.${entry}`));
 }
 
 async function getStore(): Promise<Store> {
-	// Stored values are untrusted; only property reads happen before normalization.
 	const saved = await library.get<Record<string, Raw | null | undefined>>([
 		STORAGE_KEY,
 	]);
@@ -1000,19 +910,12 @@ async function getStore(): Promise<Store> {
 		);
 	}
 
-	// Read paths never write: the schema migration is persisted once, inside `mutate` (see migrateStoreOnce).
 	return normalizeStore(exists ? saved[STORAGE_KEY] : null);
 }
 
 let migrationChecked = false;
 let migrationRetryAt = 0;
-// After a failed migration the old layout keeps working; the next try waits this long (or a worker restart).
 const MIGRATION_RETRY_MS = 300_000;
-/**
-Moves the library to the per-record layout once per worker run, and only when it is still in the old single entry.
-Runs inside the mutation queue, so it can never race a mutation or a concurrent read-only caller. The old entry
-stays the library until the final verified step; if anything fails it stays, and the app keeps using it.
-*/
 async function migrateStoreOnce() {
 	if (migrationChecked || Date.now() < migrationRetryAt) {
 		return;
@@ -1021,12 +924,10 @@ async function migrateStoreOnce() {
 	try {
 		const meta = await libraryState.readMeta();
 		if (meta.schemaVersion > SCHEMA_VERSION) {
-			// Refused (and reported) by getStore; never overwritten.
 			return;
 		}
 
 		if (meta.layout === 'legacy') {
-			// A restorable copy through the usual recovery list; skipped when an interrupted attempt already took one.
 			const started = (await rawLibrary.get([MIGRATION_KEY]))[MIGRATION_KEY];
 			if (started === undefined) {
 				await safetyBackup(
@@ -1059,9 +960,6 @@ async function migrateStoreOnce() {
 
 		migrationChecked = true;
 	} catch (error) {
-		/*
-		The old layout still works: the operation reports its own storage error, and a later mutation retries.
-		*/
 		migrationRetryAt = Date.now() + MIGRATION_RETRY_MS;
 		console.warn(
 			'TabLodge could not upgrade how the library is stored yet.',
@@ -1071,7 +969,6 @@ async function migrateStoreOnce() {
 }
 
 async function writeStore(store: Store): Promise<Store> {
-	// Removing or skipping one tab of a pair (delete, restore-and-remove, import duplicates) orphans its partner.
 	for (const group of store.groups) {
 		pairSplits(group.tabs);
 	}
@@ -1091,10 +988,6 @@ async function writeStore(store: Store): Promise<Store> {
 	return next;
 }
 
-/**
-Sends what changed on this device with the next sync round. A private window sharing the regular library asks the
-regular worker, which runs sync, through local storage.
-*/
 async function nudgeSync(): Promise<void> {
 	(syncClient ?? privateSync)?.localChanged();
 	if (privateContext && privateConfig.mode === 'shared') {
@@ -1121,21 +1014,12 @@ function mutate<T>(operation: () => Promise<T>): Promise<T> {
 	return result;
 }
 
-/*
-The theme and accents sync between browsers (`platform` in src/shared/setting-scopes.ts) as settings kept outside the
-library: pages store the theme and accent themselves (src/shared/theme.tsx), and the private window accent sits in the
-private config, whose other fields stay on this device.
-*/
 const OUTSIDE_SETTING_DEFAULTS = {
 	uiTheme: 'system',
 	uiAccent: 'default',
 	privateAccent: 'teal',
 } as const;
 
-/*
-Sync with a self hosted server (src/shared/sync/client.ts). Private workers never sync: their library is separate
-and may be temporary. The client runs its own library reads and writes inside the mutation queue.
-*/
 const syncClient = privateContext
 	? undefined
 	: createSyncClient({
@@ -1150,7 +1034,6 @@ const syncClient = privateContext
 			mutate,
 			readLibrary: getStore,
 			trash: {read: readSyncTrash, apply: applySyncTrash},
-			// Sources belong to the browser, so only this client carries them, never private sync.
 			sources: {read: readSyncSources, apply: applySyncSources},
 			outsideSettings: {
 				defaults: OUTSIDE_SETTING_DEFAULTS,
@@ -1158,7 +1041,6 @@ const syncClient = privateContext
 				apply: applyOutsideSettings,
 			},
 			async writeLibrary(store) {
-				// The records came from other devices: normalized like an import before they are stored.
 				const before = (await getStore()).settings;
 				const next = normalizeStore(store);
 				await writeStore(next);
@@ -1195,15 +1077,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		syncClient?.localChanged();
 	}
 
-	// Private sync uses the regular connection: a new server or token, or none, starts it over.
 	if (!(privateContext && Object.hasOwn(changes, SYNC_CONFIG_KEY))) {
 		return;
 	}
 
 	privateSync?.stop();
 	privateSync = undefined;
-	// A different server or token, or none, ends private sync here: its key belongs to the old server, and the library
-	// must not start syncing to a new one without it. Turning it on again asks for the password once.
 	const before = parseConfig(changes[SYNC_CONFIG_KEY].oldValue);
 	const after = parseConfig(changes[SYNC_CONFIG_KEY].newValue);
 	const ended =
@@ -1221,13 +1100,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		.catch(() => undefined);
 });
 
-/*
-Private windows with separate saved storage can sync that library too, when turned on from Settings in a private
-window. It goes to the regular sync's server under /private, so it follows the regular connection: no server there
-means no private sync. With a password, values are encrypted first (src/shared/private-sync.ts). Everything
-private sync keeps on this device, the sync key included, is in the private library's storage, which the lock seals.
-The client exists only while that library can be read: it stops when the library locks or the storage mode changes.
-*/
 const PRIVATE_SYNC_ON_KEY = 'sync.private.on';
 const PRIVATE_SYNC_KEY_KEY = 'sync.private.key';
 let privateSync: ReturnType<typeof createSyncClient> | undefined;
@@ -1259,7 +1131,6 @@ async function privateWrite(values: Record<string, unknown>) {
 function createPrivateSyncClient() {
 	return createSyncClient({
 		async get(key) {
-			// The connection is the regular one under /private, so it changes and ends with it.
 			if (key === SYNC_CONFIG_KEY) {
 				const regular = await regularSyncConfig();
 				return regular && (await privateRead(PRIVATE_SYNC_ON_KEY)) === true
@@ -1313,9 +1184,6 @@ function createPrivateSyncClient() {
 	});
 }
 
-/**
-What keeps the private library from syncing here, or 'ready'.
-*/
 async function privateSyncAvailability(): Promise<
 	PrivateSyncInfo['availability']
 > {
@@ -1335,9 +1203,6 @@ async function privateSyncAvailability(): Promise<
 	return (await privateLock.status()).locked ? 'locked' : 'ready';
 }
 
-/**
-Creates the private client when its library can be read, or stops it when it cannot. `wakeSync` then wakes it.
-*/
 async function refreshPrivateSync() {
 	if (!privateContext) {
 		return;
@@ -1372,10 +1237,6 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 	};
 }
 
-/**
-The name this browser gives the sessions and bookmarks it saves: the one set in Settings, else the browser and system.
-Read once at start and again whenever the setting changes; functions that save wait for the first read.
-*/
 let thisDevice = '';
 async function readDeviceName() {
 	const stored = (await chrome.storage.local.get([DEVICE_KEY]))[DEVICE_KEY] as
@@ -1401,11 +1262,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 	}
 });
 
-/**
-The fields that mark a new bookmark as saved in this browser.
-*/
 async function savedHere() {
-	// A failed first read leaves the default name, rather than every later save failing with it.
 	await deviceReady.catch(() => undefined);
 	return deviceStamp(thisDevice, 'desktop');
 }
@@ -1413,10 +1270,6 @@ async function savedHere() {
 const PREVIEW_CACHE_SIZE = 200;
 const previewCache = new Map<string, LinkPreviewData | null>();
 
-/**
-The title, description, and image of a page, asked of the sync server, which fetches the page itself. Nothing is
-asked unless the setting is on and a server is connected; answers, including misses, are kept while the worker runs.
-*/
 async function linkPreview(url: string): Promise<LinkPreviewData | null> {
 	if (!/^https?:\/\//i.test(url) || url.length > 2048) {
 		return null;
@@ -1451,7 +1304,6 @@ async function linkPreview(url: string): Promise<LinkPreviewData | null> {
 			};
 		}
 	} catch {
-		// Offline or refused: no card, and the next hover asks again.
 		return null;
 	}
 
@@ -1463,10 +1315,6 @@ async function linkPreview(url: string): Promise<LinkPreviewData | null> {
 	return found;
 }
 
-/*
-Shared pages: Share › Web page snapshots on the regular sync server, public at their link. Never from a private window,
-whichever library it uses.
-*/
 const livePageFingerprints = new Map<string, string>();
 
 async function handleSharedPagesMessage(
@@ -1546,9 +1394,6 @@ async function handleSharedPagesMessage(
 	};
 }
 
-/**
-A field of a sync server's JSON answer, for setting up the private library's key outside the sync client.
-*/
 async function serverField(target: SyncConfig, path: string, field: string) {
 	const {body} = await callServer(fetch, target, path);
 	return isRecord(body) ? body[field] : undefined;
@@ -1574,18 +1419,10 @@ const WRONG_SERVER_PIN_MESSAGE =
 	'That is not the password protecting private data on the sync server.';
 const REWRAP_UNCONFIRMED_MESSAGE =
 	'The new password is set here, but the sync server did not confirm it. Change the password again once the server is reachable, so the two match.';
-/**
-The server may or may not have taken the new wrapper, and could not be asked. The library keeps the new password, and
-a second change settles it.
-*/
 class RewrapUnconfirmedError extends Error {}
 const REWRAP_FAILED_MESSAGE =
 	'The sync server could not take the new password, so it was not changed. Check the connection and try again.';
 
-/**
-Turns private sync on. It runs in the same queue as password changes, so its read of the lock and its adoption of the
-server's password cannot fall between a change's local write and its server update.
-*/
 async function enablePrivateSync(
 	credential: string | undefined,
 	serverCredential?: string,
@@ -1644,7 +1481,6 @@ async function enablePrivateSyncNow(
 
 	let key: PrivateSyncKey;
 	try {
-		// The library's own lock is the one secret: it must match, so the server and the lock never use two.
 		await unwrapDataKey(lock.wrapped, credential);
 		if (serverKey) {
 			try {
@@ -1657,7 +1493,6 @@ async function enablePrivateSyncNow(
 					throw error;
 				}
 
-				// A library kept on this device has a password of its own. The server's replaces it, so there is one.
 				if (!serverCredential) {
 					return {
 						ok: false,
@@ -1722,10 +1557,6 @@ async function enablePrivateSyncNow(
 	return {ok: true, privateSync: await privateSyncInfo()};
 }
 
-/**
-What the regular sync server holds for this private library, for the set-a-password screen: whether there is a server at all
-and whether it already has a private library (a key) that this browser can join. Errors count as nothing found.
-*/
 async function privateServerInfo(): Promise<PrivateServerInfo> {
 	const regular = await regularSyncConfig();
 	if (!regular) {
@@ -1747,11 +1578,6 @@ async function privateServerInfo(): Promise<PrivateServerInfo> {
 	}
 }
 
-/**
-For a saved library with no lock: takes the password the server's private library is protected with as this
-library's lock, then turns private sync on, so the server's data merges into what is here. Nothing is locked unless the
-credential opens the server's key.
-*/
 async function joinPrivateServer(
 	credential: string,
 ): Promise<ActionResult<'JOIN_PRIVATE_SERVER'>> {
@@ -1767,7 +1593,6 @@ async function joinPrivateServer(
 		return {ok: false, error: 'This private library already has a lock.'};
 	}
 
-	// A lock saved by an earlier try of this join, whose password this is, lets the join carry on.
 	const existing = parseLockRecord(
 		(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
 	);
@@ -1828,10 +1653,6 @@ async function joinPrivateServer(
 	return {ok: true, ...(await privateLockInfo())};
 }
 
-/**
-After this private library gets its first password: a library that synced unencrypted is protected from now
-on, so the server's copy is replaced by an encrypted one. Best effort; the lock is on either way.
-*/
 async function protectPrivateSync(credential: Credential) {
 	const regular = await regularSyncConfig();
 	if (!privateSync?.enabled || !regular) {
@@ -1855,10 +1676,6 @@ async function protectPrivateSync(credential: Credential) {
 	await privateSync.resendAll();
 }
 
-/**
-After a new password: the server's copy of the sync key is wrapped with it instead. Throws when the server could
-not take it, so the caller can undo the change and the library never has one password and the server another.
-*/
 async function rewrapPrivateSyncKey(credential: Credential) {
 	const regular = await regularSyncConfig();
 	const key = parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY));
@@ -1873,14 +1690,12 @@ async function rewrapPrivateSyncKey(credential: Credential) {
 	}
 
 	const next = await rewrapSyncKey(key, credential);
-	// Another browser may have rewrapped the same key already, so the server's copy is what the swap checks.
 	const committed = await storeServerKey(
 		target,
 		next,
 		serverKeyText({...key, wrapped: server.wrapped}),
 	).catch(async () => false);
 	if (!committed) {
-		// A reply that was lost may still have been applied: what the server holds now decides.
 		let now: ReturnType<typeof parseServerKey>;
 		try {
 			now = parseServerKey(await serverField(target, '/v1/key', 'key'));
@@ -1893,17 +1708,11 @@ async function rewrapPrivateSyncKey(credential: Credential) {
 		}
 	}
 
-	// The server has the new wrapper. A cache that cannot be written now (the library locked meanwhile) is brought up
-	// to date from the server on the next round, so it is not a reason to undo the change.
 	await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next})).catch(
 		() => undefined,
 	);
 }
 
-/**
-Password changes run one after another, from the local write through the server's update and any undo, so two pages
-changing it at once cannot each win on one side.
-*/
 let rotating: Promise<unknown> = Promise.resolve();
 async function rotatePassword<T>(work: () => Promise<T>): Promise<T> {
 	const run = rotating.then(work, work);
@@ -1911,10 +1720,6 @@ async function rotatePassword<T>(work: () => Promise<T>): Promise<T> {
 	return run;
 }
 
-/**
-From a regular window: opens Settings › Sync in a new private window, which turns private sync on there. Only a
-private window can read the private library and ask for its password.
-*/
 async function openPrivateSync(): Promise<ActionResult<'OPEN_PRIVATE_SYNC'>> {
 	if (privateContext) {
 		return {ok: false, error: 'This is already a private window.'};
@@ -1936,9 +1741,6 @@ async function openPrivateSync(): Promise<ActionResult<'OPEN_PRIVATE_SYNC'>> {
 	}
 }
 
-/**
-Keeps the fallback alarm in line with whether sync is on, then catches up and reopens the live socket.
-*/
 async function wakeSync() {
 	if (privateContext) {
 		await refreshPrivateSync();
@@ -1962,11 +1764,7 @@ async function currentWindowId(
 			if (win.type === 'normal') {
 				return win.id;
 			}
-		} catch {
-			/*
-			The sender window may have closed.
-			*/
-		}
+		} catch {}
 	}
 
 	try {
@@ -1978,11 +1776,7 @@ async function currentWindowId(
 		) {
 			return focused.id;
 		}
-	} catch {
-		/*
-		Fall back to the first normal window.
-		*/
-	}
+	} catch {}
 
 	const windows = await chrome.windows.getAll({
 		populate: false,
@@ -1993,16 +1787,11 @@ async function currentWindowId(
 	);
 }
 
-/**
-The browser's split view id for a tab, or null when it is not split (-1, or a browser without Split View).
-*/
 function splitViewOf(tab: chrome.tabs.Tab | undefined): number | null {
 	const id = tab?.splitViewId;
 	return isInteger(id) && id >= 0 ? id : null;
 }
 
-// One tab-strip slot per split view: Chromium can report both halves of the active split as highlighted,
-// which on its own is not a multi-tab selection.
 function selectionSlots(tabs: chrome.tabs.Tab[]) {
 	return new Set(
 		tabs.map((tab) => {
@@ -2056,9 +1845,6 @@ type CaptureEntry = {
 	saved: SavedTab;
 };
 
-/**
-The tabs a save would store, before duplicate handling: web pages only, no excluded sites, pinned tabs only when allowed.
-*/
 async function captureEntriesOf(
 	tabs: chrome.tabs.Tab[],
 	window: PopulatedWindow,
@@ -2094,15 +1880,10 @@ async function captureEntriesOf(
 						: null,
 				savedAt: timestamp,
 				originalIndex: isInteger(tab.index) ? tab.index : index,
-				// IsCapturable guarantees a web URL;
 			} as SavedTab,
 		}));
 }
 
-/**
-Gives both halves of each split view in `entries` a shared pair key. Call it only after exclusions, pinned
-filtering, and duplicate rejection, so a pair whose partner was dropped is stored as a plain tab.
-*/
 function assignSplitPairs(entries: CaptureEntry[]) {
 	const splitMembers = new Map<number, CaptureEntry[]>();
 	for (const entry of entries) {
@@ -2156,14 +1937,11 @@ async function captureTabs(
 		return null;
 	}
 
-	// Rejected duplicates are not stored again and their tabs stay open, so the save can offer to add them anyway.
-	// Allowed duplicates share notes (and, by policy, the title) with the copies already saved.
 	let skipped = 0;
 	const rejectedTabIds: number[] = [];
 	let titlesUpdated = false;
 	let newEntries = captureEntries;
 	const known = new Map<string, SavedTab>();
-	// A new session: only the duplicate setting decides (save-rules.ts).
 	const duplicates = sessionDuplicates(
 		store.groups,
 		undefined,
@@ -2284,11 +2062,9 @@ async function captureTabs(
 					tabs: captured,
 				}
 			: {id: null, tabs: [], skipped, rejectedTabIds};
-	// A non-empty capture always produced the Session branch above.
 	if (captured.length > 0) {
 		const first = group as Session;
 		if (parts > 1) {
-			// A session holds at most 1000 links, so a huge capture becomes several numbered sessions.
 			const baseName = first.name.slice(0, 100);
 			const sessions = Array.from({length: parts}, (_, part) => ({
 				...structuredClone({...first, tabs: []}),
@@ -2375,23 +2151,15 @@ async function captureTabs(
 		}
 
 		if (closeIds.length > 0) {
-			// Only close candidates (integer tab ids) match, so every id is defined.
 			try {
 				await chrome.tabs.remove(closeIds as number[]);
-			} catch {
-				/*
-				A tab can close while the save is being completed.
-				*/
-			}
+			} catch {}
 		}
 	}
 
 	return group;
 }
 
-/**
-Closes a window that a save is about to empty, when the setting asks for it and another normal window of the same incognito state is open; that window is focused first. Returns whether the window was closed, so the caller knows to keep it with a new tab otherwise.
-*/
 async function closeEmptiedWindow(
 	windowId: number | null | undefined,
 	settings: Settings,
@@ -2422,9 +2190,6 @@ async function closeEmptiedWindow(
 		await chrome.windows.remove(windowId);
 		return true;
 	} catch {
-		/*
-		The window can close on its own meanwhile; fall back to keeping it open.
-		*/
 		return false;
 	}
 }
@@ -2437,19 +2202,8 @@ async function saveTabs(
 		tabIds?: number[];
 		groupName?: string;
 		includePinned?: boolean;
-		/**
-		Stores tabs even when their address is already saved, whatever the duplicate setting says (the "Force add" button).
-		*/
 		allowDuplicates?: boolean;
-		/**
-		The save has no page that could ask for a name (shortcut, right-click menu, toolbar button): with the
-		`ask` style, save with the fallback name first, then open the small name prompt window.
-		*/
 		promptName?: boolean;
-		/**
-		A workspace switch saves the window but closes the tabs itself once the other session is open, so this
-		save leaves them open and does not open the dashboard.
-		*/
 		keepTabsOpen?: boolean;
 	} = {},
 ): Promise<ActionResult<'SAVE_TABS'>> {
@@ -2463,7 +2217,6 @@ async function saveTabs(
 		const selectedWindow = await chrome.windows.get(windowId, {
 			populate: false,
 		});
-		// The quick popup may allow pinned tabs for one save without changing the stored preference.
 		const captureSettings = {
 			...store.settings,
 			...(options.includePinned === true && {includePinnedTabs: true}),
@@ -2541,13 +2294,9 @@ async function saveTabs(
 				const requestedTabIds = new Set<number | undefined>(
 					options.tabIds.filter(isInteger),
 				);
-				// Explicit picks from the quick popup override the scope, so unhighlighted tabs can be chosen.
 				inScope = win.tabs.filter((tab) => requestedTabIds.has(tab.id));
 			}
 
-			// "Save only the focused tab" applies to selection saves (shortcut, menus, and the toolbar's
-			// selected-or-window mode when it saves a selection). Whole-window saves always keep both halves,
-			// and explicit quick-popup picks are saved as chosen.
 			const selectionSave =
 				!Array.isArray(options.tabIds) &&
 				(scope === 'selected' ||
@@ -2589,7 +2338,6 @@ async function saveTabs(
 				folderId,
 				scope === 'current-group' &&
 					Boolean(activeTab && activeTab.groupId >= 0),
-				// A typed name for a save across several windows is numbered per window: "Name (1/3)".
 				options.groupName && scope === 'all-windows' && windows.length > 1
 					? `${cleanText(options.groupName, '', 100)} (${windowIndex + 1}/${windows.length})`
 					: options.groupName,
@@ -2599,7 +2347,6 @@ async function saveTabs(
 						scope === 'all-windows' ||
 						(scope === 'selected-or-window' && inScope === win.tabs)),
 			);
-			// A capture with tabs is always a stored Session.
 			if (group && 'error' in group && group.error) {
 				limitError = group.error;
 				break;
@@ -2657,7 +2404,6 @@ async function saveTabs(
 			);
 		}
 
-		// A titled native tab group keeps its own title, so there is nothing to ask.
 		if (
 			options.promptName &&
 			!options.groupName &&
@@ -2687,10 +2433,6 @@ async function saveTabs(
 const NAME_PROMPT_WIDTH = 440;
 const NAME_PROMPT_HEIGHT = 280;
 
-/**
-Opens the small "Name this session" window for sessions that were just saved with the fallback name.
-Cancelling or closing it keeps that name; a failure to open it never fails the save.
-*/
 async function openNamePrompt(
 	groupIds: string[],
 	anchorWindowId: number | undefined,
@@ -2711,11 +2453,7 @@ async function openNamePrompt(
 			anchor = isInteger(anchorWindowId)
 				? await chrome.windows.get(anchorWindowId)
 				: null;
-		} catch {
-			/*
-			Without the window's position the browser places the prompt itself.
-			*/
-		}
+		} catch {}
 
 		if (
 			anchor &&
@@ -2723,7 +2461,6 @@ async function openNamePrompt(
 			isInteger(anchor.top) &&
 			isInteger(anchor.width)
 		) {
-			// Centered near the top of the window that was saved.
 			options.left = Math.max(
 				0,
 				anchor.left + Math.round((anchor.width - NAME_PROMPT_WIDTH) / 2),
@@ -2732,29 +2469,17 @@ async function openNamePrompt(
 		}
 
 		await chrome.windows.create({...options, incognito: privateContext});
-	} catch {
-		/*
-		The sessions are saved with the fallback name; the prompt is a convenience.
-		*/
-	}
+	} catch {}
 }
 
 const BOOKMARK_PROMPT_WIDTH = 440;
 const BOOKMARK_PROMPT_HEIGHT = 470;
 
-/**
-The "Bookmark this page" shortcut: reads the active tab of the last-focused normal window (the prompt window takes
-focus afterwards) and opens the small add-bookmark window for it. Pages that cannot be bookmarked fail
-without opening anything.
-*/
 async function openBookmarkPrompt(
 	commandTab?: chrome.tabs.Tab,
 	prefill?: {
 		title?: string;
 		fromBrowser?: boolean;
-		/**
-		Bookmarks this address instead of the tab's, such as a clicked link.
-		*/
 		url?: string;
 	},
 ): Promise<MenuOutcome> {
@@ -2767,11 +2492,7 @@ async function openBookmarkPrompt(
 				(candidate) => candidate.active,
 			);
 		}
-	} catch {
-		/*
-		Without the window the browser places the prompt itself.
-		*/
-	}
+	} catch {}
 
 	const url = normalizeUrl(prefill?.url ?? tab?.url);
 	if (!url) {
@@ -2786,7 +2507,6 @@ async function openBookmarkPrompt(
 		cleanText(tab?.title, linkHost(url), 500),
 		500,
 	);
-	// A column that claims this site takes the bookmark without asking.
 	const store = await getStore();
 	const claimed = columnForUrl(store.bookmarkColumns, url);
 	if (claimed) {
@@ -2818,18 +2538,11 @@ async function openBookmarkPrompt(
 	return {ok: true};
 }
 
-/**
-Shows the palette over the page the shortcut was pressed on. The shortcut is the user gesture that grants activeTab for
-that tab, which is all the access needed to inject the overlay once, so no content script runs on any page and no
-site permission is requested. Returns false where scripts cannot be injected (browser pages, the Web Store, the PDF
-viewer, extension pages, file addresses); the caller opens the window then.
-*/
 async function openPaletteInPage(commandTab?: chrome.tabs.Tab) {
 	if (
 		isInteger(commandTab?.id) &&
 		commandTab.url?.startsWith(chrome.runtime.getURL('newtab.html'))
 	) {
-		// The dashboard has a search palette of its own, so the shortcut toggles that one instead of injecting a frame.
 		try {
 			await chrome.tabs.sendMessage(commandTab.id, {type: 'toggle-finder'});
 			return true;
@@ -2865,13 +2578,6 @@ async function openPaletteInPage(commandTab?: chrome.tabs.Tab) {
 const PALETTE_WIDTH = 640;
 const PALETTE_HEIGHT = 520;
 
-/**
-The "Open the search palette" shortcut: by default shows the palette over the page (see openPaletteInPage), and falls
-back without any message to a small window of its own wherever that is not possible (chrome:// pages, the Web Store,
-the PDF viewer, extension pages, no activeTab grant) or when the setting says Window. The window works on every page,
-including ones that bind Ctrl+K. A second press closes it again. The address carries the window that was in front, so
-the palette's links, searches and restores go there.
-*/
 async function openPalette(commandTab?: chrome.tabs.Tab) {
 	if (
 		(await readSettings()).paletteLocation !== 'window' &&
@@ -2901,11 +2607,7 @@ async function openPalette(commandTab?: chrome.tabs.Tab) {
 			own?.type === 'normal'
 				? own
 				: await chrome.windows.getLastFocused({windowTypes: ['normal']});
-	} catch {
-		/*
-		Without the window the browser places the palette itself and links open in the last focused window.
-		*/
-	}
+	} catch {}
 
 	const params = new URLSearchParams();
 	if (isInteger(anchor?.id)) {
@@ -2940,10 +2642,6 @@ async function openPalette(commandTab?: chrome.tabs.Tab) {
 	await chrome.windows.create({...options, incognito: privateContext});
 }
 
-/**
-Messages from the palette window act on the window it was opened over, not on the palette's own window (which is
-no place to restore tabs into): the sender becomes the active tab of that window.
-*/
 async function paletteSender(
 	sender: chrome.runtime.MessageSender,
 ): Promise<chrome.runtime.MessageSender> {
@@ -2974,10 +2672,6 @@ function paletteAnchorWindow(
 	return isInteger(id) ? id : undefined;
 }
 
-/**
-The name the next save would get, for the Settings preview: the same formatter, the given (unsaved) style and
-template, and the tabs of the sender's (or last-focused) window.
-*/
 async function previewSessionName(
 	request: {
 		style?: unknown;
@@ -3010,7 +2704,6 @@ async function previewSessionName(
 			: settings.sessionNameTemplate;
 	const windowId = await currentWindowId(senderTab);
 	let tabs = isInteger(windowId) ? await chrome.tabs.query({windowId}) : [];
-	// The tabs the save would capture: explicit picks, a selection, or the active tab, else the whole window.
 	if (Array.isArray(request.tabIds)) {
 		const picked = new Set<unknown>(request.tabIds);
 		tabs = tabs.filter((tab) => picked.has(tab.id));
@@ -3077,7 +2770,6 @@ async function openDashboard(
 			isLodgeTab(tab) &&
 			Boolean(tab.incognito) === Boolean(targetWindow.incognito),
 	);
-	// A pinned TabLodge tab is the window's fixed home: prefer the one in this window and never move it.
 	const pinnedHere = dashboards.find(
 		(tab) => tab.pinned && tab.windowId === windowId,
 	);
@@ -3091,11 +2783,7 @@ async function openDashboard(
 		) {
 			try {
 				existing = await chrome.tabs.move(existing.id, {windowId, index: -1});
-			} catch {
-				/*
-				Keep using the open dashboard if the browser cannot move it.
-				*/
-			}
+			} catch {}
 		}
 
 		await chrome.tabs.update(existing.id, {url: path, active: true});
@@ -3112,12 +2800,8 @@ async function openDashboard(
 	return created.id;
 }
 
-// With "Keep TabLodge pinned" on, every normal window gets exactly one pinned TabLodge tab. Checks are
-// debounced; if the user closes or unpins it twice within LODGE_FIGHT_WINDOW_MS the window is left alone until it
-// is focused again, so the worker never fights the user.
 const LODGE_CHECK_DELAY_MS = 300;
 const LODGE_FIGHT_WINDOW_MS = 5000;
-// When the user last removed or unpinned the tab, per window (only user-triggered repairs are recorded).
 const lodgeUndoneAt = new Map<number, number>();
 const lodgeUserTriggered = new Set<number>();
 const lodgePaused = new Set<number>();
@@ -3161,7 +2845,6 @@ async function ensureLodgePinned(windowId: number, userTriggered = false) {
 			return;
 		}
 
-		// Two user undos within LODGE_FIGHT_WINDOW_MS mean they want it gone: wait for the next window focus.
 		if (userTriggered) {
 			const undoneAt = lodgeUndoneAt.get(windowId);
 			lodgeUndoneAt.set(windowId, Date.now());
@@ -3209,16 +2892,9 @@ async function runLodgeChecks() {
 		for (const id of ids) {
 			await ensureLodgePinned(id, triggered.has(id)).catch(() => undefined);
 		}
-	} catch {
-		/*
-		A window can close while it is being checked.
-		*/
-	}
+	} catch {}
 }
 
-/**
-Queues a (debounced) check of one window, or of every normal window when no id is given.
-*/
 function scheduleLodgeCheck(windowId?: number, userTriggered = false) {
 	if (isInteger(windowId)) {
 		lodgePending.add(windowId);
@@ -3268,9 +2944,6 @@ function findGroup(store: Store, groupId: string) {
 	return store.groups.find((group) => group.id === groupId) || null;
 }
 
-/**
-A new window for a restore; its starting new-tab page is the bootstrap tab, removed once the restored tabs are open.
-*/
 async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 	id: number | undefined;
 	bootstrapTabId: number | null;
@@ -3295,7 +2968,6 @@ async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 			throw error;
 		}
 
-		// Chromium rejects bounds that are mostly outside the visible desktop on some displays.
 		created = await chrome.windows.create({
 			url: START_WINDOW_URL,
 			focused: true,
@@ -3329,17 +3001,11 @@ async function chooseRestoreWindow(
 		needsNewWindow = true;
 	}
 
-	// Without a new window, id is an integer: otherwise needsNewWindow was set above.
 	return needsNewWindow
 		? createRestoreWindow(bounds)
 		: {id: id!, bootstrapTabId: null};
 }
 
-/**
- Pairs two adjacent restored tabs into a split view. They were created next to each other with the same
- pinned state and are already in the same tab group (grouping runs first, so the browser's "same groupId"
- rule holds). If the browser refuses, a non-adjacent pair is moved together once and retried.
- */
 async function splitRestoredPair(
 	left: number,
 	right: number,
@@ -3347,11 +3013,7 @@ async function splitRestoredPair(
 	try {
 		await chrome.tabs.createSplit([left, right]);
 		return true;
-	} catch {
-		/*
-		Retried below when only adjacency is wrong.
-		*/
-	}
+	} catch {}
 
 	try {
 		const [a, b] = await Promise.all([
@@ -3379,11 +3041,6 @@ async function splitRestoredPair(
 
 const UNLOAD_WAIT_MS = 60_000;
 
-/**
-Discards background tabs once each has committed its address. A tab discarded while its first navigation is still
-pending loses the address and reopens blank, so tabs that are not there yet are discarded when `tabs.onUpdated`
-reports their URL (for up to a minute). Already committed tabs are discarded before this resolves.
-*/
 async function unloadWhenCommitted(
 	tabIds: number[],
 	knownTabs: chrome.tabs.Tab[] = [],
@@ -3395,11 +3052,7 @@ async function unloadWhenCommitted(
 		pending.delete(tabId);
 		try {
 			await chrome.tabs.discard(tabId);
-		} catch {
-			/*
-			Chromium may refuse, for example for a tab that just became active.
-			*/
-		}
+		} catch {}
 	};
 
 	const byId = new Map(knownTabs.map((tab) => [tab.id, tab]));
@@ -3454,19 +3107,12 @@ async function unloadWhenCommitted(
 	chrome.tabs.onRemoved?.addListener?.(onRemoved);
 }
 
-// A restore of more tabs than this opens them in batches, so the browser never has hundreds of pages loading at once.
 const RESTORE_BATCH_THRESHOLD = 100;
 const RESTORE_BATCH_SIZE = 25;
-// How long a batch may keep loading before the next one starts, and how often that is checked.
 const RESTORE_BATCH_WAIT_MS = 3000;
 const RESTORE_BATCH_POLL_MS = 250;
-// A few slow pages do not hold the next batch back.
 const RESTORE_BATCH_SLACK = 5;
 
-/**
-Resolves when at most RESTORE_BATCH_SLACK of `tabIds` are still loading, or after RESTORE_BATCH_WAIT_MS, with the window's tabs as last seen.
-Never rejects: a tab that closed or a window that went away just ends the wait.
-*/
 async function waitUntilLoaded(
 	windowId: number | undefined,
 	tabIds: number[],
@@ -3502,18 +3148,11 @@ async function restoreRecords(
 	options: {
 		restoreTarget?: RestoreTarget;
 		activate?: boolean;
-		/**
-		Restore into this (new) window instead of choosing one.
-		*/
 		target?: {id: number | undefined; bootstrapTabId: number | null};
-		/**
-		The saved tab to make active (default: the first one that opened).
-		*/
 		activeSavedId?: string;
 		windowBounds?: Session['windowBounds'];
 	} = {},
 ): Promise<RestoreRecordsResult> {
-	// Restoring a single tab of a pair passes one record, so pairSplits leaves it a plain tab.
 	const valid = pairSplits(
 		records
 			.map((tab, index) => normalizeTab(tab, Date.now(), index))
@@ -3568,10 +3207,6 @@ async function restoreRecords(
 		valid.length > settings.unloadRestoredTabsThreshold &&
 		typeof chrome.tabs.discard === 'function';
 	let batch: typeof opened = [];
-	/**
-	Waits for the batch to load. With unloading on, it then unloads the batch's tabs, so memory use stays near one batch.
-	The tab that will be active and split pairs stay loaded, as they do at the end of a restore.
-	*/
 	const finishBatch = async () => {
 		const seen = await waitUntilLoaded(
 			target.id,
@@ -3600,7 +3235,6 @@ async function restoreRecords(
 		batch = [];
 	};
 
-	// Tabs open in saved order, so the two halves of a pair are created next to each other.
 	for (const saved of valid) {
 		const url = settings.removeTrackingParameters
 			? stripTrackingParameters(saved.url)
@@ -3623,7 +3257,6 @@ async function restoreRecords(
 				await finishBatch();
 			}
 
-			// Tabs.create always resolves with a tab that has an id.
 			openedIds.set(saved, created.id!);
 			existing.add(url);
 			if (saved.nativeGroup && !saved.pinned) {
@@ -3649,23 +3282,15 @@ async function restoreRecords(
 		}
 	}
 
-	// Grouping comes before splitting: createSplit needs both tabs in the same group, and both halves of a
-	// pair are listed next to each other in the group's tabIds, so tabs.group keeps them adjacent.
 	for (const entry of groupTabs.values()) {
 		try {
-			// Every grouped entry was created with at least one tab id.
 			entry.groupId = await chrome.tabs.group({
 				tabIds: entry.tabIds as [number, ...number[]],
 				createProperties: {windowId: target.id},
 			});
-		} catch {
-			/*
-			Tab grouping is optional on Chromium builds that lack it.
-			*/
-		}
+		} catch {}
 	}
 
-	// Only pairs whose two tabs both opened are split; a skipped or failed partner leaves a plain tab.
 	const splitTabIds = new Set<number>();
 	let splits = 0;
 	let splitsSeparated = 0;
@@ -3696,7 +3321,6 @@ async function restoreRecords(
 		}
 	}
 
-	// Titles, colors, and collapsing are applied after splitting so a pair is never split inside a collapsed group.
 	for (const entry of groupTabs.values()) {
 		if (entry.groupId === undefined) {
 			continue;
@@ -3708,11 +3332,7 @@ async function restoreRecords(
 				color: entry.metadata.color,
 				collapsed: entry.metadata.collapsed,
 			});
-		} catch {
-			/*
-			Group metadata is best effort.
-			*/
-		}
+		} catch {}
 	}
 
 	const activeEntry =
@@ -3721,11 +3341,7 @@ async function restoreRecords(
 	if (options.activate !== false && activeEntry?.tabId) {
 		try {
 			await chrome.tabs.update(activeEntry.tabId, {active: true});
-		} catch {
-			/*
-			The tab may have been closed.
-			*/
-		}
+		} catch {}
 	}
 
 	if (
@@ -3735,11 +3351,7 @@ async function restoreRecords(
 	) {
 		try {
 			await chrome.tabs.remove(target.bootstrapTabId);
-		} catch {
-			/*
-			The bootstrap tab may already be gone.
-			*/
-		}
+		} catch {}
 	}
 
 	if (
@@ -3749,8 +3361,6 @@ async function restoreRecords(
 	) {
 		const currentTabs = await chrome.tabs.query({windowId: target.id});
 		const activeId = currentTabs.find((tab) => tab.active)?.id;
-		// Split tabs stay loaded: either half can be on screen next to the active tab, and discarding one
-		// would leave a blank pane in the split view.
 		const unload = opened
 			.filter(
 				(entry) =>
@@ -3788,9 +3398,6 @@ async function restoreGroup(
 	senderTab: chrome.tabs.Tab | undefined,
 	forceRemove = false,
 	options: RestoreOptions & {
-		/**
-		Open every tab even when the window already shows its address, and restore into this window.
-		*/
 		intoWindowId?: number;
 	} = {},
 ): Promise<ActionResult<'RESTORE_GROUP'>> {
@@ -3875,11 +3482,6 @@ async function restoreGroup(
 	});
 }
 
-/**
-Workspace switch: saves the window's web tabs as a new session (unless a saved session already has exactly those
-pages), opens another session in the same window, and then closes those tabs. The old tabs stay open until the other session is open, so a failed restore never
-leaves the window empty. Pinned tabs, excluded sites, and pages that are not web pages stay where they are.
-*/
 async function switchWorkspace(
 	groupId: string,
 	senderTab: chrome.tabs.Tab | undefined,
@@ -3906,7 +3508,6 @@ async function switchWorkspace(
 	);
 	let saved = 0;
 	let savedGroupId: string | null = null;
-	// A window that already shows a saved session (restored with "keep", say) is not saved a second time.
 	const sortedUrls = (urls: Iterable<string | null>) =>
 		[...urls].map(String).toSorted((a, b) => a.localeCompare(b));
 	const outgoingUrls = sortedUrls(outgoing.values());
@@ -3958,11 +3559,7 @@ async function switchWorkspace(
 		try {
 			await chrome.tabs.remove(closeIds);
 			closed = closeIds.length;
-		} catch {
-			/*
-			A tab can close while the switch is being completed.
-			*/
-		}
+		} catch {}
 	}
 
 	return {...restore, saved, savedGroupId, closed};
