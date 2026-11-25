@@ -1,9 +1,3 @@
-// Instagram saved: notices the user tapping Save on a post or a reel. The control is an icon button whose svg is
-// labeled "Save", and "Remove" once the post is saved. It is found by that English label. A post in the feed is an
-// <article> whose timestamp links to the post; a post or reel opened on its own page, or in a dialog over a grid or
-// a profile, is at the page's address.
-// The saved page (/<user>/saved/all-posts/ or a collection under /<user>/saved/), which only its owner can open, is
-// read for catch-up (#383): a grid of links to the saved posts and reels, each with its caption as the image's alt.
 import type {SavedPageReader} from './source-catch-up';
 import {instagramPostUrl} from './site-sources';
 import {
@@ -17,9 +11,6 @@ import {
 const CONTROL = 'button, [role="button"]';
 const ICON = 'svg[aria-label]';
 
-/**
-The label of the icon the click was on, or of the one icon inside the clicked button.
-*/
 function iconLabel(path: Element[]) {
 	const control = path.find((element) => element.matches(CONTROL));
 	const icon =
@@ -28,10 +19,6 @@ function iconLabel(path: Element[]) {
 	return icon ? squash(icon.getAttribute('aria-label')) : undefined;
 }
 
-/**
-The caption: a post page's heading, or else the longest line of text in the post that is not a link (the author's
-name is one), which in the feed is the caption.
-*/
 function caption(scope: ParentNode) {
 	const heading = scope.querySelector('h1');
 	if (heading && squash(heading.textContent)) {
@@ -53,9 +40,6 @@ const REEL = /\/reels?\//;
 const fallbackTitle = (reel: boolean) =>
 	reel ? 'Instagram reel' : 'Instagram post';
 
-/**
-The post at `href`, titled by its caption in `scope`, or as a reel or a post when there is none.
-*/
 function titled(href: string, scope: ParentNode): SourceLink | undefined {
 	const url = instagramPostUrl(href);
 	return url
@@ -94,7 +78,6 @@ export const readInstagramSavedPage: SavedPageReader = (document) => {
 			continue;
 		}
 
-		// The grid links a reel at /p/ and marks it with a Clip icon.
 		const reel = Boolean(anchor.querySelector('svg[aria-label="Clip"]'));
 		links.push({
 			url,
@@ -114,7 +97,6 @@ export function createInstagramReader(document: Document): SourceReader {
 			return undefined;
 		}
 
-		// A post page or a post dialog holds one post, the one at the page's address.
 		const article = path.find((element) => element.matches('article'));
 		const scope =
 			article ??

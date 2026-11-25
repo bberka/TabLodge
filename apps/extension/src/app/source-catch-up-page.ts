@@ -1,7 +1,3 @@
-// The content script's half of the saved page catch-up (#377). On the site's saved page it reads the items listed
-// there and asks the worker how many TabLodge lacks; the worker adds them or says to ask, and a toast reports it. It
-// watches the page because sites load their saved page in place, but it only reads: it clicks nothing, changes
-// nothing on the site, and sends no request. One page load shows at most one catch-up message.
 import type {ActionResult} from '../shared/types';
 import {
 	CATCH_UP_MAX_LINKS,
@@ -12,9 +8,7 @@ import type {SiteSource} from './site-sources';
 import type {SourceLink} from './source-reader';
 import {showSourceToast, type ToastAction} from './source-toast';
 
-// The page is read at most this often while it changes; Reddit's pages change all the time.
 const READ_EVERY_MS = 1000;
-// A count the worker could not answer (an update restarting it) is asked again, this many times in a row.
 const RETRIES = 3;
 
 type Send = <T>(message: Record<string, unknown>) => Promise<T | undefined>;
@@ -32,9 +26,7 @@ export function watchSavedPage({
 	appName: string;
 	undo: (id: string) => Promise<string>;
 }) {
-	// The addresses last asked about, so the toast's own insertion and unrelated page changes don't ask again.
 	let lastAsked = '';
-	// Answers can come back out of order; only the newest request's answer is shown.
 	let latestRequest = 0;
 	let visit = 0;
 	let asked = false;
@@ -70,7 +62,6 @@ export function watchSavedPage({
 			: text;
 	};
 
-	// Not now: closes the notice once the answer is stored, and otherwise says so and offers it again.
 	const dismiss = async (
 		links: SourceLink[],
 	): Promise<{text: string; action: ToastAction} | undefined> => {
@@ -90,8 +81,6 @@ export function watchSavedPage({
 	const check = async () => {
 		const loaded = read(document);
 		if (!loaded) {
-			// Off the saved page (YouTube and X change pages in place): an answer still on its way is for a list
-			// that is gone, and coming back asks again.
 			latestRequest++;
 			visit++;
 			lastAsked = '';
@@ -185,7 +174,6 @@ export function watchSavedPage({
 		subtree: true,
 	});
 	settle();
-	// Settings changed (a site removed and added again forgets its Not now answers): count the page again.
 	return {
 		refresh() {
 			lastAsked = '';

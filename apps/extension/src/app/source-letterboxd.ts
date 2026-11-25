@@ -1,8 +1,3 @@
-// Watchlist on Letterboxd: notices the user adding a film to their watchlist, on the film's page ("Add this film to
-// your watchlist") or from a poster's menu ("Add to watchlist"). Removing it reads "This film is in your watchlist",
-// "Remove this film from your watchlist", or "Remove from watchlist", and saves nothing. Letterboxd is in English
-// only. On the film's page the film is the page; a poster's menu opens away from the poster, so it is matched to the
-// poster clicked last, which names its film in `data-item-link` and `data-item-name`.
 import {letterboxdFilmUrl} from './site-sources';
 import {
 	controlLabel,

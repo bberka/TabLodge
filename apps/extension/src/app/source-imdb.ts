@@ -1,8 +1,3 @@
-// Watchlist on IMDb: notices the user adding a title to their watchlist, with the ribbon on a poster
-// (`data-testid="poster-watchlist-ribbon-…"`) or the button on a title's page (`data-testid="tm-box-wl-button"`).
-// Both read `aria-pressed="true"` once the title is on the watchlist, and a click then removes it, which saves
-// nothing; the attribute is the same in every interface language. A poster names its title in its card's link; a
-// ribbon or button outside a card is the title whose page this is.
 import {imdbTitleUrl} from './site-sources';
 import {
 	eventElements,
