@@ -6,14 +6,14 @@ Status: accepted, 2026-11-25. Issue #442.
 
 This record covers the right-click menu tree (`context-menu-plan.ts`), the link kind read from an address (`link-kind.ts`), accents and colors (`accents.ts`, `accent-colors.ts`, `color-math.ts`), bookmark tags, columns, and duplicates (`bookmark-tags.ts`, `bookmark-rules.ts`, `column-sites.ts`, `duplicate-bookmarks.ts`), icon ids (`icon-ids.ts`, `icon-meta.ts`), site icons (`site-icons.ts`), excluded sites (`excluded-sites.ts`), and toasts (`toast-prefs.ts`). Their non-obvious decisions were comments. Comments are banned ([Code comments](../agents/comments.md)), so each decision lives here with the symbol that carries it. Duplicate handling for saves is in [ADR 31](0031-shared-search-save-capture-decisions.md). Bookmark tag storage is in [ADR 8](0008-bookmark-tags-sync.md).
 
-Imports: the service worker builds into one classic script and imports shared code from `src/`, so it does not keep copies of these helpers ([Extension rules](../agents/extension.md)). Several comments in these files said otherwise. Those were stale and are not carried forward.
+Imports: the service worker builds into one classic script and imports shared code from `src/` ([Extension rules](../agents/extension.md)). It imports `normalizeExcludedHost` and the other helpers in this record, with one exception: it declares its own `hostIsExcluded` matcher (`shell/service-worker.ts:hostIsExcluded`), a copy of `excluded-sites.ts:hostIsExcluded`. That duplication is tracked in #532. Comments that said otherwise elsewhere were stale and are not carried forward.
 
 ## Decisions
 
 ### Right-click menu (`context-menu-plan.ts`)
 
 * **One parent item per context, named after the extension,** keeps the browser menu short (`context-menu-plan.ts:contextMenuPlan`).
-* **The toolbar icon's menu is top level.** Chrome shows at most `ACTION_MENU_TOP_LEVEL_LIMIT` (6) items there (`context-menu-plan.ts:ACTION_MENU_TOP_LEVEL_LIMIT`).
+* **The toolbar icon's menu is top level.** Chrome shows at most six of its items there, so the extension's items are not nested under a parent (`context-menu-plan.ts:contextMenuPlan`).
 * **The page items also appear on the tab strip** in Firefox, and in Chromium 150 or newer. Chromium 149 lists the `tab` context but shows none of its items, and 150 fixed that and a crash with more than one extension item (`context-menu-plan.ts:CHROMIUM_TAB_MENU_VERSION`, `context-menu-plan.ts:hasTabMenu`).
 * **Menu ids keep the `tablodge-` prefix,** and column items append the column id (`context-menu-plan.ts:PAGE_SEND_PREFIX`, `context-menu-plan.ts:LINK_COLUMN_PREFIX`).
 * **"Bookmark this page to" is shared with the tab strip.** The worker retitles it when a menu opens. Only Firefox reports which menu opened; Chromium keeps the page title in both (`context-menu-plan.ts:contextMenuPlan`).
@@ -108,7 +108,7 @@ Imports: the service worker builds into one classic script and imports shared co
 ### Toasts (`toast-prefs.ts`)
 
 * **Two settings choose a toast's place and length.** `Default` is bottom center on TabLodge's pages and for the quote toast, and bottom right on the site pages the Sources toast shows in (`toast-prefs.ts:toastPlace`).
-* **Centered places sit at left 50% and shift back by half their width** (`toast-prefs.ts:centered`).
+* **Centered places sit at left 50% and shift back by half their width** (`toast-prefs.ts:toastEdges`).
 * **A stack lines up at the edge** it sits on, and a column stacks the newest nearest the edge, so a top stack is reversed (`toast-prefs.ts:toastEdges`, `toast-prefs.ts:toastEdges`).
 * **The quote toast gets finished values,** not this module, because `quote-toast.ts` is serialized into a page (`toast-prefs.ts` module).
 * **"Longer" is twice the base time, and "until dismissed" never closes by itself** (`toast-prefs.ts:toastMs`).
