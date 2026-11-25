@@ -156,7 +156,7 @@ export type UndoDelta = {
 
 export const isUndoDelta = (value: unknown): value is UndoDelta =>
 	isRecord(value) &&
-	[1, 2, 3].includes(Number(value.undoDelta)) &&
+	([1, 2, 3] as unknown[]).includes(value.undoDelta) &&
 	isRecord(value.index) &&
 	isRecord(value.records);
 
@@ -299,7 +299,8 @@ export function createLibraryState(
 				if (
 					!isRecord(value) ||
 					!Array.isArray(value.items) ||
-					value.items.length !== page.count
+					value.items.length !== page.count ||
+					(!extra && contentHash(page.key, value) !== page.hash)
 				) {
 					throw new LibraryDamagedError(`${page.key} ${why(value)}`);
 				}
@@ -513,6 +514,15 @@ export function createLibraryState(
 		const rev = (previous?.rev ?? 0) + 1;
 		const plan = planState(raw, rev, previous, format);
 		await carrySidecars(plan, previous);
+		if (format === 11) {
+			plan.sessionPages = planParts(
+				plan.sessions.map((session) => session.entry),
+				SESSION_PAGE_KEY_PREFIX,
+				rev,
+				previous?.format === 11 ? previous.sessionPages : [],
+			);
+		}
+
 		await writeAll([
 			...plan.sessions.filter((session) => !session.unchanged),
 			...writtenParts(plan.sessionPages),
@@ -625,7 +635,6 @@ export function createLibraryState(
 		format: 10 | 11,
 		note?: MigrationNote,
 	): LibraryIndex {
-		const kept = previous?.migratedFrom;
 		return {
 			format,
 			schemaVersion: format === 11 ? LAYOUT_VERSION : INLINE_LAYOUT_VERSION,
@@ -641,7 +650,7 @@ export function createLibraryState(
 			sessionPages: plan.sessionPages.map((page) => page.ref),
 			bookmarkParts: plan.bookmarks.map((part) => part.ref),
 			garbage: [],
-			migratedFrom: note ?? (kept && kept.keepUntil > now() ? kept : undefined),
+			migratedFrom: note ?? previous?.migratedFrom,
 			device: previous?.device,
 			// Expired tombstones stop being carried; a record deleted that long ago can no longer come back.
 			tombstones: (previous?.tombstones ?? []).filter(
@@ -1055,11 +1064,10 @@ export function createLibraryState(
 				const latest = current
 					? await readParts(current.bookmarkParts)
 					: {problems: [], items: []};
-				bookmarks = diffList(
-					old.items,
-					latest.problems.length === 0 ? latest.items : [],
-				);
-				records.delete(oldKey);
+				if (latest.problems.length === 0) {
+					bookmarks = diffList(old.items, latest.items);
+					records.delete(oldKey);
+				}
 			}
 
 			return {
@@ -1212,7 +1220,7 @@ export function createLibraryState(
 			return {status: 'newer'};
 		}
 
-		if (Number(entry.schemaVersion) >= LAYOUT_VERSION) {
+		if (Number(entry.schemaVersion) >= Math.min(LAYOUT_VERSION, maxLayout)) {
 			if ((await getOne(MIGRATION_KEY)) !== undefined) {
 				await backend.remove([MIGRATION_KEY]);
 			}
@@ -1314,6 +1322,11 @@ export function createLibraryState(
 			}
 
 			await removeKeys(written).catch(() => undefined);
+			const root = await getOne(STATE_KEY).catch(() => undefined);
+			if (isRecordsEntry(root) && Number(root.schemaVersion) < LAYOUT_VERSION) {
+				await backend.remove([PREUPGRADE_KEY]).catch(() => undefined);
+			}
+
 			await backend
 				.set({
 					[MIGRATION_KEY]: {

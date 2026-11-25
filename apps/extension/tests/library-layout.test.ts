@@ -6,6 +6,7 @@ import {
 	BOOKMARK_CHUNK_KEY_PREFIX,
 	BOOKMARKS_KEY_PREFIX,
 	createLibraryState,
+	isUndoDelta,
 	LibraryDamagedError,
 	MIGRATION_KEY,
 	PREMIGRATION_KEEP_MS,
@@ -276,6 +277,9 @@ test('a failed upgrade at any step leaves layout 10 whole and working, and the n
 
 		backend.failAt = undefined;
 		if (!failed) {
+			assert.equal(stateOf(backend).schemaVersion, 11, `step ${at}`);
+			assert.deepEqual(await store.read(), expected(base), `step ${at}`);
+			assert.deepEqual(await store.verify(), [], `step ${at}`);
 			continue;
 		}
 
@@ -549,4 +553,35 @@ test('a session and bookmark inserted at the front, removed, and reordered round
 		assert.deepEqual(await store.read(), expected(current));
 		assert.deepEqual(await store.verify(), []);
 	}
+});
+
+test('a page whose content is not what the root hashed is reported, not cached', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend);
+	await store.write(normalize(library(150, 0)));
+	const [key] = keysWith(backend, SESSION_PAGE_KEY_PREFIX);
+	const page = backend.data.get(key) as {items: Raw[]};
+	backend.data.set(key, {
+		items: page.items.map((item) => ({...item, name: 'x'})),
+	});
+	await assert.rejects(store.read(), LibraryDamagedError);
+	backend.data.set(key, page);
+	assert.equal(((await store.read())!.groups as unknown[]).length, 150);
+});
+
+test('a string undoDelta is not an Undo entry', () => {
+	assert.equal(isUndoDelta({undoDelta: '3', index: {}, records: {}}), false);
+	assert.equal(isUndoDelta({undoDelta: 3, index: {}, records: {}}), true);
+});
+
+test('the kept copies stay listed after the week until pruning removes them', async () => {
+	let time = 1_000_000;
+	const {backend, base} = await storedInLayout10(5, 5);
+	const store = createLibraryState(backend, {now: () => time});
+	await store.upgrade();
+	time += PREMIGRATION_KEEP_MS + 1;
+	await store.write({...base, updatedAt: 77});
+	assert.ok(stateOf(backend).migratedFrom);
+	assert.equal(await store.pruneRecoveryCopy(), true);
+	assert.equal(backend.data.has(PREUPGRADE_KEY), false);
 });

@@ -1042,10 +1042,15 @@ async function migrateStoreOnce() {
 		if (meta.upgradable) {
 			const started = (await rawLibrary.get([MIGRATION_KEY]))[MIGRATION_KEY];
 			if (started === undefined) {
-				await safetyBackup(
+				const saved = await safetyBackup(
 					await getStore(),
 					'Before upgrading how the library is stored',
 				);
+				if (!saved) {
+					throw new Error(
+						'The safety backup before the upgrade could not be saved.',
+					);
+				}
 			}
 
 			await libraryState.upgrade();
