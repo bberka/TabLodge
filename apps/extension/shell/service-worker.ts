@@ -4048,12 +4048,6 @@ async function addLinksToSession(
 	);
 }
 
-/**
-Replaces a session's links with the sender's window, or appends the window's links the session lacks. No tab is opened
-or closed. The save rules apply: web pages only, no excluded sites, pinned tabs only when allowed, and the save duplicate
-setting (a replaced session's own links never count as duplicates). A link the session already held keeps its notes
-(and its title unless the setting prefers the latest). Name, folder, and description stay. Undo restores the session.
-*/
 async function updateGroupFromWindow(
 	groupId: string,
 	mode: SessionWindowMode,
@@ -4099,7 +4093,6 @@ async function updateGroupFromWindow(
 					}
 				}
 
-				// Appending goes into the session, so what it holds is a duplicate; a replaced session's own links never count.
 				const duplicates = sessionDuplicates(
 					mode === 'append'
 						? store.groups
@@ -4163,10 +4156,6 @@ async function updateGroupFromWindow(
 	);
 }
 
-/**
-The default name for a session made from pasted or dropped links, by the session naming settings (an `ask` style uses
-its fallback style).
-*/
 function linksSessionName(
 	settings: Settings,
 	entries: LinkEntry[],
@@ -4189,10 +4178,6 @@ function linksSessionName(
 	});
 }
 
-/**
-Creates a session in the default folder from pasted or dropped links. Repeated addresses are kept once and counted as
-skipped. Undo removes the session again.
-*/
 async function createSessionFromLinks(
 	entries: LinkEntry[] = [],
 	requestedName = '',
@@ -4274,9 +4259,6 @@ async function createSessionFromLinks(
 	);
 }
 
-/**
-Moves the chosen links into a new session placed right after the source, in the same folder. Undo restores the source.
-*/
 async function splitGroup(
 	groupId: string,
 	tabIds: string[] = [],
@@ -4353,7 +4335,6 @@ async function moveTab(
 			return {ok: false, error: 'That saved tab no longer exists.'};
 		}
 
-		// Undoing a move that emptied its source: the source session is in the trash, so bring it back (it holds the link) and take the link out of where it went.
 		if (!target && restoreTrashId && !copy) {
 			const entry = (await readTrash()).find(
 				(item) => item.id === restoreTrashId,
@@ -4390,7 +4371,6 @@ async function moveTab(
 			return {ok: false, error: sessionFullError()};
 		}
 
-		// A moved link leaves its split view: the partner becomes a plain tab as well (a copy leaves the pair alone).
 		if (!copy && tab.split) {
 			const splitId = tab.split.id;
 			for (const entry of source.tabs) {
@@ -4423,7 +4403,6 @@ async function moveTab(
 			source.updatedAt = now;
 		}
 
-		// An emptied source goes to the trash (with its name, notes and folder) instead of vanishing.
 		let trashId: string | undefined;
 		if (!copy && source !== target && source.tabs.length === 0) {
 			trashId = await trashAdd(
@@ -4443,7 +4422,6 @@ async function moveTab(
 	});
 }
 
-// Titles and notes describe the page, so edits apply to every saved copy of the same URL.
 async function updateTab(
 	groupId: string,
 	tabId: string,
@@ -4457,8 +4435,6 @@ async function updateTab(
 			return {ok: false, error: 'That saved tab no longer exists.'};
 		}
 
-		// A new address belongs to this one saved link only; titles and notes are shared across copies of the same page.
-		// Excluded sites only filter what is captured from open tabs, so, like imports and bookmarks, a typed address is not checked against them.
 		if (typeof fields.url === 'string' && fields.url !== tab.url) {
 			const url = normalizeUrl(fields.url.trim());
 			if (!url) {
@@ -4578,11 +4554,6 @@ async function addBookmark(
 	});
 }
 
-/**
-Adds a quote to the note of the page's bookmark, else of its saved tab (every saved copy of the page, as an edit
-does), else of a new bookmark in the column the Add bookmark dialog would start on (see quotes.ts for the note).
-A note that has no room is left as it was, with an error that says so. Undo removes the quote again.
-*/
 async function saveQuote(
 	rawUrl: unknown,
 	quote: unknown,
@@ -4648,7 +4619,6 @@ async function saveQuote(
 						store.settings.cleanTitles,
 					),
 					url,
-					// With only source columns, the default is none, and the quote goes to Unfiled rather than a site's column.
 					columnId: landingColumnId(
 						store.bookmarkColumns,
 						claimedId ??
@@ -4676,8 +4646,6 @@ async function saveQuote(
 	);
 }
 
-// Adds several links to one column in a single write, used for drops of links or whole sessions.
-// They are inserted together, in order, before or after targetBookmarkId (or at the column end).
 async function addBookmarks(
 	entries: LinkEntry[] = [],
 	columnId: string | null = null,
@@ -4801,7 +4769,6 @@ async function importBrowserBookmarks(
 					column,
 				]),
 			);
-			// An address in the trash counts as saved, so an import does not bring back what was deleted.
 			const existingUrls = new Set([
 				...store.bookmarks.map((bookmark) => bookmark.url),
 				...(await trashedImportUrls(store.settings, 'bookmarks')),
@@ -4810,7 +4777,6 @@ async function importBrowserBookmarks(
 				store.bookmarks.map((bookmark) => [bookmark.url, bookmark]),
 			);
 			const allowDuplicates = duplicateMode === 'allow';
-			// With a target column, folders do not become columns: every bookmark goes into that column.
 			const targetColumnId = importTargetColumn(store, requestedColumnId);
 			const now = Date.now();
 			let columnsAdded = 0;
@@ -5048,7 +5014,6 @@ async function updateBookmark(
 			}
 		}
 
-		// Each list is replaced whole when it is sent; an empty one clears the field.
 		const saved = {...withTagEdits(bookmark, fields), updatedAt: Date.now()};
 		store.bookmarks[store.bookmarks.indexOf(bookmark)] = saved;
 		await writeStore(store);
@@ -5153,7 +5118,6 @@ async function removeDuplicateBookmarks(
 		for (const id of bookmarkIds) {
 			const index = store.bookmarks.findIndex((bookmark) => bookmark.id === id);
 			const [removed] = store.bookmarks.splice(index, 1);
-			// The flat list interleaves columns, so look for the nearest neighbors in this column.
 			const before = store.bookmarks
 				.slice(0, index)
 				.findLast((bookmark) => bookmark.columnId === removed.columnId);
@@ -5233,7 +5197,6 @@ async function updateBookmarkColumn(
 		const columnName = cleanColumnName(name);
 
 		column.name = columnName;
-		// `icon` omitted keeps the current icon; "" or an unknown id resets it to the default.
 		if (icon !== undefined) {
 			const {icon: nextIcon} = iconField(icon);
 			if (nextIcon) {
@@ -5243,7 +5206,6 @@ async function updateBookmarkColumn(
 			}
 		}
 
-		// `color` omitted keeps the current color; "" or anything that is not a color removes it.
 		if (color !== undefined) {
 			const {color: nextColor} = colorField(color);
 			if (nextColor) {
@@ -5253,7 +5215,6 @@ async function updateBookmarkColumn(
 			}
 		}
 
-		// `domains` omitted keeps the current list; an empty list clears it.
 		if (domains !== undefined) {
 			const {domains: nextDomains} = domainsField(domains);
 			if (nextDomains) {
@@ -5339,7 +5300,6 @@ async function deleteBookmarkColumn(
 			};
 		}
 
-		// With remaining columns, the check above guarantees targetColumnId is one of them or Unfiled.
 		const movedTo =
 			remaining.length > 0 ? targetColumnId! : BOOKMARK_UNFILED_ID;
 		const trashId = await trashAdd(store.settings, {
@@ -5355,7 +5315,6 @@ async function deleteBookmarkColumn(
 				movedTo,
 			},
 		});
-		// Moved bookmarks keep their order and go after the target column's own bookmarks.
 		for (const bookmark of affected) {
 			bookmark.columnId = movedTo;
 		}
@@ -5612,7 +5571,6 @@ function mergeImportedFolders(
 		}
 
 		const source = sourceById.get(sourceId);
-		// Sources that do not normalize (id "all") were already mapped above, so this one does.
 		const name = source ? normalizeFolder(source)!.name : '';
 		const target = name ? folderByName.get(name.toLocaleLowerCase()) : null;
 		idMap.set(sourceId, target?.id || DEFAULT_FOLDER_ID);
@@ -5621,9 +5579,6 @@ function mergeImportedFolders(
 	return idMap;
 }
 
-/**
-The existing column (or Unfiled) an import puts every bookmark into, or null to keep the file's columns.
-*/
 function importTargetColumn(
 	store: Store,
 	targetColumnId: unknown,
@@ -5646,7 +5601,6 @@ async function mergeImportedBookmarks(
 	input: ImportInput,
 	options: ImportOptions = {},
 ): Promise<BookmarkMergeResult> {
-	// With a target column, the file's columns are ignored and every bookmark lands in that column.
 	const targetColumnId = importTargetColumn(store, options.targetColumnId);
 	const incomingColumns = targetColumnId ? [] : arrayOf(input?.bookmarkColumns);
 	const incomingBookmarks = arrayOf(input?.bookmarks);
@@ -5668,7 +5622,6 @@ async function mergeImportedBookmarks(
 			continue;
 		}
 
-		// A source column joins the one with its id, or keeps that id, since the id is what marks it.
 		const sourceColumn = isSourceColumnId(source.id);
 		let target =
 			source.id === DEFAULT_BOOKMARK_COLUMN_ID || source.isDefault
@@ -5864,11 +5817,9 @@ async function importGroups(
 			const allowDuplicates = options.duplicateMode === 'allow';
 			let skipped = 0;
 			let updatedTitles = 0;
-			// A TabLodge export ({groups}) keeps its pinned tabs, as backup restore does; the setting only filters other shapes of tab lists.
 			const keepPinned =
 				store.settings.includePinnedTabs ||
 				(isRecord(input) && Array.isArray(input.groups));
-			// A session holds at most 1000 links, so a bigger imported one becomes several numbered sessions.
 			const parts = candidates.flatMap((candidate) => {
 				if (
 					!isRecord(candidate) ||
@@ -5917,7 +5868,6 @@ async function importGroups(
 					continue;
 				}
 
-				// Exports from older builds may carry archived sessions: same rule as the stored-data migration.
 				if (
 					candidate.archived === true &&
 					group.folderId === DEFAULT_FOLDER_ID
@@ -6025,9 +5975,6 @@ async function updateSettings(
 	});
 }
 
-/**
-Brings the toolbar, alarms, pinned tab, and menus in line with settings that changed, here or through sync.
-*/
 async function applySettingsChange(previousSettings: Settings, store: Store) {
 	if (previousSettings.actionMode !== store.settings.actionMode) {
 		await syncToolbarAction(store.settings);
@@ -6100,7 +6047,6 @@ async function eraseData(
 				};
 			}
 
-			// Erasing data keeps settings and excluded sites; only the chosen data returns to its fresh-install state.
 			if (eraseSessions) {
 				store.groups = fresh.groups;
 				store.folders = fresh.folders;
@@ -6117,8 +6063,6 @@ async function eraseData(
 	);
 }
 
-// New tab hand-off: with "Use TabLodge for new tabs" off the override page cannot be uninstalled, so tabs the
-// browser opens as new tabs are sent straight on to the browser's own page (or a blank / custom page).
 const NEW_TAB_URL = /^(?:chrome|brave|edge):\/\/(?:newtab|new-tab-page)\/?$/;
 const CLAIMS_KEY = 'newTabClaims';
 const claimsMutate = serialQueue();
@@ -6168,10 +6112,6 @@ async function writeClaims(claims: Record<string, number>): Promise<void> {
 	} catch {}
 }
 
-/**
-Where a new tab goes while TabLodge's new tab is off. After one failed attempt (the browser sent the tab back
-to TabLodge) it falls back to a blank page, so a tab can never loop.
-*/
 function newTabTarget(
 	settings: Pick<Settings, 'newTabFallback' | 'newTabFallbackUrl'>,
 	attempt: number,
@@ -6207,7 +6147,6 @@ async function handOffNewTab(
 		return false;
 	}
 
-	// `claims` counts the redirects already made for a tab; a tab the browser sends back gets a blank page.
 	const done = await claimsMutate(async () => {
 		const claims = await readClaims();
 		const previous = claims[tabId];
@@ -6247,9 +6186,6 @@ chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
 	redirectPrivateNewTab(tab, change.url);
 });
 
-// Firefox has no favicon service, so the icon of each site the user opens is remembered by host for bookmarks of
-// that site that are not open. Chromium keeps its own cache and needs none. Icons from the sync server go to the same
-// store on both browsers, through the same chain of writes.
 let siteIconWrites: Promise<unknown> = Promise.resolve();
 
 const loadSiteIcons = async () => {
@@ -6263,10 +6199,6 @@ const loadSiteIcons = async () => {
 	};
 };
 
-/**
-The server to ask for site icons: only with Site icons on Through my server and a server connected, and in a private
-window only when it uses the regular library, which is the one connected.
-*/
 async function siteIconServer() {
 	if (privateContext && privateConfig.mode !== 'shared') {
 		return undefined;
@@ -6278,7 +6210,6 @@ async function siteIconServer() {
 		: undefined;
 }
 
-// Redraws an icon too big to store at 32 pixels. Chromium cannot draw an SVG in its worker, so those are not kept.
 async function shrinkIcon(image: Blob) {
 	try {
 		const bitmap = await createImageBitmap(image, {
@@ -6343,13 +6274,6 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
 	});
 });
 
-// Recovery: crash snapshots, automatic and safety backups, trash. Everything stays in chrome.storage.local.
-// Storage keys (all separate from `tablodge.state`, so the big state is never rewritten for them):
-//   tablodge.snapshots       { version, history: Snapshot[] }  rotated at the interval, newest first
-//   tablodge.snapshots.live  Snapshot                          the latest capture, rewritten on (debounced) tab events
-//   tablodge.snapshots.meta  { sessionOpen, liveAt, liveSig, closing, recovery }  the small crash-detection flags
-//   tablodge.backups         { auto, safety, downloadError, lastAutoCheckAt } full JSON exports (auto/manual ring, safety ring)
-//   tablodge.trash           { items }                         deleted sessions, links, bookmarks, columns, folders
 const SNAPSHOTS_KEY = 'tablodge.snapshots';
 const SNAPSHOT_LIVE_KEY = 'tablodge.snapshots.live';
 const SNAPSHOT_META_KEY = 'tablodge.snapshots.meta';
@@ -6357,10 +6281,8 @@ const BACKUPS_KEY = 'tablodge.backups';
 const TRASH_KEY = 'tablodge.trash';
 const SNAPSHOT_DEBOUNCE_MS = 5000;
 const SNAPSHOT_MAX_WAIT_MS = 30_000;
-// Serialized characters across the whole history; the oldest snapshots go first.
 const SNAPSHOT_MAX_CHARS = 24_000_000;
 const MIN_RECOVERY_TABS = 2;
-// If the browser already reopened this share of the snapshot's tabs, there is nothing left to recover.
 const ALREADY_OPEN_RATIO = 0.8;
 const ALARM_SNAPSHOT = 'tablodge-snapshot';
 const ALARM_BACKUP = 'tablodge-backup';
@@ -6368,10 +6290,8 @@ const ALARM_TRASH = 'tablodge-trash';
 const ALARM_ARCHIVE = 'tablodge-archive';
 const SAFETY_BACKUP_KEEP = 5;
 const BACKUP_MAX_CHARS = 40_000_000;
-// Chrome refuses URLs longer than 2 MB, which also limits data: URLs handed to downloads.download.
 const DOWNLOAD_MAX_URL_CHARS = 2_000_000;
 const TRASH_MAX_ITEMS = 500;
-// The whole trash is one storage value rewritten on every delete, so it also has a size cap (serialized characters of the item data).
 const TRASH_MAX_CHARS = 8_000_000;
 const BULK_DELETE_THRESHOLD = 10;
 const LARGE_IMPORT_THRESHOLD = 50;
@@ -6389,9 +6309,6 @@ type BackupSummary = import('../src/shared/types').BackupSummary;
 type TrashSummary = import('../src/shared/types').TrashSummary;
 type StorageUsage = import('../src/shared/types').StorageUsage;
 
-/**
-A small FIFO runner: each operation starts after the previous one settled, so read-modify-write cycles on one storage key never interleave.
-*/
 function serialQueue() {
 	let tail: Promise<unknown> = Promise.resolve();
 	return <T>(operation: () => Promise<T>): Promise<T> => {
@@ -6422,15 +6339,8 @@ async function readKey<T>(key: string): Promise<T | undefined> {
 	return saved[key];
 }
 
-/**
-In-memory copy of the normalized settings. Safe to lose (a worker restart just re-reads) and dropped on every
-change of `tablodge.state`, whoever wrote it. Callers must treat the result as read-only.
-*/
 let settingsCache: Settings | undefined;
 let settingsGeneration = 0;
-/**
-The library as the address bar search last read it; dropped with the settings cache whenever the library changes.
-*/
 let omniboxStore: Promise<Store> | undefined;
 
 function invalidateSettings() {
@@ -6445,16 +6355,12 @@ onLibraryChanged((changes, areaName) => {
 	}
 });
 
-/**
-Settings without touching the big state (no normalization of sessions, no writes).
-*/
 async function readSettings(): Promise<Settings> {
 	if (settingsCache) {
 		return settingsCache;
 	}
 
 	const generation = settingsGeneration;
-	// The index holds the settings, so no session is read.
 	const meta = await libraryState.readMeta();
 	if (
 		meta.layout === 'records' &&
@@ -6465,7 +6371,6 @@ async function readSettings(): Promise<Settings> {
 	}
 
 	const settings = normalizeSettings(meta.settings as RawSettings | undefined);
-	// A change that landed while this read was in flight makes its result possibly stale: use it once, do not keep it.
 	if (generation === settingsGeneration) {
 		settingsCache = settings;
 	}
@@ -6474,18 +6379,9 @@ async function readSettings(): Promise<Settings> {
 }
 
 type SnapshotMeta = {
-	/**
-	True from the first capture of a run until the last window closes; still true at startup means no clean exit.
-	*/
 	sessionOpen: boolean;
 	liveAt: number;
-	/**
-	Content hash of the stored live snapshot, so a capture can tell whether it changed without reading that (large) record. Empty when unknown.
-	*/
 	liveSig: string;
-	/**
-	The latest window close and how many normal windows were left, to recognize a shutdown in progress.
-	*/
 	closing: {at: number; remaining: number} | null;
 	recovery: {snapshotId: string; detectedAt: number} | null;
 };
@@ -6535,10 +6431,6 @@ async function readLiveSnapshot(): Promise<Snapshot | null> {
 	return isSnapshot(raw) ? raw : null;
 }
 
-/**
-The open normal windows as a snapshot: web tabs only (TabLodge's own pages and browser pages are left out),
-honoring excluded sites, with pinned state, tab groups, split view pairs, the active tab and the focused window.
-*/
 async function captureSnapshotWindows(
 	settings: Settings,
 ): Promise<SnapshotWindow[]> {
@@ -6561,11 +6453,7 @@ async function captureSnapshotWindows(
 				collapsed: Boolean(group.collapsed),
 			});
 		}
-	} catch {
-		/*
-		Tab groups are optional.
-		*/
-	}
+	} catch {}
 
 	const result: SnapshotWindow[] = [];
 	for (const win of windows) {
@@ -6625,7 +6513,6 @@ async function captureSnapshotWindows(
 			tabs.push(entry);
 		}
 
-		// A split pair is kept only when both halves made it into the snapshot, side by side.
 		for (const [splitView, slots] of splitSlots) {
 			if (!(slots.length === 2 && slots[1] === slots[0] + 1)) {
 				continue;
@@ -6682,9 +6569,6 @@ function newSnapshot(
 	};
 }
 
-/**
-Newest first, at most `keep` entries, and no more than SNAPSHOT_MAX_CHARS in total (the newest always stays).
-*/
 function trimHistory(history: Snapshot[], keep: number): Snapshot[] {
 	const result: Snapshot[] = [];
 	let total = 0;
@@ -6700,10 +6584,6 @@ function trimHistory(history: Snapshot[], keep: number): Snapshot[] {
 	return result;
 }
 
-/**
-Captures the open windows. The result replaces the live snapshot when it changed; with `rotate` it also joins
-the history (unless identical to the newest entry there). Never overwrites a snapshot with an empty one.
-*/
 function takeSnapshot(
 	reason: SnapshotReason,
 	rotate: boolean,
@@ -6726,7 +6606,6 @@ function takeSnapshot(
 
 		const snapshot = newSnapshot(windows, reason);
 		const meta = await readSnapshotMeta();
-		// Metas written before liveSig existed fall back to reading the live record once.
 		const liveSig = meta.liveSig || (await readLiveSnapshot())?.sig;
 		if (liveSig !== snapshot.sig) {
 			await library.set({[SNAPSHOT_LIVE_KEY]: snapshot});
@@ -6752,11 +6631,7 @@ function takeSnapshot(
 
 let snapshotTimer: ReturnType<typeof setTimeout> | undefined;
 let snapshotFirstEventAt = 0;
-/**
-Debounced capture for tab and window events: waits SNAPSHOT_DEBOUNCE_MS after the last event, but never longer than SNAPSHOT_MAX_WAIT_MS after the first.
-*/
 function scheduleSnapshot() {
-	// Snapshots off (as far as the cached settings know): skip the timer; turning them on schedules one itself.
 	if (settingsCache && !settingsCache.snapshotsEnabled) {
 		return;
 	}
@@ -6781,9 +6656,6 @@ function scheduleSnapshot() {
 	}, delay);
 }
 
-/**
-Adds the live snapshot to the history (unless it is already there) under the given reason.
-*/
 async function rotateLiveIntoHistory(
 	reason: SnapshotReason,
 	keep: number,
@@ -6808,13 +6680,6 @@ async function rotateLiveIntoHistory(
 	return entry;
 }
 
-/**
-Crash detection, run once per browser start. MV3 has no shutdown event, so a clean exit is inferred:
-the previous run counts as ended cleanly when the last normal window was closed (windows.onRemoved saw it), or
-when windows were being closed down to one and nothing was captured after that. Anything else, a run that was
-still "open", is treated as a crash or a forced quit. The previous run's final snapshot moves into the history
-and, with at least MIN_RECOVERY_TABS tabs, becomes the pending recovery offered on the dashboard.
-*/
 function evaluateStartup(): Promise<void> {
 	return snapshotMutate(async () => {
 		const settings = await readSettings();
@@ -6843,17 +6708,12 @@ function evaluateStartup(): Promise<void> {
 			meta.recovery = null;
 		}
 
-		// A run that starts without a window (background mode) is not "open" yet: the first snapshot taken once a window appears marks it.
 		let hasWindow = true;
 		try {
 			hasWindow = (await chrome.windows.getAll({windowTypes: ['normal']})).some(
 				(win) => !win.incognito,
 			);
-		} catch {
-			/*
-			Without window info, assume one exists (the old behavior).
-			*/
-		}
+		} catch {}
 
 		meta.sessionOpen = hasWindow;
 		meta.closing = null;
@@ -6861,9 +6721,6 @@ function evaluateStartup(): Promise<void> {
 	});
 }
 
-/**
-The last normal window closed: that is the clean-exit signal. The live snapshot (the state before closing) joins the history.
-*/
 function handleWindowRemoved() {
 	return snapshotMutate(async () => {
 		const settings = await readSettings();
@@ -6904,11 +6761,7 @@ async function openUrlSet(): Promise<Set<string>> {
 				urls.add(url);
 			}
 		}
-	} catch {
-		/*
-		Treated as nothing open.
-		*/
-	}
+	} catch {}
 
 	return urls;
 }
@@ -6939,7 +6792,6 @@ async function getSnapshots(): Promise<ActionResult<'GET_SNAPSHOTS'>> {
 			);
 			const already = urls.filter((url) => open.has(url)).length;
 			if (urls.length > 0 && already / urls.length >= ALREADY_OPEN_RATIO) {
-				// The browser reopened the session itself.
 				meta.recovery = null;
 				await writeSnapshotMeta(meta);
 			} else {
@@ -6962,9 +6814,6 @@ async function getSnapshots(): Promise<ActionResult<'GET_SNAPSHOTS'>> {
 	});
 }
 
-/**
-A snapshot window as saved-tab records, so the regular restore code (groups, pinned, split view) can reopen it.
-*/
 function snapshotRecords(win: SnapshotWindow, stamp: number): SavedTab[] {
 	return win.tabs.map((tab, index) => {
 		const group =
@@ -7025,7 +6874,6 @@ async function restoreSnapshot(
 		return {ok: false, error: 'That window is not in the snapshot.'};
 	}
 
-	// Snapshot windows may repeat a URL, so duplicates open; restores always go to new windows.
 	const settings: Settings = {
 		...store.settings,
 		restoreDuplicateHandling: 'open',
@@ -7052,7 +6900,6 @@ async function restoreSnapshot(
 		}
 
 		if (result.opened.length === 0) {
-			// Nothing opened: drop the empty window that was created for it.
 			if (isInteger(target.id)) {
 				await chrome.windows.remove?.(target.id).catch(() => undefined);
 			}
@@ -7118,7 +6965,6 @@ async function saveSnapshotAsSession(
 		for (const [offset, win] of windows.entries()) {
 			const number_ = (windowIndex ?? offset) + 1;
 			const records = snapshotRecords(win, stamp);
-			// A stored session holds at most 1000 tabs, so a huge window becomes several sessions.
 			for (
 				let start = 0;
 				start < records.length;
@@ -7183,9 +7029,6 @@ function deleteSnapshot(id: string): Promise<ActionResult<'DELETE_SNAPSHOT'>> {
 	);
 }
 
-/**
-Empties the snapshot history and the live snapshot. Call it inside `snapshotMutate`. Returns how many it removed.
-*/
 async function emptySnapshots(): Promise<number> {
 	const history = await readSnapshotHistory();
 	await writeSnapshotHistory([]);
@@ -7223,12 +7066,8 @@ type BackupStore = {
 	auto: BackupRecord[];
 	safety: BackupRecord[];
 	downloadError: string;
-	/**
-	When the last scheduled backup ran, including runs that skipped unchanged data, so a quiet profile is not "due" on every start.
-	*/
 	lastAutoCheckAt: number;
 };
-// Manual ("Back up now") backups have their own cap, so they never push scheduled ones out of the list.
 const MANUAL_BACKUP_KEEP = 10;
 
 const isBackupRecord = (value: unknown): value is BackupRecord =>
@@ -7262,9 +7101,6 @@ const summarizeBackup = (record: BackupRecord): BackupSummary => ({
 	bytes: record.bytes,
 });
 
-/**
-The regular JSON export (same shape as the Back up dialog, so Import reads it), with sessions, bookmarks and settings in one file.
-*/
 function backupJson(store: Store, at: number): string {
 	return JSON.stringify({
 		format: BACKUP_FORMAT_ID,
@@ -7338,9 +7174,6 @@ function utf8Base64(text: string): string {
 	return btoa(binary);
 }
 
-/**
-Writes a backup to Downloads/TabLodge (a data: URL, since a service worker has no Blob URLs). Returns an error text, or '' on success.
-*/
 async function downloadBackupCopy(record: BackupRecord): Promise<string> {
 	try {
 		const granted = await chrome.permissions?.contains?.({
@@ -7370,9 +7203,6 @@ async function downloadBackupCopy(record: BackupRecord): Promise<string> {
 const backupFileName = (at: number) =>
 	`${APP_NAME.toLowerCase().replaceAll(/[^0-9a-z]+/g, '-')}-backup-${localDate(at)}.json`;
 
-/**
-Stores an automatic or manual backup of `store` and, when enabled, a Downloads copy. Automatic runs skip data identical to the newest backup.
-*/
 function addBackup(
 	store: Store,
 	kind: 'auto' | 'manual',
@@ -7407,7 +7237,6 @@ function addBackup(
 		backups.auto = [...scheduled, ...manual].toSorted(
 			(a, b) => Number(b.at) - Number(a.at),
 		);
-		// The record is stored first, so a failed or slow Downloads copy cannot lose it.
 		await writeBackups(backups);
 		if (store.settings.autoBackupToDownloads) {
 			backups.downloadError = await downloadBackupCopy(record);
@@ -7418,10 +7247,6 @@ function addBackup(
 	});
 }
 
-/**
-A backup taken just before something destructive (erase, large import, bulk delete); a small separate ring of SAFETY_BACKUP_KEEP.
-Returns false when it could not be written, so the caller can stop before losing data.
-*/
 async function safetyBackup(store: Store, reason: string): Promise<boolean> {
 	if (storeIsEmpty(store)) {
 		return true;
@@ -7460,9 +7285,6 @@ function backupNow(): Promise<ActionResult<'BACKUP_NOW'>> {
 	});
 }
 
-/**
-The alarm (or a startup catch-up): back up unless nothing changed since the last backup.
-*/
 function runScheduledBackup(): Promise<void> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -7515,7 +7337,6 @@ function restoreBackup(id: string): Promise<ActionResult<'RESTORE_BACKUP'>> {
 			}
 
 			const store = await getStore();
-			// Settings stay as they are; the backup brings back sessions, folders, bookmarks and columns.
 			const restored = normalizeStore({
 				...(isRecord(parsed) && parsed),
 				settings: store.settings,
@@ -7565,7 +7386,6 @@ async function getBackupData(
 		: {ok: false, error: 'That backup no longer exists.'};
 }
 
-// Readable page copies (src/shared/page-copy.ts): kept on this device by the regular worker only, never synced.
 const pageCopies = createCopyStore({
 	get: async (keys) => chrome.storage.local.get(keys),
 	set: async (items) => chrome.storage.local.set(items),
@@ -7575,9 +7395,6 @@ const PRIVATE_COPY_ERROR = 'Copies are never kept from private windows.';
 let copySweep: Promise<void> | undefined;
 let sweepAgain = false;
 
-/**
-Runs the extractor in the tab and collects what it left there (see shell/page-copy-capture.ts).
-*/
 async function capturePage(tabId: number): Promise<unknown> {
 	await chrome.scripting.executeScript({
 		target: {tabId},
@@ -7591,10 +7408,6 @@ async function capturePage(tabId: number): Promise<unknown> {
 	return injected?.result;
 }
 
-/**
-Keeps a copy of the tab under the address of the link that holds it: a saved link with the tab's address (or that
-address without tracking parameters), or else a new bookmark, which is added only once the copy is stored.
-*/
 async function keepPageCopy(
 	tab: chrome.tabs.Tab | undefined,
 ): Promise<ActionResult<'KEEP_PAGE_COPY'>> {
@@ -7671,12 +7484,7 @@ function deletePageCopy(
 	});
 }
 
-/**
-Drops the copies no link holds any more. It reads the whole library and trash first, and waits while an Undo could
-still bring links back; a library it cannot read leaves every copy alone.
-*/
 async function sweepPageCopies() {
-	// While an Undo could still bring links back, wait: purging it changes UNDO_KEY, which schedules the next sweep.
 	if (
 		privateContext ||
 		(await pageCopies.list()).length === 0 ||
@@ -7694,9 +7502,6 @@ async function sweepPageCopies() {
 	await pageCopies.sweep(copyLinkUrls(store, await readTrash()));
 }
 
-/**
-Shows a note in the tab (see showPageNote). False when the tab cannot be written to.
-*/
 async function notePage(tabId: number, text: string, failed: boolean) {
 	try {
 		await chrome.scripting.executeScript({
@@ -7733,9 +7538,6 @@ async function keepPageCopyFromMenu(tab: chrome.tabs.Tab | undefined) {
 	flashBadge(tab, result.ok);
 }
 
-/**
-One sweep at a time; changes that land while one runs get one more after it.
-*/
 function scheduleCopySweep() {
 	if (copySweep) {
 		sweepAgain = true;
@@ -7745,7 +7547,6 @@ function scheduleCopySweep() {
 	copySweep = (async () => {
 		do {
 			sweepAgain = false;
-			// Inside the queues every library and trash change holds, so an action's Undo is stored before this reads it.
 			await mutate(() => trashMutate(sweepPageCopies)).catch(() => undefined);
 		} while (sweepAgain);
 	})().finally(() => {
@@ -7805,8 +7606,6 @@ async function getPageCopies(): Promise<ActionResult<'GET_PAGE_COPIES'>> {
 	};
 }
 
-// Full backup (ZIP): the page builds and reads the archive; the worker supplies and replaces the stored values.
-// The page theme and accent color, kept in storage by the pages (src/shared/theme.tsx); the only preferences outside the state.
 const UI_THEME_KEY = 'uiTheme';
 const UI_ACCENT_KEY = 'uiAccent';
 const SNAPSHOT_REASONS = new Set([
@@ -7840,9 +7639,6 @@ async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
 	};
 }
 
-/**
-Rebuilds an imported crash snapshot from known fields only, or null when it has no usable tab.
-*/
 function normalizeImportedSnapshot(entry: unknown): Snapshot | null {
 	if (!isRecord(entry) || !Array.isArray(entry.windows)) {
 		return null;
@@ -8019,7 +7815,6 @@ async function applyFullBackup(
 	await writeStore(restored);
 	await writeSnapshotHistory(history);
 	await writeTrash(items);
-	// After the library and the trash, so the copies land with the links that hold them.
 	const copies =
 		!privateContext && Array.isArray(input.copies)
 			? await pageCopies.restore(input.copies)
@@ -8044,7 +7839,6 @@ async function applyFullBackup(
 function restoreFullBackup(
 	input: Raw,
 ): Promise<ActionResult<'RESTORE_FULL_BACKUP'>> {
-	// Same nesting as UNDO for these keys, so the queues never wait on each other.
 	return mutate(() =>
 		snapshotMutate(() =>
 			trashMutate(() =>
@@ -8057,7 +7851,6 @@ function restoreFullBackup(
 		),
 	).then(async (result) => {
 		if (result.ok) {
-			// Settings may differ from what the alarms, toolbar, and menus were set up for.
 			const store = await getStore();
 			await syncRecoveryAlarms(store.settings);
 			await syncToolbarAction(store.settings);
@@ -8082,9 +7875,6 @@ const trashSize = (entry: TrashEntry) => {
 	return entry.size;
 };
 
-/**
-Newest first: keeps items while their total size fits TRASH_MAX_CHARS (the newest item always stays), dropping the oldest.
-*/
 function capTrashSize(items: TrashEntry[]): TrashEntry[] {
 	let total = 0;
 	let kept = 0;
@@ -8109,9 +7899,6 @@ function pruneTrash(items: TrashEntry[], retentionDays: number): TrashEntry[] {
 	);
 }
 
-/**
-Moves a deleted item into the trash and returns its id. Called before the main state is written, so a crash in between duplicates rather than loses data.
-*/
 function trashAdd(
 	settings: Settings,
 	item: Omit<TrashEntry, 'id' | 'deletedAt'>,
@@ -8126,9 +7913,6 @@ function trashAdd(
 	});
 }
 
-/**
-`trashAdd` for several items with one read and write of the trash. Ids come back in the order given.
-*/
 function trashAddMany(
 	settings: Settings,
 	items: Array<Omit<TrashEntry, 'id' | 'deletedAt'>>,
@@ -8150,10 +7934,6 @@ function trashAddMany(
 	});
 }
 
-/**
-The trash as the sync client sees it: `applySyncTrash` adds or replaces entries from other devices and removes the ones
-they restored or deleted in one update, so a delete made on this device meanwhile stays.
-*/
 async function readSyncTrash(): Promise<TrashEntry[]> {
 	return pruneTrash(
 		await readTrash(),
@@ -8180,7 +7960,6 @@ function purgeTrash(): Promise<void> {
 		const items = await readTrash();
 		const unsized = items.some((item) => item.size === undefined);
 		const kept = pruneTrash(items, settings.trashRetentionDays);
-		// Entries stored before sizes were tracked get theirs written once.
 		if (kept.length !== items.length || unsized) {
 			await writeTrash(kept);
 		}
@@ -8192,9 +7971,6 @@ const trashSessionData = (session: Session, index: number): Raw => ({
 	index,
 });
 
-/**
-A tab removal (delete, or restore-and-remove) with where each link sat; a session that disappeared with its last link is kept as `groupMeta`.
-*/
 function trashTabsEntry(
 	group: Session,
 	removed: Array<{tab: SavedTab; index: number}>,
@@ -8244,9 +8020,6 @@ async function getTrash(): Promise<ActionResult<'GET_TRASH'>> {
 	};
 }
 
-/**
-Addresses in the trash (expired entries left out), which an import skips like saved links.
-*/
 async function trashedImportUrls(
 	settings: Settings,
 	kind: 'sessions' | 'bookmarks',
@@ -8273,9 +8046,6 @@ function uniqueName(name: string, taken: (candidate: string) => boolean) {
 	}
 }
 
-/**
-Puts a trash item back into `store` (not yet written). Returns where it landed.
-*/
 function applyTrashRestore(
 	store: Store,
 	entry: TrashEntry,
@@ -8430,7 +8200,6 @@ function applyTrashRestore(
 			return {ok: false, error: 'That column could not be restored.'};
 		}
 
-		// A source column that a save on its site made again takes its bookmarks back, since its id is its marker.
 		const existing = isSourceColumnId(column.id)
 			? store.bookmarkColumns.find((item) => item.id === column.id)
 			: undefined;
@@ -8458,7 +8227,6 @@ function applyTrashRestore(
 			BOOKMARK_UNFILED_ID,
 		]);
 		const knownBookmarks = new Set(store.bookmarks.map((item) => item.id));
-		// Links deleted together with the column come back into it.
 		for (const raw of Array.isArray(data.bookmarks) ? data.bookmarks : []) {
 			const bookmark = normalizeBookmark(raw, columnIds);
 			if (!bookmark || knownBookmarks.has(bookmark.id)) {
@@ -8469,7 +8237,6 @@ function applyTrashRestore(
 			store.bookmarks.push(bookmark);
 		}
 
-		// Links that were moved elsewhere when the column was deleted go back if they are still where they were put.
 		const moved = new Set(
 			Array.isArray(data.movedIds) ? (data.movedIds as unknown[]) : [],
 		);
@@ -8496,7 +8263,6 @@ function applyTrashRestore(
 	);
 	folder.isDefault = false;
 	store.folders.splice(clampIndex(data.index, store.folders.length), 0, folder);
-	// Sessions that were moved to Unfiled when the folder was deleted return to it.
 	const wasIn = new Set(
 		Array.isArray(data.groupIds) ? (data.groupIds as unknown[]) : [],
 	);
@@ -8557,9 +8323,6 @@ function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
 	);
 }
 
-// Undo: for actions the trash cannot hold (erase, empty trash, clear snapshots, restore a backup, imports),
-// the affected storage keys are copied before the action and put back by UNDO, but only briefly and only while
-// nothing else has changed those keys since.
 const UNDO_KEY = 'tablodge.undo';
 const ALARM_UNDO = 'tablodge-undo';
 
@@ -8572,9 +8335,7 @@ type UndoRecord = {
 	label: string;
 	createdAt: number;
 	keys: string[];
-	// The keys' values before the action; a key missing here did not exist.
 	before: Raw;
-	// A hash of each key's value right after the action, to notice later changes.
 	after: Record<string, string>;
 	from?: string;
 };
@@ -8606,15 +8367,11 @@ async function writeUndo(records: UndoRecord[]) {
 		: library.set({[UNDO_KEY]: {version: 1, records}}));
 }
 
-/**
-Runs `run` and, when it succeeds and changed `keys`, stores what they held before and returns an `undoId`. Call it inside the queue that guards those keys.
-*/
 async function withUndo<K extends TabLodgeMessageType>(
 	label: string,
 	keys: string[],
 	run: () => Promise<ActionResult<K>>,
 ): Promise<ActionResult<K>> {
-	// The library is kept as a delta (its index plus the records the action replaced), not as a copy of everything.
 	const others = keys.filter((key) => key !== STORAGE_KEY);
 	const before = await library.get<Raw>(others);
 	const tracksState = keys.includes(STORAGE_KEY);
@@ -8622,7 +8379,6 @@ async function withUndo<K extends TabLodgeMessageType>(
 	const fingerprintBefore = checkpoint
 		? await libraryState.fingerprint()
 		: undefined;
-	// Without the record layout (a migration that could not run) the whole value is copied, as it always was.
 	const stateBefore =
 		tracksState && !checkpoint
 			? (await library.get<Raw>([STORAGE_KEY]))[STORAGE_KEY]
@@ -8653,7 +8409,6 @@ async function withUndo<K extends TabLodgeMessageType>(
 				after[STORAGE_KEY] = fingerprintAfter ?? 'none';
 				if (fingerprintAfter !== fingerprintBefore) {
 					if (!delta) {
-						// A record the action replaced could not be copied: better no Undo than a wrong one.
 						return result;
 					}
 
@@ -8686,11 +8441,9 @@ async function withUndo<K extends TabLodgeMessageType>(
 		await undoMutate(async () => {
 			await writeUndo([record, ...(await readUndo())].slice(0, UNDO_KEEP));
 		});
-		// The copy holds user data, so it is dropped soon after the window closes.
 		await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
 		return {...result, undoId: record.id};
 	} catch {
-		// Undo is a convenience; the action itself succeeded.
 		return result;
 	}
 }
