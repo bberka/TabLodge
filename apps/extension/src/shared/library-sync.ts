@@ -1,13 +1,5 @@
-/*
-Sync reservations of the library layout (see the header of library-state.ts): the shapes of the optional stamp,
-order key, and tombstone fields, and the code that carries them without trusting them.
-*/
 import {isCount, isRecord} from './library-values';
 
-/**
-Reserved sync stamp of one record: a hybrid logical clock string, the device that wrote it, and an order key
-(a fractional index among its siblings). All parts are optional; see the header.
-*/
 export type RecordSync = {h?: string; d?: string; o?: string};
 export type TombstoneKind =
 	| 'session'
@@ -21,9 +13,6 @@ export type TombstoneKind =
 	| 'note'
 	| 'tag'
 	| 'source';
-/**
-A deleted record kept so a stale device cannot bring it back; removed from the index once `purgeAfter` passes.
-*/
 export type Tombstone = {
 	kind: TombstoneKind;
 	id: string;
@@ -54,9 +43,6 @@ export const syncText = (value: unknown) =>
 		? value
 		: undefined;
 
-/**
-Sync data is only carried, never trusted: a malformed part is dropped instead of making the library unreadable.
-*/
 export function parseSync(value: unknown): RecordSync | undefined {
 	if (!isRecord(value)) {
 		return undefined;
@@ -120,9 +106,6 @@ export function parseTombstones(value: unknown): Tombstone[] {
 	});
 }
 
-/**
-The sidecar's per-id stamps, kept only for ids that still exist.
-*/
 export function carriedSync(
 	sidecar: unknown,
 	field: 'tabs' | 'items',

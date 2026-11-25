@@ -1,98 +1,43 @@
-// Password lock for the saved separate private library (issue #142).
-//
-// How it works. A random 256-bit data key encrypts every value of the private library with AES-GCM, so a save
-// costs no key stretching. The data key itself is wrapped in the credential envelope from crypto-envelope.ts
-// (PBKDF2-SHA-256 into AES-GCM) and stored in the lock record. Nothing derived from the credential is stored.
-//
-// The data key lives only in `chrome.storage.session`, which the browser keeps in memory and never writes to disk.
-// It is gone after a browser restart, an extension reload, or Lock now, and the idle timeout removes it too.
-//
-// Closing the last private window locks too, but the private worker is not woken for that close, so nothing runs at
-// that moment. Instead the worker keeps the ids of the private windows that were open while unlocked, and compares them
-// with the windows that exist before it serves anything (see judgePrivateWindows). The key stays in memory until then.
-//
-// Enabling and removing the lock rewrite every stored value. Both are resumable: each value is either sealed or plain,
-// readers accept both, and the lock record's `state` says which way the pass is going, so an interrupted pass is
-// finished the next time the key is available and never leaves data that cannot be read.
-//
-// This module has no browser globals other than Web Crypto: the worker hands it the storage areas.
 import {decryptBytes, encryptBytes, EnvelopeError} from './crypto-envelope';
 import {type Credential, validateCredential} from './passcode';
 
 export const LOCK_RECORD_KEY = 'tablodge.private.lock';
 export const LOCK_SESSION_KEY = 'tablodge.privatelock.key';
-/**
-When the library was last used, in its own session key. A late write of this can never bring the data key back after a lock.
-*/
 export const LOCK_ACTIVITY_KEY = 'tablodge.privatelock.active';
 export const LOCK_ATTEMPTS_KEY = 'tablodge.privatelock.attempts';
-/**
-Ids of the private windows that were open while the library was unlocked, in their own session key. It is written with the
-data key and removed with it.
-*/
 export const LOCK_WINDOWS_KEY = 'tablodge.privatelock.windows';
 
 export const DEFAULT_IDLE_MINUTES = 5;
-/**
-Minutes of inactivity before the library locks again; 0 keeps it unlocked until the last private window or the browser closes.
-*/
 export const IDLE_MINUTE_CHOICES = [1, 5, 15, 30, 60, 0] as const;
 
 export const isIdleMinutes = (value: unknown): value is number =>
 	typeof value === 'number' &&
 	(IDLE_MINUTE_CHOICES as readonly number[]).includes(value);
 
-/**
-`encrypting` and `decrypting` are passes that did not finish; `encrypted` is the settled lock.
-*/
 export type LockState = 'encrypting' | 'encrypted' | 'decrypting';
 
 export type LockRecord = {
 	version: 1;
 	state: LockState;
-	/**
-	Written as 'password'. Records from older versions say 'pin' or 'password'; both are read, and neither changes anything.
-	*/
 	kind: 'pin' | 'password';
-	/**
-	The data key in a credential envelope, base64.
-	*/
 	wrapped: string;
 	idleMinutes: number;
 };
 
 export type LockStatus = {
-	/**
-	True when a lock record exists.
-	*/
 	enabled: boolean;
 	state: LockState | 'none' | 'damaged';
 	locked: boolean;
 	idleMinutes: number;
-	/**
-	When the idle timeout locks the library, as a timestamp; null when locked or the timeout is off.
-	*/
 	expiresAt: number | null;
 };
 
 export type LockErrorCode =
-	/**
-	The key is not in memory.
-	*/
 	| 'locked'
 	| 'wrong-credential'
-	/**
-	Too many wrong entries in a row.
-	*/
 	| 'rate-limited'
-	/**
-	The lock record or a sealed value cannot be read.
-	*/
 	| 'damaged'
 	| 'invalid'
-	/**
-	The lock is not in the state the action needs.
-	*/
 	| 'state';
 
 export class PrivateLockError extends Error {
@@ -111,9 +56,6 @@ const WRONG_MESSAGE = 'That password is not correct.';
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/**
-A stored lock record, or null when it is malformed. A missing record is `undefined`, not this.
-*/
 export function parseLockRecord(value: unknown): LockRecord | null {
 	if (
 		!isRecord(value) ||
@@ -130,16 +72,11 @@ export function parseLockRecord(value: unknown): LockRecord | null {
 	return value as LockRecord;
 }
 
-// Private windows -------------------------------------------------------------------------------------------------
-
 export type WindowVerdict = {lock: true} | {lock: false; tracked: number[]};
 
 const isWindowId = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
-/**
-The window ids stored beside the key, or undefined when they are missing or malformed.
-*/
 export function parseWindowIds(value: unknown): number[] | undefined {
 	return Array.isArray(value) && value.every((id) => isWindowId(id))
 		? [...new Set(value)]
@@ -149,18 +86,6 @@ export function parseWindowIds(value: unknown): number[] | undefined {
 const sameIds = (a: readonly number[] | undefined, b: readonly number[]) =>
 	a?.length === b.length && b.every((id) => a.includes(id));
 
-/**
-Decides whether closing windows should have locked the library. `tracked` holds the ids of the private windows that were
-open while it was unlocked, `open` the private windows that exist now.
-
-- Some tracked window still exists: the private session never ended. Keep it unlocked and track every open window, so
-  windows opened while the worker slept belong to it from now on.
-- None exists (or nothing was tracked): the last private window closed at some point, so lock. This also covers windows
-  that opened and closed while the worker slept, and it locks when unsure.
-
-Chromium numbers windows from a counter that only goes up while the browser runs, and the tracked ids are cleared when it
-closes, so an id cannot come back for a different window.
-*/
 export function judgePrivateWindows(
 	tracked: readonly number[] | undefined,
 	open: readonly number[],
@@ -170,8 +95,6 @@ export function judgePrivateWindows(
 		? {lock: false, tracked: [...now]}
 		: {lock: true};
 }
-
-// Base64 -------------------------------------------------------------------------------------------------------
 
 export function toBase64(bytes: Uint8Array): string {
 	let text = '';
@@ -193,8 +116,6 @@ export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
 
 	return bytes;
 }
-
-// Data key and sealed values --------------------------------------------------------------------------------------
 
 const DATA_KEY_BYTES = 32;
 const IV_BYTES = 12;
@@ -219,9 +140,6 @@ export async function importDataKey(raw: Uint8Array): Promise<CryptoKey> {
 	);
 }
 
-/**
-Wraps the data key in the credential envelope. Throws EnvelopeError('invalid-credential') for a credential that breaks the limits.
-*/
 export async function wrapDataKey(
 	dataKey: Uint8Array,
 	credential: Credential,
@@ -257,9 +175,6 @@ export async function unwrapDataKey(
 	}
 }
 
-/**
-A value as stored once the lock is on. `iv` and `ct` are base64.
-*/
 export type SealedValue = {tlock: 1; iv: string; ct: string};
 
 export const isSealed = (value: unknown): value is SealedValue =>
@@ -270,9 +185,6 @@ export const isSealed = (value: unknown): value is SealedValue =>
 
 const nameBytes = (name: string) => new TextEncoder().encode(name);
 
-/**
-Encrypts one value. The storage key name is authenticated too, so a sealed value cannot be moved to another key.
-*/
 export async function sealValue(
 	key: CryptoKey,
 	name: string,
@@ -316,9 +228,6 @@ export async function openValue(
 	}
 }
 
-/**
-What a reader gets for a stored value: plain values pass through, sealed ones are opened.
-*/
 export async function readStored(
 	key: CryptoKey,
 	name: string,
@@ -327,12 +236,7 @@ export async function readStored(
 	return isSealed(stored) ? openValue(key, name, stored) : stored;
 }
 
-// Conversion pass -------------------------------------------------------------------------------------------------
-
 export type ConvertBackend = {
-	/**
-	Names of every stored value in the private library, without the storage prefix.
-	*/
 	names(): Promise<string[]>;
 	get(names: string[]): Promise<Record<string, unknown>>;
 	set(values: Record<string, unknown>): Promise<void>;
@@ -341,11 +245,6 @@ export type ConvertBackend = {
 const CONVERT_BATCH_CHARS = 1_000_000;
 const CONVERT_BATCH_KEYS = 25;
 
-/**
-Seals (or opens) every value that is not in the wanted form yet, a batch at a time. Each value is written whole,
-so a pass cut off anywhere leaves some values converted and the rest as they were; running it again finishes.
-Returns how many values it converted.
-*/
 export async function convertValues(
 	backend: ConvertBackend,
 	key: CryptoKey,
@@ -395,8 +294,6 @@ export async function convertValues(
 	return converted;
 }
 
-// Controller -------------------------------------------------------------------------------------------------------
-
 type Area = {
 	get(keys: string[] | null): Promise<Record<string, unknown>>;
 	set(values: Record<string, unknown>): Promise<void>;
@@ -406,23 +303,10 @@ type Area = {
 export type LockEnv = {
 	local: Area;
 	session: Area;
-	/**
-	Storage prefix of the private library in the local area.
-	*/
 	prefix: string;
-	/**
-	Local keys under the prefix that are not library values and must never be sealed (the private config and the lock record).
-	*/
 	reserved: string[];
 	now(): number;
-	/**
-	The ids of the private windows that exist now. Only the private worker sets it; without it the library does not
-	lock when the last private window closes (a regular worker cannot see private windows).
-	*/
 	openWindows?(): Promise<number[]>;
-	/**
-	Passed to convertValues; tests use small batches.
-	*/
 	batch?: {batchKeys?: number; batchChars?: number};
 };
 
@@ -431,26 +315,19 @@ type KeyPayload = {key: string; at: number};
 const isKeyValue = (value: unknown): value is {key: string} =>
 	isRecord(value) && typeof value.key === 'string';
 
-// A wrong entry costs a PBKDF2 run already; after a few in a row the page also has to wait.
 const ATTEMPTS_BEFORE_LOCKOUT = 5;
 const LOCKOUT_BASE_MS = 30_000;
 const LOCKOUT_MAX_MS = 900_000;
-// The activity time in the session payload is rewritten at most this often.
 const TOUCH_WRITE_MS = 10_000;
 
 export type Gate = {
 	state: LockState;
-	/**
-	The data key, or null while locked.
-	*/
 	key: CryptoKey | null;
 };
 
 export function createPrivateLock(env: LockEnv) {
 	let cachedKey: {raw: string; key: CryptoKey} | undefined;
 	let lastTouchWrite = 0;
-	// Storing, removing, and window checks of the key run one at a time, so a check never judges against a half
-	// written unlock or removes a key that a newer unlock stored.
 	let keyQueue: Promise<unknown> = Promise.resolve();
 	const exclusive = <T>(task: () => Promise<T>): Promise<T> => {
 		const run = keyQueue.then(task, task);
@@ -507,13 +384,6 @@ export function createPrivateLock(env: LockEnv) {
 
 	const removeKey = () => exclusive(dropKey);
 
-	/**
-	Locks the library when no private window that was open while it was unlocked exists any more. `closed` is a window
-	that just closed and may still be listed. Returns true when the key is gone afterwards, whether this check removed it
-	or another one already had. A read that fetched the key before that must not use it, which is why the answer is
-	checked inside the queue. The private worker cannot see the last window close, so this runs before every read of the
-	key and on every window event the worker does see.
-	*/
 	async function lockWhenWindowsClosed(closed?: number): Promise<boolean> {
 		if (!env.openWindows) {
 			return false;
@@ -526,7 +396,6 @@ export function createPrivateLock(env: LockEnv) {
 				return true;
 			}
 
-			// A window list that cannot be read counts as no windows: the library locks rather than guessing.
 			const open = await openWindows().then(
 				(ids) => ids.filter((id) => id !== closed),
 				() => [],
@@ -554,10 +423,6 @@ export function createPrivateLock(env: LockEnv) {
 		return cachedKey.key;
 	}
 
-	/**
-	The key while the library is unlocked and not idle; locks it (and says so with null) when the idle time has passed.
-	Reading counts as activity.
-	*/
 	async function currentKey(
 		record: LockRecord,
 		touch: boolean,
@@ -594,8 +459,6 @@ export function createPrivateLock(env: LockEnv) {
 		return exclusive(async () => {
 			cachedKey = undefined;
 			lastTouchWrite = env.now();
-			// The windows are written in the same call as the key. If they cannot be read none are tracked, and the
-			// next read locks again.
 			const windows = env.openWindows
 				? await env.openWindows().catch(() => [])
 				: undefined;
@@ -606,8 +469,6 @@ export function createPrivateLock(env: LockEnv) {
 			});
 		});
 	}
-
-	// Attempts ------------------------------------------------------------------------------------------------------
 
 	async function checkAttempts() {
 		const saved = (await env.session.get([LOCK_ATTEMPTS_KEY]))[
@@ -644,9 +505,6 @@ export function createPrivateLock(env: LockEnv) {
 		});
 	}
 
-	/**
-	Checks a credential against the lock record and returns the data key. Counts wrong entries.
-	*/
 	async function verify(record: LockRecord, credential: string) {
 		if (typeof credential !== 'string' || credential.length === 0) {
 			throw new PrivateLockError('wrong-credential', WRONG_MESSAGE);
@@ -668,8 +526,6 @@ export function createPrivateLock(env: LockEnv) {
 			throw error;
 		}
 	}
-
-	// Storage the conversion pass walks --------------------------------------------------------------------------------
 
 	const reserved = new Set(env.reserved);
 	const convertBackend: ConvertBackend = {
@@ -709,9 +565,6 @@ export function createPrivateLock(env: LockEnv) {
 		return key;
 	};
 
-	/**
-	Finishes a pass that was cut off. Needs the key in memory; returns false when the library is locked, or nothing was pending.
-	*/
 	async function resume(): Promise<boolean> {
 		const record = await readRecord();
 		if (!record || record.state === 'encrypted') {
@@ -742,7 +595,6 @@ export function createPrivateLock(env: LockEnv) {
 			...env.batch,
 			beforeBatch,
 		});
-		// The record goes last: until it is gone every reader still copes with sealed values.
 		await env.local.remove(LOCK_RECORD_KEY);
 		await removeKey();
 		return true;
@@ -752,9 +604,6 @@ export function createPrivateLock(env: LockEnv) {
 		readRecord,
 		resume,
 
-		/**
-		What reads and writes of the library need: null when no lock is set, otherwise the state and the key (null while locked).
-		*/
 		async gate(): Promise<Gate | null> {
 			const record = await readRecord();
 			if (record === undefined) {
@@ -807,9 +656,6 @@ export function createPrivateLock(env: LockEnv) {
 			};
 		},
 
-		/**
-		Marks activity so the idle timeout starts over. Does nothing while locked.
-		*/
 		async touch() {
 			const record = await readRecord();
 			if (record) {
@@ -821,23 +667,13 @@ export function createPrivateLock(env: LockEnv) {
 			await removeKey();
 		},
 
-		/**
-		Locks the library if every private window that was open while it was unlocked has closed. The private worker calls
-		this on its window events; every read of the key does it too. `closed` is a window that just closed.
-		*/
 		lockWhenWindowsClosed,
 
-		/**
-		Opens the library with the credential and finishes an interrupted pass if one is waiting.
-		*/
 		async unlock(credential: string) {
 			const record = await requireRecord();
 			await storeKey(await verify(record, credential));
 		},
 
-		/**
-		Turns the lock on: wraps a new data key, then seals every stored value. Fails if a lock exists already.
-		*/
 		async enable(credential: Credential, idleMinutes = DEFAULT_IDLE_MINUTES) {
 			if ((await readRecord()) !== undefined) {
 				throw new PrivateLockError(
@@ -859,8 +695,6 @@ export function createPrivateLock(env: LockEnv) {
 
 			const dataKey = generateDataKey();
 			const wrapped = await wrapDataKey(dataKey, credential);
-			// The key goes to memory first, so an interrupted pass can carry on without asking; if only the record
-			// survives, unlocking with the credential resumes it.
 			await storeKey(dataKey);
 			await env.local.set({
 				[LOCK_RECORD_KEY]: {
@@ -874,9 +708,6 @@ export function createPrivateLock(env: LockEnv) {
 			await resume();
 		},
 
-		/**
-		Turns the lock off with the credential: opens every value, then deletes the record.
-		*/
 		async checkCredential(credential: string) {
 			await verify(await requireRecord(), credential);
 		},
@@ -894,9 +725,6 @@ export function createPrivateLock(env: LockEnv) {
 			await resume();
 		},
 
-		/**
-		Wraps the same data key with a new credential. The data is not rewritten, so this takes one write and cannot be cut off halfway.
-		*/
 		async changeCredential(current: string, next: Credential) {
 			const record = await requireRecord();
 			if (record.state !== 'encrypted') {

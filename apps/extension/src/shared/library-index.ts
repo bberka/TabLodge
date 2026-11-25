@@ -1,7 +1,3 @@
-/*
-The record layout's index and the code that plans a commit from it. See the header of library-state.ts for the
-layout; this module has no storage access, only shapes, parsing, and diffing.
-*/
 import {
 	parseSync,
 	parseSyncMap,
@@ -43,9 +39,6 @@ export class LibraryDamagedError extends Error {
 	}
 }
 
-/**
-What the index says about one session. The summary fields let menus list sessions without reading any tabs.
-*/
 export type SessionEntry = {
 	id: string;
 	rev: number;
@@ -56,9 +49,6 @@ export type SessionEntry = {
 	createdAt: number;
 	updatedAt: number;
 	sync?: RecordSync;
-	/**
-	True when the record carries a `$sync` sidecar for its tabs.
-	*/
 	tabSync?: true;
 };
 
@@ -305,9 +295,6 @@ export function storedIndex(index: LibraryIndex, garbage: string[]): Raw {
 	};
 }
 
-/**
-A session record as the app sees it: without the sync sidecar.
-*/
 export function sessionContent(value: Raw): Raw {
 	if (!Object.hasOwn(value, SIDECAR)) {
 		return value;
@@ -318,9 +305,6 @@ export function sessionContent(value: Raw): Raw {
 	return copy;
 }
 
-/**
-What a stored record holds for the app, which is what its checksum covers.
-*/
 function contentOf(key: string, value: unknown): unknown {
 	if (!isRecord(value)) {
 		return value;
@@ -343,9 +327,6 @@ export const idsOf = (items: unknown): Set<string> =>
 		),
 	);
 
-/**
-Every record must carry a stable id that no sibling shares, because sync addresses records by id.
-*/
 export function assertStableIds(raw: Raw): void {
 	const check = (items: unknown, label: string) => {
 		const seen = new Set<string>();
@@ -377,9 +358,6 @@ export const referencedKeys = (index: LibraryIndex) => [
 	...index.bookmarkParts.map((part) => part.key),
 ];
 
-/**
-Groups items into runs that stay under both limits, keeping order.
-*/
 export function batches<T>(
 	items: readonly T[],
 	weight: (item: T) => number,
@@ -416,9 +394,6 @@ export type PlannedSession = {
 	key: string;
 	value: Raw;
 	json: string;
-	/**
-	True when the stored record already matches, so nothing is written.
-	*/
 	unchanged: boolean;
 };
 
@@ -505,7 +480,6 @@ export function planState(
 					folderId: typeof group.folderId === 'string' ? group.folderId : '',
 					createdAt: Number(group.createdAt) || 0,
 					updatedAt: Number(group.updatedAt) || 0,
-					// Stamps follow the session until the sync engine changes them.
 					...(old?.sync && {sync: old.sync}),
 					...(old?.tabSync && {tabSync: true as const}),
 				},

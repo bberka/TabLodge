@@ -1,42 +1,10 @@
-// Password-based encryption with Web Crypto only (no dependency, so it works on the page and in the worker).
-// PBKDF2-SHA-256 turns the credential into an AES-GCM-256 key; the result is a versioned, self-describing
-// envelope, so the work factor or the algorithm can change later without breaking old files.
-//
-// Envelope, version 1 (all integers big-endian):
-//   0   4  magic "TLEN"
-//   4   1  version (1)
-//   5   1  KDF id (1 = PBKDF2-SHA-256)
-//   6   4  KDF iterations
-//   10  1  salt length (16)
-//   11  1  IV length (12)
-//   12  s  salt (random per encryption)
-//   12+s i IV (random per encryption)
-//   ..  n  AES-GCM ciphertext followed by its 16-byte tag
-// The whole header is passed to AES-GCM as additional data, so changing any header byte fails authentication.
-// The credential is normalized to NFKC before use, so the same text typed on another keyboard still matches.
-// Nothing derived from the credential, and no hint, is ever written into the envelope.
 import {type Credential, validateCredential} from './passcode';
 
 export type EnvelopeErrorCode =
-	/**
-	The bytes do not start with the envelope magic.
-	*/
 	| 'not-encrypted'
-	/**
-	A version, algorithm or work factor this build does not read.
-	*/
 	| 'unsupported'
-	/**
-	Cut short or otherwise not shaped like an envelope.
-	*/
 	| 'damaged'
-	/**
-	Authentication failed: the credential is wrong, or the file was changed. The two cannot be told apart.
-	*/
 	| 'wrong-credential'
-	/**
-	The credential given for encryption breaks the limits in passcode.ts.
-	*/
 	| 'invalid-credential';
 
 export class EnvelopeError extends Error {
@@ -48,27 +16,19 @@ export class EnvelopeError extends Error {
 	}
 }
 
-const MAGIC = [0x54, 0x4c, 0x45, 0x4e]; // "TLEN"
+const MAGIC = [0x54, 0x4c, 0x45, 0x4e];
 const VERSION = 1;
 const KDF_PBKDF2_SHA256 = 1;
-/**
-Work factor written by this build (OWASP's 2023 figure for PBKDF2-HMAC-SHA256). Raise it here; old files keep their own.
-*/
 export const ENVELOPE_MIN_ITERATIONS = 600_000;
-// A file may ask for more than we write, but a hostile one must not tie up the page for minutes.
 const MAX_ACCEPTED_ITERATIONS = 20_000_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 const FIXED_HEADER_BYTES = 12;
-// Longer than any credential this app accepts; anything beyond cannot be the right one.
 const MAX_DECRYPT_CREDENTIAL_LENGTH = 1024;
 
 const WRONG = 'The password is wrong, or the file has been changed.';
 
-/**
-True when the bytes start with the envelope magic.
-*/
 export function looksEncrypted(bytes: Uint8Array): boolean {
 	return bytes.length >= MAGIC.length && MAGIC.every((b, i) => bytes[i] === b);
 }
@@ -95,9 +55,6 @@ async function deriveKey(
 	);
 }
 
-/**
-Encrypts `data` with the credential. Throws EnvelopeError('invalid-credential') when the credential breaks the password limits.
-*/
 export async function encryptBytes(
 	data: Uint8Array,
 	credential: Credential,
@@ -139,10 +96,6 @@ export async function encryptBytes(
 	return envelope;
 }
 
-/**
-Decrypts an envelope. Returns all of the data or throws an EnvelopeError; never partial output.
-A wrong credential and a changed file both give 'wrong-credential', so a caller learns nothing more from the failure.
-*/
 export async function decryptBytes(
 	envelope: Uint8Array,
 	credential: string,
