@@ -1,7 +1,3 @@
-// Saved posts on Substack: notices the user clicking Save on a post, a button labelled "Save" that reads
-// `aria-pressed="true"` (and "Unsave") once the post is saved; a click then un-saves, which saves nothing. The button
-// is found by its English label, so in another interface language nothing is saved. In a feed the post is the
-// link in the card around the button; elsewhere it is the page, when the page is a post.
 import {substackPostUrl} from './site-sources';
 import {
 	controlLabel,
@@ -16,11 +12,6 @@ const CARD_TITLE = '[data-testid="post-preview-title"]';
 const CARD_DEPTH = 6;
 const PAGE_TITLE = 'h1.post-title, h1';
 
-/**
-The feed card around the button: the nearest of its few closest ancestors that holds one post preview title. A
-card is small, so the search stops early and never takes a container of several previews; on a post's own page it
-never reaches the previews of other posts further down.
-*/
 function card(button: Element, document: Document) {
 	let container = button.parentElement;
 	for (
@@ -59,8 +50,6 @@ export function createSubstackReader(document: Document): SourceReader {
 		const found = card(button, document);
 		if (found) {
 			const url = [...found.container.querySelectorAll('a[href]')]
-				// Read against the page, so a relative link keeps the publication's host. A link that reads as this page's
-				// own post (#comments, ?showComments, an empty one) is about this page, not the card.
 				.map((link) =>
 					substackPostUrl(
 						link.getAttribute('href') ?? '',

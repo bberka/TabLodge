@@ -14,9 +14,6 @@ import {
 } from './dialog';
 import {cn} from '@/lib/utils';
 
-// Shadcn's AlertDialog on @radix-ui/react-alert-dialog, styled like Dialog. Alert dialogs have no close (X)
-// button and ignore outside clicks: the user answers with Cancel or the action (Escape still cancels).
-
 function AlertDialog({
 	open,
 	...props
@@ -43,14 +40,9 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 type AlertDialogContentProps = React.ComponentPropsWithoutRef<
 	typeof AlertDialogPrimitive.Content
 > & {
-	/**
-	Width preset; defaults to "sm".
-	*/
 	size?: DialogSize;
 };
 
-// Initial focus follows the same rules as DialogContent (a `data-autofocus` element first), so a
-// destructive confirmation can open on Cancel and a harmless one on its action.
 const AlertDialogContent = React.forwardRef<
 	React.ComponentRef<typeof AlertDialogPrimitive.Content>,
 	AlertDialogContentProps

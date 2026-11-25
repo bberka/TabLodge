@@ -1,14 +1,4 @@
-// Numbers for the Statistics dialog in Settings. Everything is derived from data TabLodge already holds or
-// that `chrome.tabs.query` returns with the existing "tabs" permission; nothing here needs a new permission.
-
-/**
-Rough resident memory of one loaded tab, in MB. Chrome gives extensions no per-tab memory figure without the
-`processes` API, so the dialog presents a figure built from this constant as a guess.
-*/
 const LOADED_TAB_MB = 100;
-/**
-A discarded (unloaded) tab keeps little more than its title and icon in memory.
-*/
 const DISCARDED_TAB_MB = 5;
 
 export type SavedStats = {sessions: number; tabs: number; largest: number};
@@ -32,10 +22,6 @@ type OpenTab = {
 	lastAccessed?: number;
 };
 
-/**
-The open tabs that were used longest ago, oldest first. Tabs the browser reports no access time for, and the
-tab being looked at, are left out.
-*/
 export function leastRecentlyUsedTabs<T extends OpenTab>(
 	tabs: readonly T[],
 	limit: number,
@@ -46,9 +32,6 @@ export function leastRecentlyUsedTabs<T extends OpenTab>(
 		.slice(0, limit);
 }
 
-/**
-A guess at the memory the open tabs use, in MB.
-*/
 export function estimateTabMemoryMb(total: number, discarded: number): number {
 	return (total - discarded) * LOADED_TAB_MB + discarded * DISCARDED_TAB_MB;
 }
@@ -63,9 +46,6 @@ export function memoryEstimateText(megabytes: number): string {
 		: `about ${Math.round(megabytes / 100) * 100 || 100} MB`;
 }
 
-/**
-How long ago a tab was last used, such as "3 days ago".
-*/
 export function idleText(now: number, then: number): string {
 	const minutes = Math.floor(Math.max(0, now - then) / 60_000);
 	const unit = (count: number, name: string) =>

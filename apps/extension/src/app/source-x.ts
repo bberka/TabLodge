@@ -1,11 +1,3 @@
-// X bookmarks: notices the user bookmarking a post, by either of the site's two controls:
-//   - the Bookmark button in a post's action row, data-testid "bookmark" ("removeBookmark" once bookmarked)
-//   - "Bookmark" in the post's Share menu, which X draws in a layer outside the post ("Remove Bookmark" once
-//     bookmarked)
-// The button is found by its data-testid, which is the same in every interface language; the Share menu item by
-// its English label. Posts are <article> elements whose timestamp links to the post.
-// The bookmarks page is read for catch-up (#383): /i/bookmarks, which X now sends to /i/history (its Bookmarks tab;
-// Likes is /i/history/likes). X keeps only the posts near the screen in the page, so it reads what is there.
 import type {SavedPageReader} from './source-catch-up';
 import {xPostUrl} from './site-sources';
 import {
@@ -20,15 +12,11 @@ import {
 const POST = 'article';
 const BOOKMARK = '[data-testid="bookmark"]';
 const REMOVE_BOOKMARK = '[data-testid="removeBookmark"]';
-// A photo or video opened from a post shows its actions outside the post, at the post's own address.
 const MEDIA_VIEW = /\/status\/\d+\/(?:photo|video)\//;
 
 const byAuthor = (url: string) =>
 	`Post by @${new URL(url).pathname.split('/', 2)[1]}`;
 
-/**
-The post's own text, not the text of a post it quotes: a quoted post sits in a role="link" card inside the post.
-*/
 function postText(post: Element) {
 	for (const text of post.querySelectorAll(
 		':scope [data-testid="tweetText"]',
@@ -42,7 +30,6 @@ function postText(post: Element) {
 }
 
 function postLink(post: Element): SourceLink | undefined {
-	// The timestamp of the post comes before the one of a post it quotes.
 	for (const time of post.querySelectorAll(':scope a[href] time')) {
 		const url = xPostUrl(time.closest('a')?.getAttribute('href') ?? '');
 		if (url) {
@@ -60,7 +47,6 @@ export const readTwitterSavedPage: SavedPageReader = (document) => {
 		return undefined;
 	}
 
-	// A post quoted inside another is part of that post, not a bookmark of its own.
 	return [...document.querySelectorAll(`main ${POST}`)]
 		.filter((post) => !post.parentElement?.closest(POST))
 		.map((post) => postLink(post))
@@ -78,7 +64,6 @@ export function createTwitterReader(
 	document: Document,
 	now = () => Date.now(),
 ): SourceReader {
-	// The post whose Share menu is open, for the menu X draws outside the post.
 	const lastPost = rememberLast<SourceLink | undefined>(now);
 	return (event) => {
 		const path = eventElements(event);

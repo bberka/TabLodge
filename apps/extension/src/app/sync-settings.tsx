@@ -70,9 +70,6 @@ export const SYNC_WORDS = [
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
 const CLOUDFLARE_DEPLOY_URL = `https://deploy.workers.cloudflare.com/?url=${PROJECT.repoUrl}/tree/release/apps/server/cloudflare-deploy`;
 
-/**
-When the last sync happened: the time alone for today, the date and time before that.
-*/
 function syncedAt(time: number): string {
 	const date = new Date(time);
 	return date.toDateString() === new Date().toDateString()
@@ -157,9 +154,6 @@ const CHECKS: Record<Field, (text: string) => string | undefined> = {
 	token: checkToken,
 };
 
-/**
-Fails a connect attempt on one field, so the form shows the message under that field.
-*/
 class FieldError extends Error {
 	constructor(
 		readonly field: Field,
@@ -179,13 +173,11 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [action, setAction] = useState<Action>();
 	const busy = action !== undefined;
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-	// Missing in storage means on.
 	const [syncSettings, setSyncSettings] = useState(true);
 	const settingsSwitchId = useId();
 	const settingsHelpId = useId();
 	const [error, setError] = useState('');
 	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-	// After connecting, whether to offer syncing the separate private library too.
 	const [askPrivate, setAskPrivate] = useState(false);
 	const addressRef = useRef<HTMLInputElement>(null);
 	const tokenRef = useRef<HTMLInputElement>(null);
@@ -225,7 +217,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		};
 	}, []);
 
-	// Moves focus once an action is over and the view it leads to is on screen (see `run`).
 	useEffect(() => {
 		if (busy) {
 			return;
@@ -244,10 +235,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		return null;
 	}
 
-	/**
-	Runs an action. Its buttons are disabled meanwhile, which drops focus, so focus then goes to `focus.done` or,
-	when the action failed, to `focus.failed`.
-	*/
 	const run = async (
 		name: Action,
 		work: () => Promise<SyncStatus>,
@@ -311,9 +298,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		);
 	};
 
-	/**
-	Rechecks a field as it is edited once it shows an error, so the error goes away as soon as it is fixed.
-	*/
 	const recheck = (field: Field, value: string) => {
 		setFieldErrors((errors) => ({...errors, [field]: CHECKS[field](value)}));
 	};
@@ -325,7 +309,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		}
 	};
 
-	// Leaving a filled in field checks it; an empty one is only flagged on Connect.
 	const leave = (field: Field, value: string) => {
 		if (value.trim() !== '') {
 			recheck(field, value);
@@ -452,7 +435,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	};
 
 	const server = (status.url ?? '').replace(/^https?:\/\//, '');
-	// Covers a sync the worker started on its own as well as one started here.
 	const syncing = action === 'sync' || status.phase === 'syncing';
 	return (
 		<div className="space-y-4">
@@ -540,10 +522,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	);
 }
 
-/**
-Asks, right after connecting, whether the separate private library should sync too. That can only be turned on in a
-private window, which can read the library and ask for its password, so Yes opens Settings there.
-*/
 function PrivateSyncPrompt({
 	open,
 	onOpenChange,
@@ -601,10 +579,6 @@ function PrivateSyncPrompt({
 	);
 }
 
-/**
-For someone without a server: a button that opens the steps to make a token, deploy the server to Cloudflare with it,
-and come back with the address. Cloudflare cannot hand the address back, so the last step stays manual.
-*/
 function ServerSetupDialog({
 	showStatus,
 	onToken,
@@ -740,10 +714,6 @@ function ServerSetupDialog({
 	);
 }
 
-/**
-How sync is doing, for the regular library and the private one: an icon, a headline, the server and the last sync,
-and the error when sync stopped.
-*/
 export function SyncStatusLine({
 	status,
 	server,
@@ -783,10 +753,6 @@ export function SyncStatusLine({
 	);
 }
 
-/**
-The server's version and what does not work with it: the update a stopped sync needs (its message is in the status
-line), or the features this server lacks.
-*/
 function ServerReport({status}: {status: SyncStatus}) {
 	const {server, incompatible, missing} = readCompat(status);
 	if (!server) {
@@ -829,10 +795,6 @@ function ServerReport({status}: {status: SyncStatus}) {
 	);
 }
 
-/**
-Sync now, which reads Syncing… and ignores presses while a sync runs. It stays focusable meanwhile (aria-disabled
-rather than disabled), so focus is not dropped to the page.
-*/
 export function SyncNowButton({
 	ref,
 	busy,

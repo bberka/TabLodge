@@ -23,28 +23,16 @@ export type PickerTarget = {
 	color?: string;
 };
 
-/**
-What to ask for. `kind` picks how a row looks: a session is a name, a folder or a column has its icon. `targets` come most recent first.
-*/
 export type TargetPickerRequest = {
 	title: string;
 	description: string;
 	kind: 'session' | 'folder' | 'column';
 	targets: readonly PickerTarget[];
-	/**
-	Marked "Current" and not selectable.
-	*/
 	currentId?: string;
 	onPick: (target: PickerTarget) => void;
-	/**
-	Offers "New ‹label›" for the typed name when nothing matches. Missing means targets cannot be created from here.
-	*/
 	create?: {label: string; run: (name: string) => void};
 };
 
-/**
-The one picker for every move or add action that can list more targets than a menu can show. A search field with the list below it: arrows move, Enter picks, Escape closes without a change.
-*/
 export function TargetPickerDialog({
 	request,
 	onClose,
@@ -95,7 +83,6 @@ function PickerBody({
 			: matches;
 	}, [targets, currentId, create, needle, query]);
 	const firstChoice = rows.findIndex((row) => !isCurrent(row));
-	// Until the arrows or the pointer pick a row, the first row that can be chosen is active.
 	const active = Math.min(
 		activeIndex ?? Math.max(firstChoice, 0),
 		Math.max(rows.length - 1, 0),
@@ -118,7 +105,6 @@ function PickerBody({
 		}
 	}
 
-	// Moves to the next row that can be chosen, skipping the current target.
 	function step(direction: 1 | -1) {
 		let next = active + direction;
 		while (isCurrent(rows[next])) {

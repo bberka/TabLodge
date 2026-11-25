@@ -22,10 +22,6 @@ import {
 } from './context-menu';
 import {cn} from '@/lib/utils';
 
-/**
-One action-definition model rendered by both the dropdown (⋯) and the context (right-click) menu,
-so the two menus always show the same items, icons, order, separators and styling.
-*/
 export type MenuAction =
 	| {
 			type?: 'item';
@@ -36,9 +32,6 @@ export type MenuAction =
 			accent?: boolean;
 			destructive?: boolean;
 			disabled?: boolean;
-			/**
-			Marks the current choice in a list of options.
-			*/
 			checked?: boolean;
 			hidden?: boolean;
 			onSelect: () => void;
@@ -54,9 +47,6 @@ export type MenuAction =
 			items: MenuAction[];
 	  };
 
-/**
-Drops hidden entries, empty submenus and leading, trailing and repeated separators.
-*/
 function cleanActions(actions: MenuAction[]): MenuAction[] {
 	const out: MenuAction[] = [];
 	for (const action of actions) {
@@ -120,7 +110,6 @@ const dropdownKit: Kit = {
 	SubTrigger: DropdownMenuSubTrigger,
 	SubContent: DropdownMenuSubContent,
 };
-// The context-menu primitives share the same prop shapes as the dropdown ones.
 const contextKit = {
 	Item: ContextMenuItem,
 	Separator: ContextMenuSeparator,
@@ -171,12 +160,8 @@ function renderActions(actions: MenuAction[], kit: Kit): ReactNode {
 	});
 }
 
-/**
-Pass a function to build the actions only when the menu opens (long lists render many closed menus).
-*/
 type ActionsSource = MenuAction[] | (() => MenuAction[]);
 
-// Mounted by the menu content only while the menu is open, so closed menus cost nothing per render.
 function MenuItems({actions, kit}: {actions: ActionsSource; kit: Kit}) {
 	return renderActions(
 		typeof actions === 'function' ? actions() : actions,
@@ -194,9 +179,6 @@ export function ActionDropdownMenu({
 	actions: ActionsSource;
 	trigger: ReactElement;
 	align?: 'start' | 'end';
-	/**
-	Set both to control the menu from outside (such as opening it when its row is clicked).
-	*/
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
 }) {

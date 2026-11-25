@@ -1,10 +1,6 @@
 import * as React from 'react';
 import {cn} from '@/lib/utils';
 
-// Radio choices built on native radio inputs, so arrow keys, form semantics, and screen readers
-// work without extra code. RadioCard is a selectable card (icon, name, one-line explanation);
-// SegmentedControl is a compact row of mutually exclusive options.
-
 type RadioGroupContextValue = {
 	name: string;
 	value: string;
@@ -18,9 +14,6 @@ const RadioGroupContext = React.createContext<RadioGroupContextValue | null>(
 type RadioCardGroupProps = {
 	value: string;
 	onValueChange: (value: string) => void;
-	/**
-	Accessible name of the group (or pass aria-labelledby).
-	*/
 	label?: string;
 	name?: string;
 	disabled?: boolean;
@@ -63,9 +56,6 @@ type RadioCardProps = {
 		className?: string;
 		'aria-hidden'?: boolean | 'true' | 'false';
 	}>;
-	/**
-	Shown after the title, for example a "Recommended" badge.
-	*/
 	badge?: React.ReactNode;
 	disabled?: boolean;
 	className?: string;
@@ -195,9 +185,6 @@ type SegmentedControlProps<T extends string> = {
 	'aria-labelledby'?: string;
 	name?: string;
 	className?: string;
-	/**
-	Stretch to the container width with equal-width segments.
-	*/
 	fullWidth?: boolean;
 };
 

@@ -650,3 +650,121 @@ Status: accepted, 2026-11-23. Issue #442.
 * **Likes come from the Like button.** A liked item carries `.sc-button-selected`, and a click on it unlikes, which saves nothing; both are classes, so every interface language works (`source-soundcloud.ts:createSoundcloudReader`).
 * **The item is the row's or player bar's title link.** On a track's or playlist's own page it is the page (`source-soundcloud.ts:createSoundcloudReader`).
 * **The page header is the page's own title.** List rows above it have titles of their own (`source-soundcloud.ts:PAGE_TITLE`).
+
+### Spotify
+
+* **Spotify saves come from Your Library's save button.** `aria-checked="true"` means saved; a click then removes it or opens a playlist picker, which saves nothing. The label is the same in every language (`source-spotify.ts:cardItem`).
+* **The item comes from the nearest place that names one.** A track row's song link, the now-playing song, or the one item a small card links to; else the page (`source-spotify.ts:cardItem`).
+* **A card is named by one link.** The closest ancestor linking to exactly one item; one that links to several is a list or the page itself (`source-spotify.ts:cardItem`).
+* **The title can sit further out.** Its title may be outside the artwork link, so the search goes on for it (`source-spotify.ts:cardItem`).
+* **The row names the song.** The page may be another album or playlist, so the row's own container is checked first (`source-spotify.ts:createSpotifyReader`).
+
+### Stack Overflow
+
+* **Stack Overflow saves come from the bookmark button.** Found by `.js-saves-btn` (`.js-bookmark-btn` on older pages), carrying the post's id and type; `aria-pressed="true"` once saved. A save on an answer (post type 2) is not a question and saves nothing (`source-stackoverflow.ts:createStackOverflowReader`).
+* **The title comes from the page heading.** The heading link carries the same id, so it gives the question's address and title (`source-stackoverflow.ts:HEADING_LINK`).
+
+### Substack
+
+* **Substack saves are the Save button.** It reads `aria-pressed="true"` (and "Unsave") once saved; a click then un-saves. It is found by its English label, so another language saves nothing (`source-substack.ts:createSubstackReader`).
+* **The post is the card's link in a feed.** Elsewhere it is the page, when the page is a post (`source-substack.ts:card`).
+* **The card search stops early.** A card is small, so the nearest few ancestors are checked and no further (`source-substack.ts:card`).
+* **Relative links keep the publication's host.** The links are read against the page; a link that reads as this page's own comment anchor is about the page, not the card (`source-substack.ts:createSubstackReader`).
+
+### X
+
+* **X bookmarks come from two controls.** The post's action-row Bookmark button (`data-testid="bookmark"`, `removeBookmark` once bookmarked) or the Share menu's Bookmark item, which X draws outside the post (`source-x.ts:createTwitterReader`).
+* **Buttons are found by test id; the menu item by English label.** The test id is the same in every language (`source-x.ts:BOOKMARK`).
+* **The bookmarks page is read for catch-up.** X sends `/i/bookmarks` to `/i/history`, its Bookmarks tab; Likes is `/i/history/likes` (`source-x.ts:readTwitterSavedPage`).
+* **Only posts on screen are read.** X keeps only the posts near the screen in the page (`source-x.ts:readTwitterSavedPage`).
+* **A media view's actions sit outside the post.** A photo or video opened from a post shows them at the post's own address (`source-x.ts:MEDIA_VIEW`).
+* **Quoted posts are not part of the post's text.** A quoted post sits in a link card inside the post (`source-x.ts:postText`).
+* **The post's own timestamp comes first.** It precedes the timestamp of a post it quotes (`source-x.ts:postLink`).
+* **A quoted post is not a bookmark.** It belongs to the post that quotes it (`source-x.ts:readTwitterSavedPage`).
+* **The last clicked post is the menu's post.** The Share menu is drawn outside the post (`source-x.ts:createTwitterReader`).
+
+### YouTube
+
+* **Watch later comes from four controls.** A thumbnail's button (label turns "Added"), the clock in the hover player, the "Save to Watch later" menu item, and the checkbox in the Save dialog. All are found by English label, so another language saves nothing (`source-youtube.ts:createYoutubeReader`).
+* **The Watch later playlist is read for catch-up.** Only its owner can open it (`source-youtube.ts:readYoutubeSavedPage`).
+* **The hover player is outside the card.** Its clock is in no card, so the card is found by the video address (`source-youtube.ts:previewedCard`).
+* **The player area acts on the video being watched.** Its menu and Save button (`source-youtube.ts:watchedVideo`).
+* **The option name is in its title.** Its aria-label includes the privacy line, so the name is read from the title (`source-youtube.ts:OPTION_NAME`).
+* **Hidden pages are not read.** YouTube keeps the pages it navigated away from; only the shown playlist page counts (`source-youtube.ts:WATCH_LATER_ROW`).
+* **The preview is matched by video.** The hover preview has no title; its link carries the length too (`source-youtube.ts:previewedCard`).
+* **An unreadable tick is not a save.** Undefined when the state cannot be read (`source-youtube.ts:optionTicks`).
+* **The last clicked video is the menu's video.** Set by the click that opened the menu (`source-youtube.ts:createYoutubeReader`).
+
+### Window state
+
+* **Window globals are declared in an interface.** TypeScript augments the `Window` global only through an interface, so the declaration uses one (`state-preload.ts:StateRequest`).
+
+### Sync indicator
+
+* **Quick syncs stay visible.** A sync that finishes faster than 900 ms would flash by unseen, so the button keeps the syncing look that long (`sync-indicator.tsx:MIN_SYNCING_MS`).
+* **An error message brings its own full stop.** The label does not add a second one (`sync-indicator.tsx:describe`).
+
+### Sync now
+
+* **Sync now reports failures.** The worker answers ok even when no server is set up or the round failed, so the outcome reads the result itself (`sync-now.ts:syncNowOutcome`).
+
+### Sync settings
+
+* **Sync is on until the setting says otherwise.** A missing stored value means on (`sync-settings.tsx:SyncSettings`).
+* **The private library is offered once.** After connecting, the user is asked whether the separate private library syncs too (`sync-settings.tsx:PrivateSyncPrompt`).
+* **Focus moves after an action.** Once the action ends and its view is on screen (`sync-settings.tsx:SyncSettings`).
+* **Disabled buttons drop focus.** The action goes to `focus.done`, or `focus.failed` when it failed (`sync-settings.tsx:run`).
+* **Errors clear as soon as they are fixed.** A field with an error is checked again while typed (`sync-settings.tsx:recheck`).
+* **Empty fields wait for Connect.** A filled field is checked on leaving; an empty one is flagged only on Connect (`sync-settings.tsx:leave`).
+* **Syncing covers worker syncs.** A sync the worker started alone counts as well as one started here (`sync-settings.tsx:SyncSettings`).
+* **Private sync is offered in a private window only.** It can only be turned on there, which reads the library (`sync-settings.tsx:PrivateSyncPrompt`).
+* **Server setup is a guided dialog.** For someone without a server: the steps to make a token, deploy to Cloudflare, and come back with the address (`sync-settings.tsx:ServerSetupDialog`).
+* **Sync now stays focusable.** It is aria-disabled, not disabled, while a sync runs, so focus is not dropped (`sync-settings.tsx:SyncNowButton`).
+
+### Tab statistics
+
+* **Statistics only read.** The dialog reads data and changes or sends nothing (`tab-stats-dialog.tsx:TabStatsDialog`).
+* **Only existing data and the tabs permission.** Everything is derived from data TabLodge holds or from `chrome.tabs.query`, so no new permission is needed (`tab-stats.ts:savedStats`).
+* **Memory is a guess.** Chrome gives extensions no per-tab memory without the `processes` API, so the dialog shows a figure built from the constants (`tab-stats.ts:LOADED_TAB_MB`).
+* **A discarded tab keeps little.** Its title and icon only (`tab-stats.ts:DISCARDED_TAB_MB`).
+* **The current tab and no-time tabs are left out.** Tabs with no access time, and the tab being looked at, are not in the least-used list (`tab-stats.ts:leastRecentlyUsedTabs`).
+
+### Target picker
+
+* **The first choosable row is active.** Until arrows or the pointer pick a row (`target-picker-dialog.tsx:TargetPickerDialog`).
+* **The current target is skipped.** Arrow movement passes over it (`target-picker-dialog.tsx:step`).
+
+### Source toasts
+
+* **Notices stack in a closed shadow root.** The newest sits nearest the corner, at most `MAX_TOASTS` show (a fourth closes the oldest), and each has its own timer and Undo (`source-toast.ts:showSourceToast`).
+* **An answer replaces its notice.** A notice that answers another is that notice's next text, so it replaces it in place (`source-toast.ts:showSourceToast`).
+* **Styles go on the element, not in CSS.** The page's stylesheets do not select the toast's contents, because they sit in a closed shadow root. The page's Content Security Policy and Trusted Types rules still apply to the page. Every style is set through the element style object, not a style-attribute string that `style-src` would restrict, as `palette-overlay.ts` does (`source-toast.ts:showSourceToast`).
+* **The toast never takes focus.** Tab reaches its buttons at the end of the page. It stays while the pointer or focus is on it, and Escape closes it from there (`source-toast.ts:showSourceToast`).
+* **Closing with focus returns it.** It goes back to where it came from, never to the page body (`source-toast.ts:showSourceToast`).
+* **Buttons become the next step.** Once one runs, the others go and the button becomes Close or the next step's button (`source-toast.ts:run`).
+* **The toast looks like TabLodge's own.** It matches the status region of the extension pages (`source-toast.ts:TOAST_TOKENS`).
+* **Tokens are copied.** A shadow root on another site cannot read the stylesheet's tokens, so the values are copied into `TOAST_TOKENS` (`source-toast.ts:TOAST_TOKENS`).
+* **Messages stay follows the setting.** "Longer" doubles these times, and "Until dismissed" never closes a notice by itself (`source-toast.ts:showSourceToast`).
+* **A question stays longer.** So there is time to read it and decide (`source-toast.ts:ASKING_VISIBLE_MS`).
+* **The token values match the stylesheet.** `tests/site-sources.test.ts` keeps them equal; `primary` is the default indigo accent (`source-toast.ts:TOAST_TOKENS`).
+* **Pixels, not rem.** Rem would follow the site's root font size, not the extension's 16px (`source-toast.ts:TOAST_TOKENS`).
+* **Appearance matches the extension pages.** Anything unexpected in storage counts as the default, as on those pages (`source-toast.ts:toastAppearance`).
+* **Private windows use the private default.** With no private accent stored, a private window shows the private default, as its pages do (`source-toast.ts:toastAppearance`).
+* **The accent is adjusted for the toast background.** It is darkened or lightened until it reads, as `applyAccent` does (`source-toast.ts:toastColors`).
+* **A stale script uses the defaults.** A script left behind by an extension update or removal can no longer read storage (`source-toast.ts:readPrefs`).
+* **The page cannot read settings.** The worker's answer gives the place and times; without one, the defaults apply (`source-toast.ts:readPrefs`).
+* **Placement reverses the list.** The newest notice sits nearest the edge, so a stack at the top lists them in reverse (`source-toast.ts:place`).
+* **Notices render in the order asked.** Each reads the theme asynchronously, so a queue keeps the order (`source-toast.ts:showSourceToast`).
+* **A leftover host is removed.** One left by an earlier copy of the script, after an update, is not in the stack (`source-toast.ts:showSourceToast`).
+* **A notice press is not a page press.** The site's bubbling listeners, such as one that closes a menu on an outside press, do not act on it (`source-toast.ts:showSourceToast`).
+* **Newest last in the flex row.** It sits nearest the edge, and `place` sets the direction (`source-toast.ts:place`).
+* **Asking notices stay longer.** `error` marks a failed save in the destructive color; `asking` marks a question, which stays longer (`source-toast.ts:showSourceToast`).
+* **A removed host is replaced.** When the page removed it, or a later copy of the script did, a new one starts (`source-toast.ts:showSourceToast`).
+* **Until dismissed still has a button.** A notice with no button of its own gets one, since a button that answers with nothing closes it (`source-toast.ts:showSourceToast`).
+* **The region exists before its text.** Screen readers announce the text when it arrives (`source-toast.ts:showSourceToast`).
+* **One line, so no label wraps.** A label wider than the row runs over the text, such as "Also save on Stack Overflow" (`source-toast.ts:showSourceToast`).
+* **The ring shows for keyboard focus only.** As on the extension's pages (`source-toast.ts:showSourceToast`).
+* **The focus ring is an outline.** Not a shadow, so forced-colors mode still shows it (`source-toast.ts:showSourceToast`).
+* **A closed notice stays closed.** Its Undo can finish later, and it must not arm a timer again (`source-toast.ts:showSourceToast`).
+* **Only page focus counts.** Moving between the notice's own buttons keeps the page target (`source-toast.ts:showSourceToast`).
+* **Focus stays on the notice.** After an action the button that remains keeps focus instead of falling to the page body (`source-toast.ts:run`).

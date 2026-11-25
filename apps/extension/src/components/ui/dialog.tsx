@@ -6,8 +6,6 @@ import {Tooltip, TooltipContent, TooltipTrigger} from './tooltip';
 import {focusReturnTarget} from '@/shared/focus-rescue';
 import {cn} from '@/lib/utils';
 
-// Returns `value` while `active`, and the last active value otherwise. Dialogs use it so their
-// content stays populated during the close animation even after the caller clears its data.
 function useRetainedValue<T>(value: T, active = value != null): T {
 	const retained = React.useRef(value);
 	React.useLayoutEffect(() => {
@@ -18,12 +16,8 @@ function useRetainedValue<T>(value: T, active = value != null): T {
 	return active ? value : retained.current;
 }
 
-/**
-Shared by Dialog and AlertDialog: the controlled `open` state, read by the content to freeze its children while closing.
-*/
 const DialogOpenContext = React.createContext<boolean | undefined>(undefined);
 
-// Shares the controlled `open` state with DialogContent, which freezes its children while closing.
 function Dialog({
 	open,
 	...props
@@ -37,9 +31,6 @@ function Dialog({
 
 const DialogClose = DialogPrimitive.Close;
 
-/**
-What had focus when a dialog opened, and the open dialog it was in, if any (a confirmation opened from a dialog).
-*/
 type Opener = {element: Element | null; dialog: HTMLElement | null};
 
 function captureOpener(): Opener {
@@ -47,10 +38,6 @@ function captureOpener(): Opener {
 	return {element, dialog: element?.closest<HTMLElement>(OPEN_DIALOG) ?? null};
 }
 
-// Hands focus back to the control that opened the dialog. A caller's own onCloseAutoFocus that calls
-// preventDefault keeps full control. A dialog opened from inside another dialog that is still open returns
-// focus there: to its opener, or, when the opener is gone or disabled, to that dialog's own first choice.
-// Otherwise focus goes to the last control used outside any dialog.
 function returnFocus(
 	event: Event,
 	onCloseAutoFocus: ((event: Event) => void) | undefined,
@@ -82,9 +69,6 @@ function returnFocus(
 const OPEN_DIALOG =
 	'[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
-/**
-Width presets shared by every dialog and alert dialog: confirmations (sm), forms (md), and richer flows (lg).
-*/
 const DIALOG_SIZES = {
 	sm: 'w-[min(94vw,28rem)]',
 	md: 'w-[min(94vw,32rem)]',
@@ -92,9 +76,6 @@ const DIALOG_SIZES = {
 } as const;
 type DialogSize = keyof typeof DIALOG_SIZES;
 
-/**
-Overlay and panel styles, shared with alert-dialog.tsx. Long content scrolls inside the panel.
-*/
 const dialogOverlayClass = 'tn-dialog-overlay fixed inset-0 z-90 bg-black/40';
 const dialogPanelClass = (size: DialogSize) =>
 	cn(
@@ -118,10 +99,6 @@ const FORM_FIELDS =
 	'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [role="combobox"]:not([disabled])';
 const ACTIONS = 'button:not([disabled]):not([data-dialog-close])';
 
-// Where focus lands when any dialog opens. The close (X) button never takes initial focus:
-// focused, it shows its ring and tooltip, and Escape would close only the tooltip.
-// Order: an element marked `data-autofocus` (or `autofocus`), the first form field, the primary action
-// (a submit button, else the last footer action), else the dialog container itself.
 function initialFocusTarget(content: HTMLElement): HTMLElement {
 	const actions = [...content.querySelectorAll<HTMLElement>(ACTIONS)];
 	return (
@@ -137,9 +114,6 @@ function initialFocusTarget(content: HTMLElement): HTMLElement {
 	);
 }
 
-// Time of the last Tab key press per document. Keyboard navigation inside a dialog's focus trap moves
-// focus with Tab, so a focus right after one is keyboard focus; anything else (initial auto-focus,
-// focus restored by script, a pointer press) is not.
 const lastTabPress = new WeakMap<Document, number>();
 function trackTabKey(doc: Document) {
 	if (lastTabPress.has(doc)) {
@@ -160,9 +134,6 @@ function trackTabKey(doc: Document) {
 
 const KEYBOARD_FOCUS_WINDOW_MS = 500;
 
-// The close (X) button's tooltip opens on hover and on Tab focus only. Other focus is default-prevented,
-// which makes Radix's trigger skip opening the tooltip. Escape while the tooltip is showing closes the
-// dialog too, so one Escape is always enough. Dialogs never focus this button initially (see DialogContent).
 const DialogCloseButton = React.forwardRef<
 	HTMLButtonElement,
 	Omit<ButtonProps, 'children'>
@@ -227,13 +198,7 @@ const DialogCloseButton = React.forwardRef<
 type DialogContentProps = React.ComponentPropsWithoutRef<
 	typeof DialogPrimitive.Content
 > & {
-	/**
-	Width preset; defaults to "md".
-	*/
 	size?: DialogSize;
-	/**
-	Hides the close (X) button in the top-right corner.
-	*/
 	hideClose?: boolean;
 };
 
@@ -254,7 +219,6 @@ const DialogContent = React.forwardRef<
 		ref,
 	) => {
 		const open = React.useContext(DialogOpenContext);
-		// Uncontrolled dialogs (open === undefined) never freeze.
 		const shownChildren = useRetainedValue(children, open !== false);
 		const contentRef = React.useRef<HTMLDivElement | null>(null);
 		const openerRef = React.useRef<Opener>({element: null, dialog: null});
@@ -276,7 +240,6 @@ const DialogContent = React.forwardRef<
 					ref={setRefs}
 					tabIndex={-1}
 					className={cn(dialogPanelClass(size), className)}
-					// A caller's own onOpenAutoFocus that calls preventDefault keeps full control.
 					onOpenAutoFocus={(event) => {
 						openerRef.current = captureOpener();
 						onOpenAutoFocus?.(event);
@@ -285,7 +248,6 @@ const DialogContent = React.forwardRef<
 						}
 
 						event.preventDefault();
-						// The container is focusable (tabIndex -1) and has no visible focus ring.
 						initialFocusTarget(contentRef.current).focus();
 					}}
 					onCloseAutoFocus={(event) => {
@@ -304,7 +266,6 @@ const DialogContent = React.forwardRef<
 );
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-// Title and description stack on the left; the right padding keeps long titles clear of the close button.
 const DialogHeader = ({
 	className,
 	...props
@@ -319,9 +280,6 @@ const DialogHeader = ({
 );
 DialogHeader.displayName = 'DialogHeader';
 
-/**
-The dialog's main content between header and footer: stacked fields with even spacing.
-*/
 const DialogBody = ({
 	className,
 	...props
@@ -336,8 +294,6 @@ const DialogBody = ({
 );
 DialogBody.displayName = 'DialogBody';
 
-// Actions sit on the right: Cancel (outline or ghost) first, the primary action last. `start` content
-// (for example a Back button) is pushed to the left edge.
 const DialogFooter = ({
 	className,
 	...props

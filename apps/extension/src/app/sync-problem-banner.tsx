@@ -13,11 +13,6 @@ import {
 } from './sync-indicator';
 import {cn} from '@/lib/utils';
 
-/**
-Shown on the dashboard while the connected sync server and this browser do not match: sync stopped over another
-protocol, or the server lacks features. A stopped sync has no Dismiss and goes away once the server or the app is
-updated. Missing features can be dismissed on this browser until the server version or the list changes.
-*/
 export function SyncProblemBanner() {
 	const status = useSyncStatus();
 	const dismissed = useLocalValue(SYNC_DISMISSED_KEY);
