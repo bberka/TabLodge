@@ -585,3 +585,31 @@ test('the kept copies stay listed after the week until pruning removes them', as
 	assert.equal(await store.pruneRecoveryCopy(), true);
 	assert.equal(backend.data.has(PREUPGRADE_KEY), false);
 });
+
+test('an upgrade whose root write succeeds but whose confirming read fails keeps every page and chunk', async () => {
+	const {backend, base} = await storedInLayout10(120, 120);
+	const store = createLibraryState(backend);
+	const set = backend.set.bind(backend);
+	let switched = false;
+	backend.set = async (values) => {
+		await set(values);
+		if (!Object.keys(values).includes(STATE_KEY)) {
+			return;
+		}
+
+		switched = true;
+		throw new Error('answer lost');
+	};
+
+	backend.onGet = async () => {
+		if (switched) {
+			throw new Error('read failed');
+		}
+	};
+
+	await assert.rejects(store.upgrade(), /answer lost/);
+	backend.onGet = undefined;
+	assert.equal(stateOf(backend).schemaVersion, 11);
+	assert.deepEqual(await store.read(), expected(base));
+	assert.deepEqual(await store.verify(), []);
+});

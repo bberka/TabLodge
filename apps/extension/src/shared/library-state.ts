@@ -1312,21 +1312,24 @@ export function createLibraryState(
 			});
 			await backend.set({[STATE_KEY]: storedIndex(index, previous.garbage)});
 		} catch (error) {
-			const after = await getOne(STATE_KEY).catch(() => undefined);
+			const after = await getOne(STATE_KEY).then(
+				(value) => ({value}),
+				() => undefined,
+			);
+			if (!after) {
+				throw error;
+			}
+
 			if (
-				isRecordsEntry(after) &&
-				Number(after.schemaVersion) >= LAYOUT_VERSION
+				isRecordsEntry(after.value) &&
+				Number(after.value.schemaVersion) >= LAYOUT_VERSION
 			) {
 				await backend.remove([MIGRATION_KEY]).catch(() => undefined);
 				return {status: 'upgraded'};
 			}
 
 			await removeKeys(written).catch(() => undefined);
-			const root = await getOne(STATE_KEY).catch(() => undefined);
-			if (isRecordsEntry(root) && Number(root.schemaVersion) < LAYOUT_VERSION) {
-				await backend.remove([PREUPGRADE_KEY]).catch(() => undefined);
-			}
-
+			await backend.remove([PREUPGRADE_KEY]).catch(() => undefined);
 			await backend
 				.set({
 					[MIGRATION_KEY]: {
