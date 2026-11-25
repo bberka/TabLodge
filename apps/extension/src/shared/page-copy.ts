@@ -1,15 +1,3 @@
-/*
-Readable copies of saved pages, kept on one device and never synced. A copy is the page's text as blocks (headings,
-paragraphs, list items, quotes, code), never HTML, so showing one cannot run anything the page carried.
-
-Copies belong to an address, not to a link id: the phone's undo puts deleted links back under new ids, and a saved tab
-and a bookmark of the same page share one copy. A copy lives while any link in the library or the trash has its
-address, so it goes to the trash with its link and comes back with it; `sweep` drops the rest. Editing a link's
-address therefore drops its copy.
-
-The extension keeps copies in `chrome.storage.local`, the Android app in its key-value store. Both pass the same
-three calls (`CopyStorage`), so the index, the caps, and the budget are one piece of code.
-*/
 import {cleanText, normalizeUrl} from './library-normalize';
 import {hashText, isRecord} from './library-values';
 import {trashedUrls, type TrashEntry} from './trash';
@@ -34,9 +22,6 @@ export type PageCopy = {
 	blocks: CopyBlock[];
 };
 
-/**
-What the index says about one copy, enough to list copies and count the budget without reading them.
-*/
 export type CopyEntry = {
 	url: string;
 	key: string;
@@ -53,19 +38,9 @@ export type CopyStorage = {
 
 export const COPY_INDEX_KEY = 'tablodge.copies';
 export const COPY_DELETED = 'Copy deleted. The link stays saved.';
-/**
-Where the extension's capture script leaves a copy in the tab for the worker to collect.
-*/
 export const CAPTURE_GLOBAL = '__tablodgePageCopy';
 export const COPY_KEY_PREFIX = 'tablodge.copy.';
-/**
-Text in one copy, counted in characters.
-*/
 export const COPY_MAX_CHARS = 1_000_000;
-/**
-All copies on one device, counted as stored. A full backup carries every copy in one message and one ZIP entry, which
-the extension caps near 60 MB, so the budget leaves room for the library beside it.
-*/
 export const COPY_BUDGET = 25_000_000;
 const TITLE_MAX = 300;
 const BYLINE_MAX = 200;
@@ -90,10 +65,6 @@ export const copyTextLength = (blocks: readonly CopyBlock[]) =>
 
 export const copySize = (copy: PageCopy) => JSON.stringify(copy).length;
 
-/**
-A copy from storage, a backup, a page, or the network, checked field by field. Blocks of an unknown type or without
-text are dropped; undefined when it has no address. The caps are `keep`'s to enforce, so it can say which one failed.
-*/
 export function parsePageCopy(value: unknown): PageCopy | undefined {
 	if (!isRecord(value) || value.v !== 1 || !Array.isArray(value.blocks)) {
 		return undefined;
@@ -160,9 +131,6 @@ function parseIndex(value: unknown): CopyEntry[] {
 	});
 }
 
-/**
-Every address a copy may belong to: the links in the library and the links in the trash.
-*/
 export function copyLinkUrls(
 	library: {groups: readonly Session[]; bookmarks: readonly Bookmark[]},
 	trash: readonly TrashEntry[],
@@ -177,9 +145,6 @@ export function copyLinkUrls(
 
 export type CopyStore = ReturnType<typeof createCopyStore>;
 
-/**
-The copies on one device. Calls run one at a time, so the index and the stored copies never disagree.
-*/
 export function createCopyStore(
 	storage: CopyStorage,
 	budget: number = COPY_BUDGET,
@@ -207,9 +172,6 @@ export function createCopyStore(
 		return key;
 	};
 
-	/**
-	Stores one copy in an index that is already read, replacing the address's older copy.
-	*/
 	const place = async (
 		items: CopyEntry[],
 		copy: PageCopy,
@@ -282,10 +244,6 @@ export function createCopyStore(
 				return true;
 			}),
 
-		/**
-		Drops every copy whose address is not in `liveUrls`. Only pass a set read completely from the library and the
-		trash: a partial read would delete copies that still have a link. Returns how many went.
-		*/
 		sweep: (liveUrls: ReadonlySet<string>) =>
 			serial(async () => {
 				const items = await readIndex();
@@ -299,9 +257,6 @@ export function createCopyStore(
 				return gone.length;
 			}),
 
-		/**
-		Every copy, for a full backup.
-		*/
 		all: () =>
 			serial(async () => {
 				const items = await readIndex();
@@ -316,9 +271,6 @@ export function createCopyStore(
 				});
 			}),
 
-		/**
-		Copies from a backup, checked again and added under the same caps. Returns how many were kept.
-		*/
 		restore: (values: readonly unknown[]) =>
 			serial(async () => {
 				const items = await readIndex();

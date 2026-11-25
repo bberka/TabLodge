@@ -1,20 +1,3 @@
-// Pure fuzzy-search helpers shared by Settings search and the global finder: which items match a query, how well, and which characters to highlight.
-// Matching is case-insensitive, treats hyphens, underscores and curly quotes like spaces/apostrophes, and every
-// word of the query must match somewhere. Each word is scored by its best match type, best first:
-//   the whole text ("sessions" in "Sessions")                           1000
-//   a whole word ("tabs" in "Include tabs")                              900
-//   the start of a word ("book" in "Bookmarks")                          800
-//   inside a word ("side" in "inside")                                   700
-//   the initials of a label's words ("sbd" in "Show bookmark dock")      600
-//   letters in order inside one word ("bkmrk" in "bookmark")             500, less for a wide span
-//   a typo ("bokmark", "sesions"): one edit for 4+ letters (two for 7+)  200 / 150
-// A field lowers the score a little (label 0, help 15, options and keywords 30), never enough to cross into
-// the next match type. A typo is only used when the word has no other kind of match anywhere in the texts,
-// so typos can never outrank a real match. Fuzzy matches need at least three letters ("up" stays strict).
-
-/**
-Lower-cases and unifies punctuation without changing the text's length, so match offsets still fit the original.
-*/
 export function fold(value: string): string {
 	return value
 		.toLocaleLowerCase()
@@ -40,15 +23,9 @@ const ORDER_BONUS = 10;
 const ADJACENT_BONUS = 10;
 const FULL_QUERY_BONUS = 40;
 
-/**
-How much a field lowers a match: the label (first text) none, the help (second text) a little, others more.
-*/
 const fieldPenalty = (index: number) =>
 	index === 0 ? 0 : index === 1 ? 15 : 30;
 
-/**
-Words of a query, folded; empty when the query is blank.
-*/
 export function searchTerms(query: string): string[] {
 	return fold(query).split(/\s+/).filter(Boolean);
 }
@@ -62,9 +39,6 @@ function wordsOf(haystack: string): Array<{start: number; text: string}> {
 	return words;
 }
 
-/**
-Optimal-string-alignment edit distance (insert, delete, replace, swap neighbours), stopping early past `max`.
-*/
 function editDistance(a: string, b: string, max: number): number {
 	if (Math.abs(a.length - b.length) > max) {
 		return max + 1;
@@ -98,10 +72,6 @@ function editDistance(a: string, b: string, max: number): number {
 	return rows[a.length][b.length];
 }
 
-/**
-Literal occurrences of `term` (it may contain punctuation such as an apostrophe): the whole text, a whole
-word, the start of a word, or inside a word (three letters or more).
-*/
 function literalHits(haystack: string, term: string): Hit[] {
 	const hits: Hit[] = [];
 	for (
@@ -171,7 +141,6 @@ function fuzzyHits(
 	const words = wordsOf(haystack);
 	const maxEdits = term.length >= 7 ? 2 : 1;
 	for (const word of words) {
-		// A typo or missing letter, compared with the word's start (so "sesion" finds "sessions").
 		if (allowTypos && term.length >= 4) {
 			for (const size of [term.length, term.length - 1, term.length + 1]) {
 				const part = word.text.slice(0, size);
@@ -192,7 +161,6 @@ function fuzzyHits(
 		}
 	}
 
-	// Initials of words ("sbd" for "Show bookmark dock"), in order; skipping words costs a little.
 	if (allowInitials) {
 		const ranges: Range[] = [];
 		let index = 0;
@@ -225,9 +193,6 @@ function fuzzyHits(
 	return hits;
 }
 
-/**
-Every way `term` matches the text; typos are dropped when the text has any other kind of match.
-*/
 function hitsIn(
 	haystack: string,
 	term: string,
@@ -235,13 +200,10 @@ function hitsIn(
 	allowTypos = true,
 ): Hit[] {
 	const literal = literalHits(haystack, term);
-	// Every literal match outranks every fuzzy one (and typos are dropped whenever another kind of match
-	// exists), so fuzzy matching only runs when the text has no literal match.
 	if (literal.length > 0) {
 		return literal;
 	}
 
-	// Initials and in-word letter matches need the term's letters in order somewhere in the text.
 	if (!allowTypos && !hasLettersInOrder(haystack, term)) {
 		return [];
 	}
@@ -262,9 +224,6 @@ function hasLettersInOrder(haystack: string, term: string): boolean {
 	return true;
 }
 
-/**
-The best match type of a text: the score and the ranges of every hit of that type.
-*/
 function bestHit(
 	haystack: string,
 	term: string,
@@ -302,9 +261,6 @@ function bestHit(
 
 type TermMatch = {score: number; field: number; start: number; end: number};
 
-/**
-The best place for a term among all texts: a typo only counts when no text has a better kind of match.
-*/
 function bestMatch(
 	folded: readonly string[],
 	term: string,
@@ -340,12 +296,6 @@ function bestMatch(
 	return best;
 }
 
-/**
-How well the query matches the texts: 0 for no match (or a missing word), otherwise higher is better.
-The first text is the row's label, the second its help; later texts (options, keywords) count least. Matches
-are ordered by kind (see the top of this file), then by field. Each word scores its best match and the scores
-add up, with a bonus when the words appear in order or side by side. A blank query scores 1.
-*/
 export function scoreQuery(
 	query: string,
 	texts: ReadonlyArray<string | null | undefined>,
@@ -356,11 +306,6 @@ export function scoreQuery(
 	);
 }
 
-/**
-Like scoreQuery for a query already split into `searchTerms` and texts already `fold`ed, so a long list can be
-scored without folding every text again on every keystroke. `typos: false` skips the (slower) typo matching;
-scores of texts that match without typos are the same either way.
-*/
 export function scoreFolded(
 	terms: readonly string[],
 	folded: readonly string[],
@@ -408,9 +353,6 @@ export function scoreFolded(
 	return total;
 }
 
-/**
-True when the query is blank, or every one of its words matches at least one of the texts.
-*/
 export function matchesQuery(
 	query: string,
 	texts: ReadonlyArray<string | null | undefined>,
@@ -418,9 +360,6 @@ export function matchesQuery(
 	return scoreQuery(query, texts) > 0;
 }
 
-/**
-Keeps the items that match and orders them best first (ties: shorter label first, then original order).
-*/
 export function rankByQuery<T>(
 	query: string,
 	items: readonly T[],
@@ -447,9 +386,6 @@ export function rankByQuery<T>(
 		.map((entry) => entry.item);
 }
 
-/**
-Orders all items best match first, keeping the ones that do not match (after the matches, in their original order).
-*/
 export function sortByQuery<T>(
 	query: string,
 	items: readonly T[],
@@ -474,9 +410,6 @@ export function sortByQuery<T>(
 		.map((entry) => entry.item);
 }
 
-/**
-True when the text matches at least one word of the query (used to list matching select options).
-*/
 export function matchesAnyTerm(query: string, text: string): boolean {
 	const haystack = fold(text);
 	return searchTerms(query).some((term) =>
@@ -489,10 +422,6 @@ export type HighlightSegment = {
 	match: boolean;
 };
 
-/**
-Splits a text into plain and matching parts for every word of the query; overlapping matches merge.
-Fuzzy matches highlight just the characters that matched.
-*/
 export function highlightSegments(
 	text: string,
 	query: string,

@@ -36,9 +36,6 @@ const TRACKING_PARAMETER_NAMES = new Set([
 	'yclid',
 ]);
 
-/**
-Parameters that are only trackers on certain sites. `s` and `t` are generic names, so they are removed on X status links and nowhere else.
-*/
 const SITE_TRACKING_RULES: ReadonlyArray<{
 	hosts: readonly string[];
 	path?: RegExp;
@@ -75,9 +72,6 @@ function isTrackingParameter(name: string, url: URL) {
 	);
 }
 
-/**
-Removes common tracking parameters from an HTTP or HTTPS URL, leaving other query values and the fragment intact.
-*/
 export function stripTrackingParameters(rawUrl: string): string {
 	try {
 		const url = new URL(rawUrl);
@@ -92,9 +86,7 @@ export function stripTrackingParameters(rawUrl: string): string {
 			let name = key;
 			try {
 				name = decodeURIComponent(key.replaceAll('+', ' '));
-			} catch {
-				// Keep malformed keys unless their raw form is a known tracker.
-			}
+			} catch {}
 
 			return !isTrackingParameter(name, url);
 		});
