@@ -651,13 +651,6 @@ export function createLibraryState(
 					sessionPages: [],
 					bookmarks: [],
 				};
-				plan.sessionPages = planParts(
-					plan.sessions.map((session) => session.entry),
-					SESSION_PAGE_KEY_PREFIX,
-					rev,
-					previous.sessionPages,
-					previous.sessions,
-				);
 				const items = Array.isArray(next.bookmarks) ? next.bookmarks : [];
 				if (scope.bookmarks === 'all') {
 					plan.bookmarks = planParts(
@@ -692,6 +685,13 @@ export function createLibraryState(
 				}
 
 				await carrySidecars(plan, previous);
+				plan.sessionPages = planParts(
+					plan.sessions.map((session) => session.entry),
+					SESSION_PAGE_KEY_PREFIX,
+					rev,
+					previous.sessionPages,
+					previous.sessions,
+				);
 				await commitPlan(next, plan, rev, previous, 11, (stored) => {
 					announce?.({from, to: stampOf(stored)});
 				});

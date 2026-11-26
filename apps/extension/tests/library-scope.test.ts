@@ -7,6 +7,7 @@ import {
 	SESSION_PAGE_KEY_PREFIX,
 	STATE_KEY,
 } from '../src/shared/library-state';
+import {canonicalJson, hashText} from '../src/shared/library-values';
 import {library, MemoryBackend, normalize, session} from './library-memory';
 
 type Raw = Record<string, unknown>;
@@ -221,4 +222,34 @@ test('a layout 10 library and a damaged record fall back to the whole read', asy
 	current.backend.data.delete(`${SESSION_KEY_PREFIX}s1.1`);
 	assert.equal(await current.store.openScope({sessions: ['s1']}), null);
 	assert.ok(await current.store.openScope({sessions: ['s2']}));
+});
+
+test('removing the only stamped tab of a session leaves an index page that still checks out', async () => {
+	const {backend, store} = await stored(3, 0);
+	const root = backend.data.get(STATE_KEY) as {
+		sessionPages: Array<{key: string; hash: string}>;
+	};
+	const [page] = root.sessionPages;
+	const {items: entries} = backend.data.get(page.key) as {items: Raw[]};
+	const flagged = entries.map((entry) =>
+		entry.id === 's1' ? {...entry, tabSync: true} : entry,
+	);
+	backend.data.set(page.key, {items: flagged});
+	page.hash = hashText(canonicalJson(flagged));
+	const key = `${SESSION_KEY_PREFIX}s1.1`;
+	backend.data.set(key, {
+		...(backend.data.get(key) as Raw),
+		$sync: {tabs: {'s1-t0': {h: 'stamp', d: 'device'}}},
+	});
+
+	const opened = (await store.openScope({sessions: ['s1']}))!;
+	const [edited] = items(opened.raw, 'groups');
+	const tabs = (edited.tabs as Raw[]).filter((tab) => tab.id !== 's1-t0');
+	await opened.commit({...opened.raw, groups: [{...edited, tabs}]});
+
+	assert.deepEqual(await store.verify(), []);
+	assert.deepEqual(
+		await createLibraryState(backend).read(),
+		await store.read(),
+	);
 });
