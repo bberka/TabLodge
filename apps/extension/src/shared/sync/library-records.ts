@@ -212,6 +212,7 @@ export function splitLibrary(
 	trash: readonly TrashEntry[] = [],
 	sources: readonly SyncedSource[] = [],
 	outside: Readonly<Record<string, unknown>> = {},
+	onServer: ReadonlySet<string> = new Set(),
 ): Map<string, LibraryRecord> {
 	const records = new Map<string, LibraryRecord>();
 	const add = (record: LibraryRecord) => records.set(recordKey(record), record);
@@ -256,7 +257,10 @@ export function splitLibrary(
 	}
 
 	for (const entry of trash) {
-		const value = syncedTrash(entry);
+		const value = syncedTrash(
+			entry,
+			onServer.has(recordKey({kind: 'trash', id: entry.id})),
+		);
 		if (value) {
 			add({kind: 'trash', id: entry.id, value});
 		}

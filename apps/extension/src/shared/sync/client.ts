@@ -20,6 +20,7 @@ import {
 	receive,
 	restartAfterServerReset,
 	settle,
+	settledKeys,
 	startResync,
 	type SyncState,
 } from './engine';
@@ -613,6 +614,8 @@ export function createSyncClient(host: SyncHost) {
 	) {
 		return host.mutate(async () => {
 			const store = await host.readLibrary();
+			const stored = parseState(await host.get(SYNC_STATE_KEY));
+			let state = stored ?? newSyncState(host.randomId());
 			const records = splitLibrary(
 				store,
 				trashOn && host.trash ? await host.trash.read() : [],
@@ -620,9 +623,8 @@ export function createSyncClient(host: SyncHost) {
 				settingKindOn && host.outsideSettings
 					? await host.outsideSettings.read()
 					: {},
+				settledKeys(state),
 			);
-			const stored = parseState(await host.get(SYNC_STATE_KEY));
-			let state = stored ?? newSyncState(host.randomId());
 			if (state.joined) {
 				state = await captureLocal(state, records);
 			}

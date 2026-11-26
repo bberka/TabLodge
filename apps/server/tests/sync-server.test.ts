@@ -6,8 +6,20 @@ import {isAuthMessage, sameToken} from '../src/live';
 import {sqlite} from '../src/node-sqlite';
 import {SqlChangeLog} from '../src/sql-change-log';
 import {EXPORT_FORMAT, exportLibrary, importLibrary} from '../src/transfer';
-import type {SyncChange} from '../../extension/src/shared/sync/changes';
+import {
+	recordKey,
+	type SyncChange,
+} from '../../extension/src/shared/sync/changes';
 import {startClock, tick} from '../../extension/src/shared/sync/clock';
+import {
+	generateDataKey,
+	importDataKey,
+	sealValue,
+} from '../../extension/src/shared/private-lock';
+import {
+	syncedTrash,
+	TRASH_SYNC_MAX_BYTES,
+} from '../../extension/src/shared/trash';
 
 const TOKEN = 'test-token-0123456789-abcdefghijklmnop';
 const T0 = Date.UTC(2026, 10, 1);
@@ -150,6 +162,51 @@ test('a push with a malformed change is refused whole', async () => {
 	);
 	assert.equal((await call('/v1/changes?cursor=-1')).status, 400);
 	assert.equal((await call('/v1/changes?limit=5000')).status, 400);
+});
+
+test('the largest trash entry apps send is accepted, sealed or not', async () => {
+	const {push} = server();
+	const entry = {
+		id: 'i'.repeat(100),
+		kind: 'bookmark' as const,
+		deletedAt: T0,
+		label: '',
+		origin: '',
+		count: 1,
+		data: {text: ''},
+	};
+	const room =
+		TRASH_SYNC_MAX_BYTES -
+		new TextEncoder().encode(JSON.stringify(entry)).length;
+	const key = await importDataKey(generateDataKey());
+	for (const [index, unit] of ['x', '€', '"'].entries()) {
+		const width = new TextEncoder().encode(JSON.stringify(unit)).length - 2;
+		const text =
+			unit.repeat(Math.floor(room / width)) + 'x'.repeat(room % width);
+		const value = syncedTrash({...entry, data: {text}});
+		assert.ok(value);
+		assert.equal(
+			new TextEncoder().encode(JSON.stringify(value)).length,
+			TRASH_SYNC_MAX_BYTES,
+		);
+		const change = {
+			kind: 'trash' as const,
+			id: entry.id,
+			h: tick(startClock(), T0 + index * 2).h,
+			d: '"'.repeat(64),
+			value,
+		};
+		const plain = await push([change]);
+		assert.deepEqual(plain.body.results, ['applied']);
+		const sealed = await push([
+			{
+				...change,
+				h: tick(startClock(), T0 + index * 2 + 1).h,
+				value: await sealValue(key, recordKey(change), value),
+			},
+		]);
+		assert.deepEqual(sealed.body.results, ['applied']);
+	}
 });
 
 test('a full library refuses new records but still takes deletes', async () => {
