@@ -1077,6 +1077,44 @@ test('an oversized trash entry already on the server stays on every device until
 	assert.equal((await a.client.status()).error, null);
 });
 
+const sealedTooLargeCodec: SyncCodec = {
+	...wrapCodec,
+	async seal(change) {
+		const sealed = await wrapCodec.seal(change);
+		return change.id === 'older' && !change.deleted
+			? {...sealed, value: {...(sealed.value as object), pad: PADDING}}
+			: sealed;
+	},
+};
+const PADDING = 'x'.repeat(100_000);
+
+test('resealing a trash entry the server holds, too large once sealed, neither deletes it nor stops sync', async () => {
+	const server = makeServer();
+	const plain = makeDevice(server, emptyStore(), {withTrash: true});
+	await plain.client.connect(URL_BASE, TOKEN);
+	plain.trash = [trashEntry('older', 'x'.repeat(190_000))];
+	await plain.client.syncNow();
+
+	const sealer = makeDevice(server, emptyStore(), {
+		withTrash: true,
+		codec: sealedTooLargeCodec,
+	});
+	await sealer.client.connect(URL_BASE, TOKEN);
+	await sealer.client.resendAll();
+	sealer.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await sealer.client.syncNow();
+	await plain.client.syncNow();
+
+	assert.deepEqual(trashIds(sealer), ['older']);
+	assert.deepEqual(trashIds(plain), ['older']);
+	const lines = await server.export();
+	assert.ok(lines.some((line) => line.includes('"id":"b1"')));
+	const kept = lines.find((line) => line.includes('"id":"older"'));
+	assert.doesNotMatch(kept ?? '', /"deleted"|"sealed"/);
+	const status = await sealer.client.status();
+	assert.deepEqual([status.error, status.pending], [null, 0]);
+});
+
 test('a server without the trash feature keeps syncing the library and leaves the trash alone', async () => {
 	const server = makeServer({legacy: true});
 	const a = makeDevice(server, emptyStore(), {withTrash: true});

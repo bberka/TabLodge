@@ -11,8 +11,9 @@ import {
 	orderList,
 	outgoing,
 	receive,
+	restartAfterServerReset,
 	settle,
-	settledKeys,
+	serverHeldKeys,
 	startResync,
 	type SyncState,
 } from '../src/shared/sync/engine';
@@ -570,7 +571,7 @@ test('an oversized trash entry the server already holds is not sent as a delete'
 		new Set(['trash:held']),
 	);
 	let state = {...capture(newSyncState('dev'), records, T0), joined: true};
-	assert.equal(settledKeys(state).has('trash:held'), false);
+	assert.equal(serverHeldKeys(state).has('trash:held'), false);
 
 	const sent = outgoing(state, records, 100);
 	({state} = settle(
@@ -578,20 +579,26 @@ test('an oversized trash entry the server already holds is not sent as a delete'
 		sent,
 		sent.map(() => 'applied'),
 	));
-	assert.equal(settledKeys(state).has('trash:held'), true);
+	assert.equal(serverHeldKeys(state).has('trash:held'), true);
 
-	const again = splitLibrary(emptyStore(), [huge], [], {}, settledKeys(state));
+	const again = splitLibrary(
+		emptyStore(),
+		[huge],
+		[],
+		{},
+		serverHeldKeys(state),
+	);
 	assert.equal(capture(state, again, T0 + 1), state);
 
 	const removed = capture(
 		state,
-		splitLibrary(emptyStore(), [], [], {}, settledKeys(state)),
+		splitLibrary(emptyStore(), [], [], {}, serverHeldKeys(state)),
 		T0 + 2,
 	);
 	assert.equal(removed.shadow['trash:held'].deleted, true);
 });
 
-test('an oversized trash entry still waiting to be sent leaves the queue as a delete', () => {
+test('an oversized trash entry the server never accepted leaves the queue as a delete', () => {
 	const huge = trashedOfBytes('stuck', TRASH_SYNC_MAX_BYTES + 1, '€');
 	const queued = capture(
 		newSyncState('dev'),
@@ -603,7 +610,7 @@ test('an oversized trash entry still waiting to be sent leaves the queue as a de
 		[huge],
 		[],
 		{},
-		settledKeys(queued),
+		serverHeldKeys(queued),
 	);
 	const sent = outgoing(capture(queued, records, T0 + 1), records, 100).filter(
 		(change) => change.kind === 'trash',
@@ -611,6 +618,128 @@ test('an oversized trash entry still waiting to be sent leaves the queue as a de
 	assert.deepEqual(
 		sent.map((change) => [change.id, change.deleted, 'value' in change]),
 		[['stuck', true, false]],
+	);
+});
+
+const hugeTrash = trashedOfBytes('huge', TRASH_SYNC_MAX_BYTES + 1, '€');
+
+const snapshotOf = (state: SyncState, trash: TrashEntry[] = [hugeTrash]) =>
+	splitLibrary(emptyStore(), trash, [], {}, serverHeldKeys(state));
+
+const holdingHugeTrash = (): SyncState => {
+	const records = splitLibrary(
+		emptyStore(),
+		[hugeTrash],
+		[],
+		{},
+		new Set(['trash:huge']),
+	);
+	const state = {...capture(newSyncState('dev'), records, T0), joined: true};
+	const sent = outgoing(state, records, 100);
+	return settle(
+		state,
+		sent,
+		sent.map(() => 'applied'),
+	).state;
+};
+
+const withResetHashes = (state: SyncState): SyncState => ({
+	...state,
+	shadow: Object.fromEntries(
+		Object.entries(state.shadow).map(([key, entry]) => [
+			key,
+			entry.deleted ? entry : {...entry, hash: ''},
+		]),
+	),
+});
+
+const sentTrash = (state: SyncState) =>
+	outgoing(state, snapshotOf(state), 100).filter(
+		(change) => change.kind === 'trash',
+	);
+
+test('a trash entry the server holds is not deleted when a resend is never acknowledged', () => {
+	const held = holdingHugeTrash();
+	const reset = withResetHashes(held);
+	const queued = capture(reset, snapshotOf(reset), T0 + 1);
+	assert.ok(queued.outbox.includes('trash:huge'));
+
+	const next = capture(queued, snapshotOf(queued), T0 + 2);
+
+	assert.equal(next.shadow['trash:huge'].deleted, undefined);
+	assert.deepEqual(
+		sentTrash(next).map((change) => [change.deleted, 'value' in change]),
+		[[undefined, true]],
+	);
+});
+
+test('a queued trash entry stored before acceptance was tracked is not deleted', () => {
+	const state = holdingHugeTrash();
+	const stored = {
+		...state,
+		outbox: ['trash:huge'],
+		shadow: {'trash:huge': state.shadow['trash:huge']},
+	};
+	assert.equal('unaccepted' in stored.shadow['trash:huge'], false);
+
+	const next = capture(stored, snapshotOf(stored), T0 + 1);
+
+	assert.equal(next.shadow['trash:huge'].deleted, undefined);
+});
+
+test('an oversized trash entry the server never accepted stays on the device', () => {
+	const first = capture(
+		newSyncState('dev'),
+		snapshotOf(newSyncState('dev')),
+		T0,
+	);
+	assert.equal(first.shadow['trash:huge'], undefined);
+	assert.deepEqual(sentTrash(first), []);
+
+	const small = [trashed('huge', 1)];
+	const queued = capture(
+		newSyncState('dev'),
+		snapshotOf(newSyncState('dev'), small),
+		T0,
+	);
+	for (const result of ['stale', 'clock', 'unsendable'] as const) {
+		const sent = outgoing(queued, snapshotOf(queued, small), 100);
+		const {state} = settle(
+			queued,
+			sent,
+			sent.map(() => result),
+		);
+		assert.equal(serverHeldKeys(state).has('trash:huge'), false, result);
+	}
+});
+
+test('a pulled copy of a queued trash entry shows the server holds it', () => {
+	const records = snapshotOf(newSyncState('dev'), [trashed('a', 1)]);
+	const queued = capture(newSyncState('dev'), records, T0);
+	assert.equal(serverHeldKeys(queued).has('trash:a'), false);
+
+	const changes = outgoing(queued, records, 100).filter(
+		(change) => change.kind === 'trash',
+	);
+	const {state} = receive(
+		queued,
+		records,
+		{changes, cursor: 1, purged: 0},
+		T0 + 1,
+	);
+
+	assert.equal(serverHeldKeys(state).has('trash:a'), true);
+});
+
+test('a server reset forgets that the server held a trash entry', () => {
+	const restarted = restartAfterServerReset(holdingHugeTrash());
+	assert.equal(serverHeldKeys(restarted).has('trash:huge'), false);
+
+	const next = capture(restarted, snapshotOf(restarted), T0 + 1);
+
+	assert.deepEqual(
+		sentTrash(next).map((change) => [change.deleted, 'value' in change]),
+		[[true, false]],
 	);
 });
 
