@@ -96,6 +96,7 @@ import {
 	looksLikeZip,
 	protectFullBackup,
 	protectedFullBackupFilename,
+	importFileLimit,
 	readFullBackup,
 	readProtectedFullBackup,
 	type FullBackupContents,
@@ -112,6 +113,7 @@ import {
 } from '../shared/import-link';
 import {validateCredential, weakPasswordHint} from '../shared/passcode';
 import {siteName} from '../shared/web-url';
+import {backupImageParts, restoreBackupImages} from './saved-images';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
@@ -774,9 +776,11 @@ export function ShareDialog({
 				throw new Error(result?.error || 'Could not read your data.');
 			}
 
-			const {bytes, manifest} = buildFullBackup(result, {
-				appVersion: PROJECT.version,
-			});
+			const {images: thumbs, ...parts} = result;
+			const {bytes, manifest} = buildFullBackup(
+				{...parts, ...(await backupImageParts(thumbs))},
+				{appVersion: PROJECT.version},
+			);
 			const protectedBytes = protect
 				? await protectFullBackup(bytes, {value: passcode.value})
 				: undefined;
@@ -1411,9 +1415,12 @@ export function ImportDialog({
 
 		const generation = ++readGenerationRef.current;
 		setError('');
-		if (file.size > MAX_IMPORT_BYTES) {
+		const limit = importFileLimit(file.name, MAX_IMPORT_BYTES);
+		if (file.size > limit) {
 			setReading(false);
-			setError(`“${file.name}” is larger than 45 MB.`);
+			setError(
+				`“${file.name}” is larger than ${Math.round(limit / (1024 * 1024))} MB.`,
+			);
 			return;
 		}
 
@@ -1682,6 +1689,7 @@ export function ImportDialog({
 				}
 
 				await send('ADD_PAGE_COPIES', {copies: full.copies});
+				await restoreBackupImages(full);
 
 				onOpenChange(false);
 				await onImported?.();
@@ -1703,6 +1711,8 @@ export function ImportDialog({
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not import this backup.');
 			}
+
+			await restoreBackupImages(full);
 
 			onOpenChange(false);
 			await onImported?.();
@@ -2187,6 +2197,7 @@ export function ImportDialog({
 								<Stat label="Snapshots" value={full.counts.snapshots} />
 								<Stat label="Trash bin items" value={full.counts.trash} />
 								<Stat label="Page copies" value={full.counts.copies} />
+								<Stat label="Saved images" value={full.counts.images} />
 							</dl>
 							<div className="rounded-lg bg-muted/40 p-3">
 								<OptionRow id="full-import-mode" label="How to bring it in">

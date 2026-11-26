@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useState, useSyncExternalStore} from 'react';
 import {Share, StyleSheet, Text, View} from 'react-native';
+import {allImageThumbs} from '../../library/image-thumbs';
 import {
 	buildExport,
 	type ExportData,
@@ -217,6 +218,7 @@ export function ShareSheet({
 					password,
 					view,
 					view === 'regular' ? await allCopies() : [],
+					view === 'regular' ? await allImageThumbs() : [],
 				);
 				await shareBinaryFile(file.filename, file.mime, file.bytes);
 			} else {

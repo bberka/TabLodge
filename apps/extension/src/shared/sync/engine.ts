@@ -28,7 +28,7 @@ export type SyncState = {
 	outbox: string[];
 	unseen?: string[];
 	held?: SyncChange[];
-	pulled?: Array<'trash' | 'note' | 'tag' | 'source' | 'setting'>;
+	pulled?: Array<'trash' | 'note' | 'tag' | 'source' | 'setting' | 'thumb'>;
 };
 
 export type Records = Map<string, LibraryRecord>;

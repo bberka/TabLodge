@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import {strToU8, zipSync} from 'fflate';
 import {beforeEach, describe, test, vi} from 'vite-plus/test';
+import {
+	base64ToBytes,
+	type SavedThumb,
+} from '../../extension/src/shared/image-store';
+import {picture} from '../../extension/tests/image-fixtures';
 import {looksEncrypted} from '../../extension/src/shared/crypto-envelope';
 import {
+	backupImageFile,
 	buildFullBackup,
 	protectFullBackup,
 	readFullBackup,
@@ -105,6 +111,7 @@ describe('a backup the phone makes, read by the extension', () => {
 			snapshots: 0,
 			trash: 0,
 			copies: 0,
+			images: 0,
 		});
 		assert.equal(contents.snapshots, null);
 		assert.equal(contents.trash, null);
@@ -222,6 +229,40 @@ describe('a backup the phone makes, read by the extension', () => {
 		assert.ok(restored.ok);
 		assert.deepEqual(restored.copies, [copy]);
 		assert.equal(restored.counts.copies, 1);
+	});
+
+	test('thumbnails travel in the ZIP, and an extension backup gives the phone thumbnails without the picture files', async () => {
+		const {data, ...thumb} = picture();
+		const file = await buildBackup(
+			phoneLibrary(1, 1, 1),
+			'TabLodge',
+			undefined,
+			'regular',
+			[],
+			[thumb as SavedThumb],
+		);
+		const own = await readBackup(file.bytes);
+		assert.ok(own.ok);
+		assert.deepEqual(own.images, [thumb]);
+		assert.equal(own.counts.images, 1);
+
+		const fromExtension = buildFullBackup(
+			{
+				state: phoneLibrary(1, 1, 1),
+				preferences: null,
+				snapshots: null,
+				trash: null,
+				images: [thumb],
+				imageFiles: {
+					[backupImageFile({url: thumb.url, type: 'image/png'})]:
+						base64ToBytes(data),
+				},
+			},
+			{appVersion: '1'},
+		);
+		const read = await readBackup(fromExtension.bytes);
+		assert.ok(read.ok);
+		assert.deepEqual(read.images, [thumb], 'no original is read on the phone');
 	});
 
 	test('the phone’s own settings travel in the library settings the extension keeps as an unread entry', async () => {

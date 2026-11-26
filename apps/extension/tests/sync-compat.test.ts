@@ -48,6 +48,7 @@ test('a server with every feature has no problem, and one without the newest nam
 		[
 			'notes',
 			'tags',
+			'thumbs',
 			'sources',
 			'settings',
 			'shared-pages',
@@ -62,7 +63,7 @@ test('a server with every feature has no problem, and one without the newest nam
 		stopped: false,
 		title: 'Your sync server needs an update',
 		detail:
-			'Until it runs 0.4.0 or later: Bookmark notes stay on this device. Bookmark tags stay on this device. Sources settings in the browser extension stay in each browser. Settings added since 0.3.0 stay on this device. Get a link cannot share pages. Shared pages have no Add to TabLodge button, and Share does not list the links made from a column or session. Live shared links and password-protected shared pages are not available. Keep a copy on the phone fetches pages itself, not through the server.',
+			'Until it runs 0.4.0 or later: Bookmark notes stay on this device. Bookmark tags stay on this device. Saved image thumbnails stay on the device that saved them. Sources settings in the browser extension stay in each browser. Settings added since 0.3.0 stay on this device. Get a link cannot share pages. Shared pages have no Add to TabLodge button, and Share does not list the links made from a column or session. Live shared links and password-protected shared pages are not available. Keep a copy on the phone fetches pages itself, not through the server.',
 	});
 });
 

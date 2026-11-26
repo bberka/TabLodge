@@ -833,6 +833,7 @@ export type TabLodgeResponses = {
 		snapshots: unknown;
 		trash: unknown;
 		copies: PageCopy[];
+		images: Array<SavedThumb & {held: boolean}>;
 	};
 	RESTORE_FULL_BACKUP: {
 		sessions: number;

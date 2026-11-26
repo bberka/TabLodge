@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import {looksEncrypted} from '../../../extension/src/shared/crypto-envelope';
 import {
+	backupImages,
 	buildFullBackup,
 	countFullBackup,
 	FullBackupError,
@@ -13,6 +14,7 @@ import {isRecord} from '../../../extension/src/shared/library-values';
 import {normalizeStore} from '../../../extension/src/shared/library-normalize';
 import type {Store} from '../../../extension/src/shared/types';
 import type {PageCopy} from '../../../extension/src/shared/page-copy';
+import type {SavedThumb} from '../../../extension/src/shared/image-store';
 import {unwrapKey, wrapKey} from '../../modules/tablodge-crypto';
 import {backupPreferences} from '../settings/preferences';
 import {isStore} from '../library/store-shape';
@@ -61,6 +63,7 @@ export async function buildBackup(
 	password?: string,
 	library: 'regular' | 'private' = 'regular',
 	copies: readonly PageCopy[] = [],
+	images: readonly SavedThumb[] = [],
 ): Promise<BackupFile> {
 	const now = new Date();
 	const fileApp = library === 'private' ? `${appName} private` : appName;
@@ -74,6 +77,7 @@ export async function buildBackup(
 			snapshots: null,
 			trash: null,
 			copies,
+			images,
 		},
 		{appVersion: Constants.expoConfig?.version ?? '', now},
 	);
@@ -101,6 +105,7 @@ export type BackupRead =
 			createdAt: string;
 			counts: FullBackupCounts;
 			copies: unknown[];
+			images: unknown[];
 			skipped: number;
 	  }
 	| {ok: false; reason: 'password' | 'wrong' | 'damaged'; message: string};
@@ -140,7 +145,7 @@ export async function readBackup(
 	}
 
 	try {
-		const contents = readFullBackup(zip);
+		const contents = readFullBackup(zip, {imageFiles: false});
 		if (!contents || !isStore(contents.state)) {
 			return {
 				ok: false,
@@ -163,8 +168,13 @@ export async function readBackup(
 				? contents.state.settings.mobileApp
 				: undefined,
 			createdAt: contents.manifest.createdAt,
-			counts: {...counts, copies: contents.counts.copies},
+			counts: {
+				...counts,
+				copies: contents.counts.copies,
+				images: contents.counts.images,
+			},
 			copies: Array.isArray(contents.copies) ? contents.copies : [],
+			images: backupImages(contents),
 			skipped: lostIn(contents.counts, counts),
 		};
 	} catch (error) {

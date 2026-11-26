@@ -1,4 +1,5 @@
 import type {Store} from '../types';
+import type {SyncedThumb} from '../image-store';
 import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
 import {type TrashEntry, refusedTrash} from '../trash';
@@ -28,6 +29,7 @@ import {
 	assemble,
 	isUntouchedDefault,
 	sourcesOf,
+	thumbsOf,
 	splitLibrary,
 	type SyncedSource,
 	trashOf,
@@ -50,9 +52,33 @@ export function createSyncToken(): string {
 }
 
 const PULL_LIMIT = 500;
-const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source', 'setting'] as const;
+const OPTIONAL_KINDS = [
+	'trash',
+	'note',
+	'tag',
+	'source',
+	'setting',
+	'thumb',
+] as const;
 type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
+const PUSH_MAX_CHARS = 5_000_000;
+
+function withinRequest(changes: SyncChange[]): SyncChange[] {
+	let size = 0;
+	const fitting: SyncChange[] = [];
+	for (const change of changes) {
+		size += JSON.stringify(change).length;
+		if (fitting.length > 0 && size > PUSH_MAX_CHARS) {
+			break;
+		}
+
+		fitting.push(change);
+	}
+
+	return fitting;
+}
+
 const LOCAL_CHANGE_DELAY_MS = 2500;
 const LOCAL_CHANGE_MAX_WAIT_MS = 10_000;
 const PUSH_CHECKPOINT_MS = 3000;
@@ -122,6 +148,10 @@ export type SyncHost = {
 			remove: string[],
 			was: ReadonlyMap<string, unknown>,
 		): Promise<void>;
+	};
+	thumbs?: {
+		read(): Promise<SyncedThumb[]>;
+		apply(put: unknown[], remove: string[]): Promise<void>;
 	};
 	outsideSettings?: {
 		defaults: Readonly<Record<string, unknown>>;
@@ -371,6 +401,7 @@ export function createSyncClient(host: SyncHost) {
 	let notesOn = false;
 	let tagsOn = false;
 	let sourcesOn = false;
+	let thumbsOn = false;
 	let settingKindOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
@@ -472,6 +503,7 @@ export function createSyncClient(host: SyncHost) {
 		(kind === 'note' && !notesOn) ||
 		(kind === 'tag' && !tagsOn) ||
 		(kind === 'source' && !sourcesOn) ||
+		(kind === 'thumb' && !thumbsOn) ||
 		(kind === 'setting' && !settingKindOn);
 
 	const resyncSupported = (state: SyncState): SyncState => {
@@ -485,15 +517,17 @@ export function createSyncClient(host: SyncHost) {
 	};
 
 	const queued = (state: SyncState, records: Records) =>
-		outgoing(
-			{
-				...state,
-				outbox: state.outbox.filter(
-					(key) => !unsupported(state.shadow[key]?.kind),
-				),
-			},
-			records,
-			PUSH_LIMIT,
+		withinRequest(
+			outgoing(
+				{
+					...state,
+					outbox: state.outbox.filter(
+						(key) => !unsupported(state.shadow[key]?.kind),
+					),
+				},
+				records,
+				PUSH_LIMIT,
+			),
 		);
 
 	const leftAlone = async (
@@ -505,6 +539,7 @@ export function createSyncClient(host: SyncHost) {
 			...(notesOn ? [] : (['note'] as const)),
 			...(tagsOn ? [] : (['tag'] as const)),
 			...(sourcesOn ? [] : (['source'] as const)),
+			...(thumbsOn ? [] : (['thumb'] as const)),
 			...(settingKindOn && state.pulled?.includes('setting')
 				? []
 				: (['setting'] as const)),
@@ -600,6 +635,23 @@ export function createSyncClient(host: SyncHost) {
 					await host.sources.apply(put, remove, was);
 				}
 			}
+
+			if (thumbsOn && host.thumbs) {
+				const put = thumbsOf(
+					[...records]
+						.filter(([key, record]) => before.get(key) !== record)
+						.map(([, record]) => record),
+				);
+				const remove = [...before.values()]
+					.filter(
+						(record) =>
+							record.kind === 'thumb' && !records.has(recordKey(record)),
+					)
+					.map((record) => record.id);
+				if (put.length > 0 || remove.length > 0) {
+					await host.thumbs.apply(put, remove);
+				}
+			}
 		} finally {
 			applying = false;
 		}
@@ -624,6 +676,7 @@ export function createSyncClient(host: SyncHost) {
 					? await host.outsideSettings.read()
 					: {},
 				serverHeldKeys(state),
+				thumbsOn && host.thumbs ? await host.thumbs.read() : [],
 			);
 			if (state.joined) {
 				state = await captureLocal(state, records);
@@ -658,6 +711,7 @@ export function createSyncClient(host: SyncHost) {
 		notesOn = features.has('notes');
 		tagsOn = features.has('tags');
 		sourcesOn = host.sources !== undefined && features.has('sources');
+		thumbsOn = host.thumbs !== undefined && features.has('thumbs');
 		settingKindOn = features.has('settings');
 		const reseal = new Set<string>();
 		const kinds = OPTIONAL_KINDS.filter((kind) => !unsupported(kind));
