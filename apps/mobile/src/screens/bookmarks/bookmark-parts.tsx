@@ -175,6 +175,8 @@ function BookmarkRowView({
 							width: compact ? 32 : 40,
 							height: compact ? 32 : 40,
 							borderRadius: 6,
+							borderWidth: StyleSheet.hairlineWidth,
+							borderColor: colors.border,
 							backgroundColor: colors.border,
 						}}
 					/>
