@@ -169,7 +169,7 @@ test('the largest trash entry apps send is accepted, sealed or not', async () =>
 	const entry = {
 		id: 'i'.repeat(100),
 		kind: 'bookmark' as const,
-		deletedAt: Date.now(),
+		deletedAt: T0,
 		label: '',
 		origin: '',
 		count: 1,
@@ -179,7 +179,7 @@ test('the largest trash entry apps send is accepted, sealed or not', async () =>
 		TRASH_SYNC_MAX_BYTES -
 		new TextEncoder().encode(JSON.stringify(entry)).length;
 	const key = await importDataKey(generateDataKey());
-	for (const unit of ['x', '€', '"']) {
+	for (const [index, unit] of ['x', '€', '"'].entries()) {
 		const width = new TextEncoder().encode(JSON.stringify(unit)).length - 2;
 		const text =
 			unit.repeat(Math.floor(room / width)) + 'x'.repeat(room % width);
@@ -192,16 +192,20 @@ test('the largest trash entry apps send is accepted, sealed or not', async () =>
 		const change = {
 			kind: 'trash' as const,
 			id: entry.id,
-			h: tick(startClock(), Date.now()).h,
+			h: tick(startClock(), T0 + index * 2).h,
 			d: '"'.repeat(64),
 			value,
 		};
-		const sealed = {
-			...change,
-			value: await sealValue(key, recordKey(change), value),
-		};
-		assert.equal((await push([change])).status, 200);
-		assert.equal((await push([sealed])).status, 200);
+		const plain = await push([change]);
+		assert.deepEqual(plain.body.results, ['applied']);
+		const sealed = await push([
+			{
+				...change,
+				h: tick(startClock(), T0 + index * 2 + 1).h,
+				value: await sealValue(key, recordKey(change), value),
+			},
+		]);
+		assert.deepEqual(sealed.body.results, ['applied']);
 	}
 });
 
