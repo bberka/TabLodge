@@ -187,7 +187,10 @@ export const ANDROID_PREFERENCES = {
 	floatingBar: ['platform', PHONE_LOOK],
 	barSize: ['platform', PHONE_LOOK],
 	barLabels: ['platform', PHONE_LOOK],
-	glassEffect: ['platform', PHONE_LOOK],
+	glassEffect: [
+		'device',
+		'Whether this phone frosts its floating bar and buttons, which depends on its graphics: a slow phone turns it off for itself.',
+	],
 	messagePosition: ['platform', PHONE_LOOK],
 	theme: ['platform', PHONE_LOOK],
 	accent: ['platform', PHONE_LOOK],
