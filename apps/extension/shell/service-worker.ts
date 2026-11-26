@@ -33,6 +33,8 @@ import {
 	trashedUrls,
 	type TrashEntry,
 } from '../src/shared/trash';
+import {createChangeLog} from '../src/shared/state-changes';
+import {diffList} from '../src/shared/library-patch';
 import {undoableEdit, type UndoableEdit} from '../src/shared/undo-policy';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {hostIsExcluded} from '../src/shared/excluded-sites';
@@ -125,7 +127,7 @@ import {
 	urlHost,
 } from '../src/shared/library-normalize';
 import {tagFields, withTagEdits} from '../src/shared/bookmark-tags';
-import {isRecord, hashText} from '../src/shared/library-values';
+import {canonicalJson, isRecord, hashText} from '../src/shared/library-values';
 import {
 	CAPTURE_GLOBAL,
 	COPY_BUDGET,
@@ -195,6 +197,7 @@ import {
 import {
 	createLibraryState,
 	isUndoDelta,
+	type LibraryScope,
 	MIGRATION_KEY,
 	STATE_KEY,
 	type UndoDelta,
@@ -264,6 +267,7 @@ type TabLodgeMessageType = import('../src/shared/types').TabLodgeMessageType;
 type ActionResult<K extends TabLodgeMessageType = TabLodgeMessageType> =
 	import('../src/shared/types').ActionResult<K>;
 type Raw = import('../src/shared/library-normalize').Raw;
+type RevisionedStore = import('../src/shared/types').RevisionedStore;
 type RawSettings = import('../src/shared/library-normalize').RawSettings;
 type Bookmark = import('../src/shared/types').Bookmark;
 type BookmarkColumn = import('../src/shared/types').BookmarkColumn;
@@ -738,6 +742,7 @@ function replacePrivateConfig(next: PrivateConfig) {
 					privateConfig = next;
 					migrationChecked = false;
 					invalidateSettings();
+					stateChanges.clear();
 				}),
 			),
 		),
@@ -800,6 +805,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 	}
 
 	invalidateSettings();
+	stateChanges.clear();
 	void wakeSync().catch(() => undefined);
 	if (changes[LOCK_SESSION_KEY].newValue !== undefined) {
 		return;
@@ -896,18 +902,84 @@ async function bestBookmarkTitle(value: unknown, url: string, clean = true) {
 }
 
 async function getStore(): Promise<Store> {
-	const saved = await library.get<Record<string, Raw | null | undefined>>([
-		STORAGE_KEY,
-	]);
-	const exists = saved[STORAGE_KEY] && typeof saved[STORAGE_KEY] === 'object';
-	const storedVersion = Number(saved[STORAGE_KEY]?.schemaVersion) || 0;
-	if (exists && storedVersion > SCHEMA_VERSION) {
+	const {revision: _revision, ...store} = await getRevisionedStore();
+	return store;
+}
+
+async function getRevisionedStore(): Promise<RevisionedStore> {
+	const {raw, stamp} = await libraryState.readStamped();
+	if (raw && Number(raw.schemaVersion) > SCHEMA_VERSION) {
 		throw new Error(
 			`This ${APP_NAME} data was saved by a newer version. Update ${APP_NAME} before opening it here.`,
 		);
 	}
 
-	return normalizeStore(exists ? saved[STORAGE_KEY] : null);
+	return {...normalizeStore(raw), ...(stamp && {revision: stamp})};
+}
+
+const stateChanges = createChangeLog();
+
+async function getStateChanges(
+	since: string,
+): Promise<ActionResult<'GET_STATE_CHANGES'>> {
+	const revision = await libraryState.stamp();
+	const changes = revision ? stateChanges.since(since, revision) : undefined;
+	return changes ? {ok: true, changes} : {ok: true};
+}
+
+function hasOutdatedFolders(raw: Raw) {
+	return (
+		canonicalJson(normalizeFolders(raw.folders)) !== canonicalJson(raw.folders)
+	);
+}
+
+async function openStore(
+	scope: LibraryScope,
+): Promise<{store: Store; save(): Promise<void>}> {
+	const opened = await libraryState.openScope(scope);
+	if (!opened || hasOutdatedFolders(opened.raw)) {
+		const store = await getStore();
+		return {
+			store,
+			async save() {
+				await writeStore(store);
+			},
+		};
+	}
+
+	const store = normalizeStore(opened.raw);
+	return {
+		store,
+		async save() {
+			const next = storedForm(store);
+			const written = normalizeStore(next);
+			const kept = new Set(written.groups.map((group) => group.id));
+			await opened.commit(next, ({from, to}) => {
+				stateChanges.add({
+					from,
+					to,
+					folders: written.folders,
+					bookmarkColumns: written.bookmarkColumns,
+					settings: written.settings,
+					updatedAt: written.updatedAt,
+					sessions: {
+						changed: written.groups,
+						removed: (scope.sessions ?? []).filter((id) => !kept.has(id)),
+					},
+					bookmarks:
+						scope.bookmarks === 'all'
+							? {
+									patch: diffList(
+										written.bookmarks,
+										arrayOf(opened.raw.bookmarks),
+									),
+								}
+							: {changed: written.bookmarks},
+				});
+			});
+			await afterLibraryWrite();
+		},
+	};
 }
 
 let migrationChecked = false;
@@ -965,12 +1037,12 @@ async function migrateStoreOnce() {
 	}
 }
 
-async function writeStore(store: Store): Promise<Store> {
+function storedForm(store: Store) {
 	for (const group of store.groups) {
 		pairSplits(group.tabs);
 	}
 
-	const next = {
+	return {
 		schemaVersion: SCHEMA_VERSION,
 		groups: store.groups,
 		folders: normalizeFolders(store.folders),
@@ -979,10 +1051,18 @@ async function writeStore(store: Store): Promise<Store> {
 		settings: normalizeSettings(store.settings),
 		updatedAt: Date.now(),
 	};
+}
+
+async function writeStore(store: Store): Promise<Store> {
+	const next = storedForm(store);
 	await library.set({[STORAGE_KEY]: next});
+	await afterLibraryWrite();
+	return next;
+}
+
+async function afterLibraryWrite() {
 	invalidateSettings();
 	await nudgeSync();
-	return next;
 }
 
 async function nudgeSync(): Promise<void> {
@@ -3590,7 +3670,7 @@ async function updateGroup(
 	fields: SessionFields,
 ): Promise<ActionResult<'UPDATE_GROUP'>> {
 	return mutateWithUndo('UPDATE_GROUP', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({sessions: [groupId]});
 		const group = findGroup(store, groupId);
 		if (!group) {
 			return {ok: false, error: 'That saved session no longer exists.'};
@@ -3635,7 +3715,7 @@ async function updateGroup(
 		}
 
 		group.updatedAt = Date.now();
-		await writeStore(store);
+		await save();
 		return {ok: true, group};
 	});
 }
@@ -3644,7 +3724,7 @@ async function archiveGroup(
 	groupId: string,
 ): Promise<ActionResult<'ARCHIVE_GROUP'>> {
 	return mutateWithUndo('ARCHIVE_GROUP', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({sessions: [groupId]});
 		const group = findGroup(store, groupId);
 		if (!group) {
 			return {ok: false, error: 'That saved session no longer exists.'};
@@ -3660,7 +3740,7 @@ async function archiveGroup(
 		const archived = existingFolder ?? findOrAddArchivedFolder(store.folders);
 		group.folderId = archived.id;
 		group.updatedAt = Date.now();
-		await writeStore(store);
+		await save();
 		return {ok: true, group};
 	});
 }
@@ -3724,7 +3804,7 @@ async function createFolder(
 	colorSessions?: unknown,
 ): Promise<ActionResult<'CREATE_FOLDER'>> {
 	return mutateWithUndo('CREATE_FOLDER', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({});
 		const problem = folderNameProblem(store.folders, name);
 		if (problem) {
 			return {ok: false, error: problem};
@@ -3744,7 +3824,7 @@ async function createFolder(
 		}
 
 		store.folders.push(folder);
-		await writeStore(store);
+		await save();
 		return {ok: true, folder};
 	});
 }
@@ -3757,7 +3837,7 @@ async function updateFolder(
 	colorSessions?: unknown,
 ): Promise<ActionResult<'UPDATE_FOLDER'>> {
 	return mutateWithUndo('UPDATE_FOLDER', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({});
 		const folder = store.folders.find((entry) => entry.id === folderId);
 		if (!folder) {
 			return {ok: false, error: 'That folder no longer exists.'};
@@ -3804,7 +3884,7 @@ async function updateFolder(
 			}
 		}
 
-		await writeStore(store);
+		await save();
 		return {ok: true, folder};
 	});
 }
@@ -4481,7 +4561,7 @@ async function addBookmark(
 	fields: BookmarkFields = {},
 ): Promise<ActionResult<'ADD_BOOKMARK'>> {
 	return mutateWithUndo('ADD_BOOKMARK', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({bookmarks: 'all'});
 		const url = normalizeUrl(fields.url);
 		if (!url) {
 			return {
@@ -4525,7 +4605,7 @@ async function addBookmark(
 			updatedAt: now,
 		};
 		store.bookmarks.push(bookmark);
-		await writeStore(store);
+		await save();
 		return {ok: true, bookmark};
 	});
 }
@@ -4951,7 +5031,7 @@ async function updateBookmark(
 	fields: BookmarkFields = {},
 ): Promise<ActionResult<'UPDATE_BOOKMARK'>> {
 	return mutateWithUndo('UPDATE_BOOKMARK', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({bookmarks: [bookmarkId]});
 		const bookmark = findBookmark(store, bookmarkId);
 		if (!bookmark) {
 			return {ok: false, error: 'That bookmark no longer exists.'};
@@ -4992,7 +5072,7 @@ async function updateBookmark(
 
 		const saved = {...withTagEdits(bookmark, fields), updatedAt: Date.now()};
 		store.bookmarks[store.bookmarks.indexOf(bookmark)] = saved;
-		await writeStore(store);
+		await save();
 		return {ok: true, bookmark: saved};
 	});
 }
@@ -5001,7 +5081,7 @@ async function deleteBookmark(
 	bookmarkId: string,
 ): Promise<ActionResult<'DELETE_BOOKMARK'>> {
 	return mutate(async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({bookmarks: 'all'});
 		const index = store.bookmarks.findIndex(
 			(bookmark) => bookmark.id === bookmarkId,
 		);
@@ -5027,7 +5107,7 @@ async function deleteBookmark(
 				nextId: sameColumn(store.bookmarks[index]),
 			},
 		});
-		await writeStore(store);
+		await save();
 		return {ok: true, trashId};
 	});
 }
@@ -5128,7 +5208,7 @@ async function createBookmarkColumn(
 	domains?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutateWithUndo('CREATE_BOOKMARK_COLUMN', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({});
 		const problem = columnNameProblem(store.bookmarkColumns, name);
 		if (problem) {
 			return {ok: false, error: problem};
@@ -5146,7 +5226,7 @@ async function createBookmarkColumn(
 			isDefault: false,
 		};
 		store.bookmarkColumns.push(column);
-		await writeStore(store);
+		await save();
 		return {ok: true, column};
 	});
 }
@@ -5159,7 +5239,7 @@ async function updateBookmarkColumn(
 	domains?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutateWithUndo('UPDATE_BOOKMARK_COLUMN', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({});
 		const column = store.bookmarkColumns.find((entry) => entry.id === columnId);
 		if (!column) {
 			return {ok: false, error: 'That bookmark column no longer exists.'};
@@ -5200,7 +5280,7 @@ async function updateBookmarkColumn(
 			}
 		}
 
-		await writeStore(store);
+		await save();
 		return {ok: true, column};
 	});
 }
@@ -5318,7 +5398,7 @@ async function reorderBookmarkColumn(
 	position: InsertPosition = 'before',
 ): Promise<ActionResult<'REORDER_BOOKMARK_COLUMN'>> {
 	return mutateWithUndo('REORDER_BOOKMARK_COLUMN', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({});
 		const sourceIndex = store.bookmarkColumns.findIndex(
 			(column) => column.id === columnId,
 		);
@@ -5346,7 +5426,7 @@ async function reorderBookmarkColumn(
 				? store.bookmarkColumns.length
 				: targetIndex + (position === 'after' ? 1 : 0);
 		store.bookmarkColumns.splice(insertAt, 0, column);
-		await writeStore(store);
+		await save();
 		return {ok: true};
 	});
 }
@@ -5422,7 +5502,7 @@ async function reorderBookmark(
 	position: InsertPosition = 'after',
 ): Promise<ActionResult<'REORDER_BOOKMARK'>> {
 	return mutateWithUndo('REORDER_BOOKMARK', async () => {
-		const store = await getStore();
+		const {store, save} = await openStore({bookmarks: 'all'});
 		for (const bookmarkId of bookmarkIds) {
 			const problem = placeBookmark(
 				store,
@@ -5436,7 +5516,7 @@ async function reorderBookmark(
 			}
 		}
 
-		await writeStore(store);
+		await save();
 		return {ok: true};
 	});
 }
@@ -10274,7 +10354,11 @@ async function handleMessage(
 		}
 
 		case 'GET_STATE': {
-			return {ok: true, ...(await getStore())};
+			return {ok: true, ...(await getRevisionedStore())};
+		}
+
+		case 'GET_STATE_CHANGES': {
+			return getStateChanges(String(message.since));
 		}
 
 		case 'GET_BOOKMARK_PROMPT': {
