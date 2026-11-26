@@ -60,6 +60,10 @@ export function parseTrashEntry(value: unknown): TrashEntry | undefined {
 
 const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
 
+export const refusedTrash = (change: {kind: string}) =>
+	change.kind === 'trash' &&
+	JSON.stringify(change).length > SERVER_MAX_CHANGE_SIZE;
+
 export function syncedTrash(
 	entry: TrashEntry,
 	onServer = false,
