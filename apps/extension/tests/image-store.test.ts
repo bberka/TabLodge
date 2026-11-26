@@ -12,6 +12,7 @@ import {
 	createImageStore,
 	imageFileName,
 	imageId,
+	imageUsageText,
 	parseSavedImage,
 	parseThumb,
 	sniffImageType,
@@ -220,6 +221,12 @@ test('an index that was tampered with lists only entries that still check out', 
 	const index = data[IMAGE_INDEX_KEY] as {items: unknown[]};
 	index.items.push({url: 'file:///etc/passwd', held: 1}, 7, index.items[0]);
 	assert.equal((await store.list()).length, 1);
+});
+
+test('usage reads as megabytes of the budget', () => {
+	assert.equal(imageUsageText(0), '0 KB of 100 MB');
+	assert.equal(imageUsageText(48_836), '49 KB of 100 MB');
+	assert.equal(imageUsageText(4_240_000), '4.2 MB of 100 MB');
 });
 
 test('a download name comes from the site and the file, with the real extension', () => {

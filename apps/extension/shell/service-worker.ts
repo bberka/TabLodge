@@ -8999,6 +8999,8 @@ async function getStorageUsage(): Promise<ActionResult<'GET_STORAGE_USAGE'>> {
 		backups: await bytes([BACKUPS_KEY]),
 		trash: await bytes([TRASH_KEY]),
 		state: await bytes([STORAGE_KEY]),
+		images: privateContext ? 0 : (await savedImages.usage()).size,
+		imageBudget: IMAGE_BUDGET,
 	};
 	return {ok: true, usage};
 }

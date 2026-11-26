@@ -8889,6 +8889,8 @@ test('storage usage reports each area', async () => {
 	assert.equal(response.usage.backups > 0, true);
 	assert.equal(response.usage.trash > 0, true);
 	assert.equal(response.usage.state > 0, true);
+	assert.equal(response.usage.images, 0);
+	assert.equal(response.usage.imageBudget, 100_000_000);
 });
 
 test('undo paths: restore-and-remove, move between sessions and close-after-save are reversible', async () => {
@@ -13626,6 +13628,11 @@ test('a saved image follows its bookmark into the trash and goes when the trash 
 	const bookmark = harness.state.bookmarks.find((entry) => entry.url === url);
 	assert.ok(bookmark, 'the image is bookmarked');
 	assert.equal(imageKeys(), 2, 'the original and its thumbnail');
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_STORAGE_USAGE'})).usage.images,
+		70,
+		'Settings counts the bytes of the originals',
+	);
 
 	await harness.sendMessage({
 		type: 'DELETE_BOOKMARK',

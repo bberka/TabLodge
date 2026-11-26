@@ -59,6 +59,13 @@ export type ImageKeepResult =
 const megabytes = (size: number) =>
 	`${Math.max(1, Math.round(size / 1_000_000))} MB`;
 
+export const imageUsageText = (size: number, budget: number = IMAGE_BUDGET) =>
+	`${
+		size < 1_000_000
+			? `${Math.round(size / 1000)} KB`
+			: `${(size / 1_000_000).toFixed(1)} MB`
+	} of ${megabytes(budget)}`;
+
 export const IMAGE_ERRORS: Record<ImageFailure, string> = {
 	unsupported:
 		'This is not a picture TabLodge can keep. It keeps JPEG, PNG, GIF, WebP and AVIF images.',

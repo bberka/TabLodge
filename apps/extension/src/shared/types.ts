@@ -343,6 +343,8 @@ export type StorageUsage = {
 	backups: number;
 	trash: number;
 	state: number;
+	images: number;
+	imageBudget: number;
 };
 
 export type RestoreFailure = {
