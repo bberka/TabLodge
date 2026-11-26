@@ -42,6 +42,17 @@ test('the type comes from the bytes, never from what the page claimed', () => {
 	assert.equal(magic('GIF89a....'), 'image/gif');
 	assert.equal(sniffImageType(base64ToBytes(WEBP)), 'image/webp');
 	assert.equal(magic('\0\0\0\u001Cftypavif\0\0'), 'image/avif');
+	assert.equal(
+		magic('\0\0\0\u001Cftypmif1\0\0\0\0mif1avifmiaf'),
+		'image/avif',
+		'an AVIF may name avif only among its compatible brands',
+	);
+	assert.equal(magic('\0\0\0\u0018ftypmif1\0\0\0\0mif1heic'), undefined);
+	assert.equal(
+		magic('\0\0\0\u0010ftypmif1\0\0\0\0avif'),
+		undefined,
+		'a brand past the end of the box does not count',
+	);
 	assert.equal(magic('<svg xmlns="http://www.w3.org/2000/svg"/>'), undefined);
 	assert.equal(magic('<!doctype html><script>'), undefined);
 
@@ -163,6 +174,45 @@ test('remove and sweep delete the original, the thumbnail, and the index entry',
 	);
 	assert.equal(Object.keys(data).length, 3);
 	assert.equal(await store.read('https://cdn.example/b.png'), undefined);
+});
+
+test('a delete that fails part way can be tried again, and a save that fails leaves nothing behind', async () => {
+	const {storage, data} = memoryStorage();
+	let failing: 'remove' | 'set' | undefined;
+	const store = createImageStore({
+		get: storage.get,
+		async set(items) {
+			if (failing === 'set') {
+				throw new Error('quota');
+			}
+
+			await storage.set(items);
+		},
+		async remove(keys) {
+			if (failing === 'remove') {
+				throw new Error('busy');
+			}
+
+			await storage.remove(keys);
+		},
+	});
+	await store.keep(picture());
+
+	failing = 'remove';
+	await assert.rejects(store.remove('https://cdn.example/cat.png'), /busy/);
+	assert.equal((await store.list()).length, 1, 'still listed, so still found');
+	failing = undefined;
+	assert.equal(await store.remove('https://cdn.example/cat.png'), true);
+	assert.deepEqual(Object.keys(data), ['tablodge.images']);
+
+	failing = 'set';
+	await assert.rejects(
+		store.keep(picture('https://cdn.example/dog.png')),
+		/quota/,
+	);
+	failing = undefined;
+	assert.deepEqual(await store.list(), []);
+	assert.deepEqual(Object.keys(data), ['tablodge.images']);
 });
 
 test('a thumbnail from another device shows without an original, and a delete from there removes it', async () => {

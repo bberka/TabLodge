@@ -29,6 +29,7 @@ export const THUMB_MAX_SIDE = 256;
 export const IMAGE_DELETED = 'Image deleted. The bookmark stays saved.';
 const SIDE_MAX = 65_535;
 const DEVICE_MAX = 80;
+const SNIFF_CHARS = 128;
 
 export type ImageMeta = {
 	url: string;
@@ -114,10 +115,21 @@ export function sniffImageType(bytes: Uint8Array): ImageType | undefined {
 		return 'image/webp';
 	}
 
-	return startsWith(bytes, FTYP, 4) &&
-		AVIF.some((brand) => startsWith(bytes, brand, 8))
-		? 'image/avif'
-		: undefined;
+	if (!startsWith(bytes, FTYP, 4)) {
+		return undefined;
+	}
+
+	const boxEnd = Math.min(
+		bytes.length,
+		bytes[0] * 16_777_216 + bytes[1] * 65_536 + bytes[2] * 256 + bytes[3],
+	);
+	for (let at = 8; at + 4 <= boxEnd; at += at === 8 ? 8 : 4) {
+		if (AVIF.some((brand) => startsWith(bytes, brand, at))) {
+			return 'image/avif';
+		}
+	}
+
+	return undefined;
 }
 
 function encodedImage(
@@ -137,7 +149,7 @@ function encodedImage(
 		return undefined;
 	}
 
-	const type = sniffImageType(base64ToBytes(value.slice(0, 24)));
+	const type = sniffImageType(base64ToBytes(value.slice(0, SNIFF_CHARS)));
 	return type && {type, size};
 }
 
@@ -155,7 +167,7 @@ export const imageDataUrl = (type: ImageType, data: string) =>
 
 export const thumbDataUrl = (thumb: string) =>
 	imageDataUrl(
-		sniffImageType(base64ToBytes(thumb.slice(0, 24))) ?? 'image/webp',
+		sniffImageType(base64ToBytes(thumb.slice(0, SNIFF_CHARS))) ?? 'image/webp',
 		thumb,
 	);
 
@@ -290,13 +302,13 @@ export function createImageStore(
 
 	const readIndex = async () =>
 		parseIndex((await storage.get([IMAGE_INDEX_KEY]))[IMAGE_INDEX_KEY]);
-	const writeIndex = (items: ImageEntry[]) =>
-		storage.set({
-			[IMAGE_INDEX_KEY]: {
-				v: 1,
-				items: items.map(({id: _id, ...item}) => item),
-			},
-		});
+	const indexValue = (items: ImageEntry[]) => ({
+		[IMAGE_INDEX_KEY]: {
+			v: 1,
+			items: items.map(({id: _id, ...item}) => item),
+		},
+	});
+	const writeIndex = (items: ImageEntry[]) => storage.set(indexValue(items));
 
 	const drop = async (items: ImageEntry[], gone: readonly ImageEntry[]) => {
 		if (gone.length === 0) {
@@ -304,10 +316,10 @@ export function createImageStore(
 		}
 
 		const urls = new Set(gone.map((item) => item.url));
-		await writeIndex(items.filter((item) => !urls.has(item.url)));
 		await storage.remove(
 			gone.flatMap((item) => [imageKey(item.id), thumbKey(item.id)]),
 		);
+		await writeIndex(items.filter((item) => !urls.has(item.url)));
 		return gone.length;
 	};
 
@@ -348,13 +360,13 @@ export function createImageStore(
 			id: imageId(image.url),
 			held: image.size,
 		};
+		const next = [...items.filter((item) => item.url !== image.url), entry];
 		await storage.set({
 			[imageKey(entry.id)]: {v: 1, url: image.url, type: image.type, data},
 			[thumbKey(entry.id)]: {v: 1, ...meta, thumb},
+			...indexValue(next),
 		});
-		const rest = items.filter((item) => item.url !== image.url);
-		items.splice(0, items.length, ...rest, entry);
-		await writeIndex(items);
+		items.splice(0, items.length, ...next);
 		return {ok: true, entry};
 	};
 
@@ -479,8 +491,7 @@ export function createImageStore(
 				}
 
 				if (Object.keys(writes).length > 0) {
-					await storage.set(writes);
-					await writeIndex(items);
+					await storage.set({...writes, ...indexValue(items)});
 				}
 
 				await drop(
