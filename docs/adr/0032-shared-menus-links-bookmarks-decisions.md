@@ -6,7 +6,7 @@ Status: accepted, 2026-11-25. Issue #442.
 
 This record covers the right-click menu tree (`context-menu-plan.ts`), the link kind read from an address (`link-kind.ts`), accents and colors (`accents.ts`, `accent-colors.ts`, `color-math.ts`), bookmark tags, columns, and duplicates (`bookmark-tags.ts`, `bookmark-rules.ts`, `column-sites.ts`, `duplicate-bookmarks.ts`), icon ids (`icon-ids.ts`, `icon-meta.ts`), site icons (`site-icons.ts`), excluded sites (`excluded-sites.ts`), and toasts (`toast-prefs.ts`). Their non-obvious decisions were comments. Comments are banned ([Code comments](../agents/comments.md)), so each decision lives here with the symbol that carries it. Duplicate handling for saves is in [ADR 31](0031-shared-search-save-capture-decisions.md). Bookmark tag storage is in [ADR 8](0008-bookmark-tags-sync.md).
 
-Imports: the service worker builds into one classic script and imports shared code from `src/` ([Extension rules](../agents/extension.md)). It imports `normalizeExcludedHost` and the other helpers in this record, with one exception: it declares its own `hostIsExcluded` matcher (`shell/service-worker.ts:hostIsExcluded`), a copy of `excluded-sites.ts:hostIsExcluded`. That duplication is tracked in #532. Comments that said otherwise elsewhere were stale and are not carried forward.
+Imports: the service worker builds into one classic script and imports shared code from `src/` ([Extension rules](../agents/extension.md)). It imports `normalizeExcludedHost`, `hostIsExcluded`, and the other helpers in this record. It keeps no copy of any of them.
 
 ## Decisions
 

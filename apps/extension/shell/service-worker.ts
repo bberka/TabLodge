@@ -35,6 +35,7 @@ import {
 } from '../src/shared/trash';
 import {undoableEdit, type UndoableEdit} from '../src/shared/undo-policy';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
+import {hostIsExcluded} from '../src/shared/excluded-sites';
 import {
 	folderNameExists,
 	folderNameProblem,
@@ -892,10 +893,6 @@ async function bestBookmarkTitle(value: unknown, url: string, clean = true) {
 
 	const openTitles = await openBookmarkTitleMap(clean);
 	return importedBookmarkTitle(value, url, openTitles);
-}
-
-function hostIsExcluded(host: string, entries: readonly string[]): boolean {
-	return entries.some((entry) => host === entry || host.endsWith(`.${entry}`));
 }
 
 async function getStore(): Promise<Store> {
