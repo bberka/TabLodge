@@ -403,8 +403,11 @@ export function useTabLodgeState(
 			return load();
 		}
 
-		if (next !== held && mountedRef.current) {
-			hold(withSharedRoot(held!, next));
+		if (mountedRef.current) {
+			if (next !== held) {
+				hold(withSharedRoot(held!, next));
+			}
+
 			setError('');
 		}
 
