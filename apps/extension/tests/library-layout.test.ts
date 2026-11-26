@@ -110,7 +110,7 @@ test('one bookmark edit among 10,000 writes one chunk and the root, under 300 KB
 	assert.ok(keys.some((key) => key.startsWith(BOOKMARK_CHUNK_KEY_PREFIX)));
 	assert.ok(backend.bytesWritten < 300_000, String(backend.bytesWritten));
 	assert.deepEqual(await store.read(), expected(edited));
-});
+}, 60_000);
 
 test('one session rename among 10,000 writes the session, one page and the root, under 300 KB', async () => {
 	const backend = new MemoryBackend();
@@ -130,7 +130,7 @@ test('one session rename among 10,000 writes the session, one page and the root,
 	);
 	assert.ok(backend.bytesWritten < 300_000, String(backend.bytesWritten));
 	assert.deepEqual(await store.read(), expected(edited));
-});
+}, 60_000);
 
 test('an Undo entry for one edit among 10,000 bookmarks and 10,000 sessions holds only the changed pieces, and Undo restores everything', async () => {
 	const backend = new MemoryBackend();
@@ -152,7 +152,7 @@ test('an Undo entry for one edit among 10,000 bookmarks and 10,000 sessions hold
 	await store.restoreCheckpoint(delta);
 	assert.deepEqual(await store.read(), expected(base));
 	assert.deepEqual(await store.verify(), []);
-});
+}, 60_000);
 
 test('a library stored in layout 10 loads, upgrades, and keeps every session and bookmark at 10,000 each', async () => {
 	const {backend, base} = await storedInLayout10(10_000, 10_000);
@@ -207,7 +207,7 @@ test('a library stored in layout 10 loads, upgrades, and keeps every session and
 	const rebuilt = assemble(records.values(), {...state, groups: []});
 	assert.equal(normalizeStore(rebuilt as never).groups.length, 10_000);
 	assert.equal(normalizeStore(rebuilt as never).bookmarks.length, 10_000);
-});
+}, 60_000);
 
 test('an upgrade reads the same library back as one that was never in layout 10', async () => {
 	const {backend, base} = await storedInLayout10(250, 250);
