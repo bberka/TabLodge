@@ -33,6 +33,7 @@ import {
 	sortKeysDeep,
 	storeLibrary,
 } from './library-fixtures';
+import {PNG, WEBP} from './image-fixtures';
 import {buildWorkerSource} from './worker-source';
 
 const workerPath = join(
@@ -13593,6 +13594,91 @@ test('an import skips addresses that are in the trash, and GET_TRASH lists them 
 	assert.deepEqual(
 		harness.state.groups.flatMap((group) => group.tabs.map((tab) => tab.url)),
 		['https://fresh.example/'],
+	);
+});
+
+test('a saved image follows its bookmark into the trash and goes when the trash is emptied and Undo has passed', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: {
+			ok: true,
+			type: 'image/png',
+			width: 640,
+			height: 480,
+			data: PNG,
+			thumb: WEBP,
+		},
+	});
+	const url = 'https://cdn.example/full/cat.png';
+	await harness.fire(
+		'contextMenuClicked',
+		{
+			menuItemId: 'tablodge-image-save',
+			mediaType: 'image',
+			srcUrl: url,
+			pageUrl: 'https://photos.example/album',
+		},
+		{id: 1, windowId: 1, url: 'https://photos.example/album'},
+	);
+	const imageKeys = () =>
+		Object.keys(harness.extraStorage).filter((key) =>
+			/^tablodge\.(?:image|thumb)\./.test(key),
+		).length;
+	const bookmark = harness.state.bookmarks.find((entry) => entry.url === url);
+	assert.ok(bookmark, 'the image is bookmarked');
+	assert.equal(imageKeys(), 2, 'the original and its thumbnail');
+
+	await harness.sendMessage({
+		type: 'DELETE_BOOKMARK',
+		bookmarkId: bookmark.id!,
+	});
+	await settle();
+	assert.equal(imageKeys(), 2, 'in the trash, the picture stays');
+
+	await harness.sendMessage({type: 'EMPTY_TRASH'});
+	await settle();
+	assert.equal(imageKeys(), 2, 'while Undo can bring the bookmark back, too');
+
+	const undo = harness.extraStorage['tablodge.undo'] as {
+		records: Array<{createdAt: number}>;
+	};
+	for (const record of undo.records) {
+		record.createdAt -= 10 * 60_000;
+	}
+
+	await harness.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.equal(imageKeys(), 0);
+	const listed = await harness.sendMessage({type: 'GET_SAVED_IMAGES'});
+	assert.equal(listed.items.length, 0);
+});
+
+test('a private window keeps no image', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		scriptResult: {
+			ok: true,
+			type: 'image/png',
+			width: 1,
+			height: 1,
+			data: PNG,
+			thumb: WEBP,
+		},
+	});
+	await harness.fire(
+		'contextMenuClicked',
+		{
+			menuItemId: 'tablodge-image-save',
+			mediaType: 'image',
+			srcUrl: 'https://cdn.example/cat.png',
+			pageUrl: 'https://photos.example/album',
+		},
+		{id: 1, windowId: 1, url: 'https://photos.example/album', incognito: true},
+	);
+	assert.deepEqual(
+		Object.keys(harness.extraStorage).filter((key) =>
+			key.startsWith('tablodge.image'),
+		),
+		[],
 	);
 });
 

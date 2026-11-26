@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
 import {afterEach, beforeEach, test, vi} from 'vite-plus/test';
 import type {
+	ActionSuccess,
 	Bookmark,
 	BookmarkColumn,
 	SavedTab,
@@ -13,6 +15,7 @@ import type {
 	TabLodgeMessage,
 } from '../src/shared/types';
 import {BOOKMARK_UNFILED_ID} from '../src/shared/bookmark-rules';
+import {PNG, WEBP} from './image-fixtures';
 import {logicalState, sortKeysDeep, storeLibrary} from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 
@@ -127,7 +130,9 @@ function createHarness(
 		userAgent = '',
 		listsTabContext = true,
 		scriptingFails = false,
+		capturedImage,
 	}: {
+		capturedImage?: unknown;
 		firefox?: boolean;
 		userAgent?: string;
 		listsTabContext?: boolean;
@@ -184,6 +189,8 @@ function createHarness(
 		undo?: {id: string};
 		theme: string;
 	}> = [];
+	const notes: Array<{text: string; failed: boolean}> = [];
+	const captures: Array<{source: string; frameIds?: number[]}> = [];
 	const menus = new Map<string, MenuItem>();
 	const menuErrors: string[] = [];
 	let lastError: {message: string} | undefined;
@@ -383,11 +390,27 @@ function createHarness(
 		},
 		scripting: {
 			async executeScript(injection: {
-				target: {tabId: number};
+				target: {tabId: number; frameIds?: number[]};
 				args: [Omit<(typeof toasts)[number], 'tabId'>];
 			}) {
 				if (scriptingFails) {
 					throw new Error('Cannot access contents of the page.');
+				}
+
+				const args = injection.args as unknown[];
+				if (args.length === 4) {
+					captures.push({
+						source: String(args[0]),
+						frameIds: injection.target.frameIds && [
+							...injection.target.frameIds,
+						],
+					});
+					return [{result: structuredClone(capturedImage)}];
+				}
+
+				if (typeof args[0] === 'string') {
+					notes.push({text: args[0], failed: Boolean(args[1])});
+					return [{result: undefined}];
 				}
 
 				toasts.push({tabId: injection.target.tabId, ...injection.args[0]});
@@ -465,6 +488,10 @@ function createHarness(
 		URLSearchParams,
 		console: capturedConsole,
 		crypto: webcrypto,
+		// eslint-disable-next-line no-restricted-globals -- the worker reads a saved image's base64 with atob
+		atob,
+		// eslint-disable-next-line no-restricted-globals -- the worker writes base64 with btoa
+		btoa,
 		globalThis: null,
 		setTimeout,
 		clearTimeout,
@@ -482,6 +509,8 @@ function createHarness(
 		badges,
 		warnings,
 		toasts,
+		notes,
+		captures,
 		menuErrors,
 		refreshes: () => refreshes,
 		items,
@@ -899,7 +928,10 @@ test('image and video menus list the columns under one root each', async () => {
 		assert.equal(harness.item(root)?.title, appName);
 		assert.equal(harness.item(root)?.parentId, undefined);
 		assert.deepEqual(harness.item(root)?.contexts, contexts);
-		assert.deepEqual(titles(harness.childrenOf(root)), [title]);
+		assert.deepEqual(
+			titles(harness.childrenOf(root)),
+			root === 'tablodge-image-root' ? [title, 'Save image to'] : [title],
+		);
 		assert.deepEqual(titles(harness.childrenOf(bookmark)), [
 			'Bookmarks',
 			'Reading',
@@ -2135,4 +2167,209 @@ test('adding bookmarks follows the duplicate setting on every path', async () =>
 		assert.equal(markOf(harness).at(-1), '=');
 		assert.deepEqual(harness.warnings, []);
 	}
+});
+
+const captured = {
+	ok: true,
+	type: 'image/png',
+	width: 640,
+	height: 480,
+	data: PNG,
+	thumb: WEBP,
+};
+const saveImage = (srcUrl: string, column = ':column-reading') => ({
+	menuItemId: `tablodge-image-save${column}`,
+	mediaType: 'image',
+	srcUrl,
+	pageUrl: 'https://www.photos.example/album/2',
+	frameId: 0,
+});
+type Harness = ReturnType<typeof createHarness>;
+const ask = async <K extends TabLodgeMessage['type']>(
+	harness: Harness,
+	message: Extract<TabLodgeMessage, {type: K}>,
+) => (await harness.send(message)) as unknown as ActionSuccess<K>;
+const savedImages = async (harness: Harness) =>
+	ask<'GET_SAVED_IMAGES'>(harness, {type: 'GET_SAVED_IMAGES'});
+const savedImage = async (harness: Harness, url: string) =>
+	ask<'GET_SAVED_IMAGE'>(harness, {type: 'GET_SAVED_IMAGE', url});
+
+test('Save image to lists the columns, and is one plain item when there are none', async () => {
+	const harness = createHarness(baseState());
+	await harness.install();
+	assert.deepEqual(titles(harness.childrenOf('tablodge-image-save')), [
+		'Bookmarks',
+		'Reading',
+	]);
+
+	const empty = createHarness(baseState({}, {bookmarkColumns: []}));
+	await empty.install();
+	assert.equal(empty.item('tablodge-image-save')?.title, 'Save image to');
+	assert.deepEqual(empty.childrenOf('tablodge-image-save'), []);
+});
+
+test('Save image to bookmarks the image in the column and keeps its bytes and thumbnail', async () => {
+	const harness = createHarness(baseState(), undefined, {
+		capturedImage: captured,
+	});
+	await harness.install();
+	const address = 'https://cdn.example/full/cat.png';
+	await harness.click(saveImage(address));
+
+	assert.deepEqual(
+		harness.state.bookmarks.map(({title, url, columnId}) => ({
+			title,
+			url,
+			columnId,
+		})),
+		[
+			{
+				title: 'Image from photos.example',
+				url: address,
+				columnId: 'column-reading',
+			},
+		],
+	);
+	assert.deepEqual(harness.captures, [{source: address, frameIds: [0]}]);
+	assert.deepEqual(harness.notes, [
+		{text: 'Image saved and bookmarked.', failed: false},
+	]);
+
+	const listed = await savedImages(harness);
+	assert.deepEqual(
+		listed.items.map((item) => ({
+			url: item.url,
+			type: item.type,
+			width: item.width,
+			height: item.height,
+			held: item.held,
+		})),
+		[{url: address, type: 'image/png', width: 640, height: 480, held: 70}],
+	);
+	assert.equal(listed.size, 70);
+	assert.equal(listed.budget, 100_000_000);
+
+	const read = await savedImage(harness, address);
+	assert.equal(read.image?.data, PNG);
+	assert.equal(read.thumb?.thumb, WEBP);
+	const thumbs = await ask<'GET_IMAGE_THUMBS'>(harness, {
+		type: 'GET_IMAGE_THUMBS',
+		urls: [address],
+	});
+	assert.deepEqual(
+		thumbs.thumbs.map((thumb) => thumb.thumb),
+		[WEBP],
+	);
+});
+
+test('an image the site will not hand over is still bookmarked, and the note says the picture was not kept', async () => {
+	const harness = createHarness(baseState(), undefined, {
+		capturedImage: {ok: false, reason: 'blocked'},
+	});
+	await harness.install();
+	await harness.click(saveImage('https://cdn.example/locked.png'));
+	assert.equal(harness.state.bookmarks.length, 1);
+	assert.deepEqual(harness.notes, [
+		{
+			text: 'Bookmarked, but the image was not kept. This site does not let extensions read the image, so only its address is saved.',
+			failed: true,
+		},
+	]);
+	assert.equal((await savedImages(harness)).items.length, 0);
+});
+
+test('what the page hands over is checked: a file that is not a picture is refused and the bookmark stays', async () => {
+	const harness = createHarness(baseState(), undefined, {
+		capturedImage: {
+			...captured,
+			data: Buffer.from('<html><script>alert(1)</script></html>').toString(
+				'base64',
+			),
+		},
+	});
+	await harness.install();
+	await harness.click(saveImage('https://cdn.example/fake.png'));
+	assert.equal(harness.state.bookmarks.length, 1);
+	assert.match(
+		harness.notes[0].text,
+		/^Bookmarked, but the image was not kept\. This is not a picture/,
+	);
+	assert.equal((await savedImages(harness)).items.length, 0);
+});
+
+test('saving an image that is already bookmarked keeps the picture and adds no second bookmark', async () => {
+	const address = 'https://cdn.example/old.png';
+	const harness = createHarness(
+		baseState(
+			{saveDuplicateHandling: 'reject'},
+			{
+				bookmarks: [
+					{
+						id: 'b0',
+						title: 'Old image',
+						url: address,
+						columnId: 'bookmark-default',
+						createdAt: 1,
+						updatedAt: 1,
+					},
+				],
+			},
+		),
+		undefined,
+		{capturedImage: captured},
+	);
+	await harness.install();
+	await harness.click(saveImage(address));
+	assert.equal(harness.state.bookmarks.length, 1);
+	assert.deepEqual(harness.notes, [
+		{text: 'Image saved. Its bookmark was already there.', failed: false},
+	]);
+	assert.equal((await savedImage(harness, address)).image?.data, PNG);
+});
+
+test('an address in the trash is not saved again, picture or bookmark', async () => {
+	const harness = createHarness(baseState(), undefined, {
+		capturedImage: captured,
+	});
+	await harness.install();
+	const address = 'https://cdn.example/full/cat.png';
+	await harness.click(saveImage(address));
+	const bookmarkId = harness.state.bookmarks[0].id!;
+	assert.ok((await harness.send({type: 'DELETE_BOOKMARK', bookmarkId})).ok);
+	await harness.click(saveImage(address));
+	assert.deepEqual(harness.notes.at(-1), {
+		text: 'This address is in the trash bin. Restore it from there to keep it.',
+		failed: true,
+	});
+	assert.equal(harness.state.bookmarks.length, 0);
+	assert.equal(harness.captures.length, 1);
+});
+
+test('Delete image removes the picture and keeps the bookmark, and a picture only comes back for an address that is saved', async () => {
+	const harness = createHarness(baseState(), undefined, {
+		capturedImage: captured,
+	});
+	await harness.install();
+	const address = 'https://cdn.example/full/cat.png';
+	await harness.click(saveImage(address));
+	const before = await savedImage(harness, address);
+	assert.ok(before.image);
+
+	assert.ok(
+		(await harness.send({type: 'DELETE_SAVED_IMAGE', url: address})).ok,
+	);
+	const after = await savedImage(harness, address);
+	assert.equal(after.image, null);
+	assert.equal(after.thumb, null);
+	assert.equal(harness.state.bookmarks.length, 1);
+
+	const back = await ask<'ADD_SAVED_IMAGES'>(harness, {
+		type: 'ADD_SAVED_IMAGES',
+		images: [
+			before.image,
+			{...before.image, url: 'https://cdn.example/never-saved.png'},
+		],
+	});
+	assert.equal(back.images, 1);
+	assert.equal((await savedImage(harness, address)).image?.data, PNG);
 });

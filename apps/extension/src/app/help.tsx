@@ -366,6 +366,12 @@ function Help() {
 						'bookmark note notes description comment why saved edit dialog search export',
 				},
 				{
+					title: 'Save an image',
+					body: `Right-click an image, open ${PROJECT.name}, and choose Save image to and a column. The image is bookmarked there, as Bookmark image to does, and the picture itself is kept on this device, so it is still there after its address expires. A note on the page says what was saved. ${PROJECT.name} reads the image from inside the page and asks for no website access, so a site that refuses that request gets a bookmark without its picture, and the note says so. An image that is already bookmarked keeps its bookmark and gains the picture. It keeps JPEG, PNG, GIF, WebP, and AVIF images, up to 10 MB each and 100 MB on this device; when either is full, the bookmark is still added and the note says the picture was not kept. A picture goes to the trash with its bookmark and is deleted when the trash is emptied. Images are never kept from private windows.`,
+					searchText:
+						'save image picture photo keep original file right-click menu thumbnail expire signed address storage full limit 10 MB 100 MB',
+				},
+				{
 					title: 'Keep a copy of a page',
 					body: `Keep a copy saves the readable text of the open page on this device, so you can still read it after the page changes or disappears. Choose it from the toolbar popup, the page’s right-click menu (under ${PROJECT.name}), or a saved link’s menu in the side panel when that link is the open tab and ${PROJECT.name} may read it, which it can after you use the toolbar button or the right-click menu on that tab. A page that is not saved yet is bookmarked to hold the copy. Open copy in a bookmark’s or saved tab’s menu shows it in a reader with the date it was kept and the original link; Delete copy there removes it at once and keeps the link; Undo in the toast brings it back. A copy is text only, never shown as the page’s own HTML, and stays on this device: it does not sync. It goes to the trash with its link and is deleted when the trash is emptied. Each copy holds up to 1 MB of text and the device up to 25 MB of copies; when either is full, ${PROJECT.name} says so. Copies are never kept from private windows. Open in Internet Archive is the other choice for a page that is gone: it needs no copy, but only works for pages the Archive captured, and not for pages behind a sign-in. The Android app keeps copies of any saved link the same way, from the link’s menu.`,
 					searchText:

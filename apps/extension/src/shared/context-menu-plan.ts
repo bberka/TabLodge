@@ -17,6 +17,7 @@ export const MENU = {
 	imageRoot: 'tablodge-image-root',
 	imageBookmark: 'tablodge-image-bookmark',
 	imageBookmarkNew: 'tablodge-image-bookmark-new',
+	imageSave: 'tablodge-image-save',
 	mediaRoot: 'tablodge-media-root',
 	mediaBookmark: 'tablodge-media-bookmark',
 	mediaBookmarkNew: 'tablodge-media-bookmark-new',
@@ -49,6 +50,8 @@ export const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
 export const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
 
 export const IMAGE_COLUMN_PREFIX = 'tablodge-image-bookmark:';
+
+export const IMAGE_SAVE_PREFIX = 'tablodge-image-save:';
 
 export const MEDIA_COLUMN_PREFIX = 'tablodge-media-bookmark:';
 
@@ -140,6 +143,7 @@ export function contextMenuPlan(
 		hasSidePanel: boolean;
 		hasTabContext: boolean;
 		hasAmpersandAccessKeys: boolean;
+		keepsImages?: boolean;
 	},
 	excludeState: {checked: boolean; enabled: boolean} = {
 		checked: false,
@@ -229,6 +233,22 @@ export function contextMenuPlan(
 			image.contexts,
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
+		if (env.keepsImages) {
+			items.push({
+				id: MENU.imageSave,
+				title: 'Save image to',
+				parentId: MENU.imageRoot,
+				...image,
+			});
+			for (const column of columns) {
+				items.push({
+					id: `${IMAGE_SAVE_PREFIX}${column.id}`,
+					title: column.name,
+					parentId: MENU.imageSave,
+					...image,
+				});
+			}
+		}
 
 		const media = {
 			contexts: ['video', 'audio'],
