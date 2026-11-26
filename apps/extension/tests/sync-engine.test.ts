@@ -12,6 +12,7 @@ import {
 	outgoing,
 	receive,
 	settle,
+	settledKeys,
 	startResync,
 	type SyncState,
 } from '../src/shared/sync/engine';
@@ -20,7 +21,11 @@ import {
 	splitLibrary,
 	trashOf,
 } from '../src/shared/sync/library-records';
-import {TRASH_SYNC_MAX_CHARS, type TrashEntry} from '../src/shared/trash';
+import {
+	syncedTrash,
+	TRASH_SYNC_MAX_BYTES,
+	type TrashEntry,
+} from '../src/shared/trash';
 import {normalizeBookmarkColumn} from '../src/shared/library-normalize';
 import {sourceColumnSite} from '../src/shared/source-columns';
 
@@ -516,10 +521,97 @@ test('trash entries are records of their own that never reach the library', () =
 
 test('the size cache stays on the device, and an entry too large for the server is not a record', () => {
 	const small = {...trashed('a', 1), size: 42};
-	const huge = trashed('b', 2, {text: 'x'.repeat(TRASH_SYNC_MAX_CHARS)});
+	const huge = trashed('b', 2, {text: 'x'.repeat(TRASH_SYNC_MAX_BYTES)});
 	const records = splitLibrary(emptyStore(), [small, huge]);
 	assert.equal(records.has('trash:b'), false);
 	assert.equal('size' in (records.get('trash:a')!.value as object), false);
+});
+
+const utf8Bytes = (value: unknown) =>
+	new TextEncoder().encode(JSON.stringify(value)).length;
+
+const trashedOfBytes = (id: string, bytes: number, unit: string) => {
+	const room = bytes - utf8Bytes(trashed(id, 1, {text: ''}));
+	const width = new TextEncoder().encode(unit).length;
+	const text = unit.repeat(Math.floor(room / width)) + 'x'.repeat(room % width);
+	return trashed(id, 1, {text});
+};
+
+for (const [name, unit] of [
+	['two byte', 'é'],
+	['three byte', '€'],
+	['four byte', '😀'],
+]) {
+	test(`the trash size limit counts the bytes of ${name} characters`, () => {
+		const under = trashedOfBytes('under', TRASH_SYNC_MAX_BYTES, unit);
+		const over = trashedOfBytes('over', TRASH_SYNC_MAX_BYTES + 1, unit);
+		assert.equal(utf8Bytes(under), TRASH_SYNC_MAX_BYTES);
+		assert.equal(utf8Bytes(over), TRASH_SYNC_MAX_BYTES + 1);
+		assert.ok(JSON.stringify(over).length < TRASH_SYNC_MAX_BYTES);
+
+		const records = splitLibrary(emptyStore(), [under, over]);
+		assert.equal(records.has('trash:under'), true);
+		assert.equal(records.has('trash:over'), false);
+	});
+}
+
+test('the device only size cache does not count towards the trash size limit', () => {
+	const entry = trashedOfBytes('full', TRASH_SYNC_MAX_BYTES, '€');
+	assert.deepEqual(syncedTrash({...entry, size: 123_456}), entry);
+});
+
+test('an oversized trash entry the server already holds is not sent as a delete', () => {
+	const huge = trashedOfBytes('held', TRASH_SYNC_MAX_BYTES + 1, '€');
+	const records = splitLibrary(
+		emptyStore(),
+		[huge],
+		[],
+		{},
+		new Set(['trash:held']),
+	);
+	let state = {...capture(newSyncState('dev'), records, T0), joined: true};
+	assert.equal(settledKeys(state).has('trash:held'), false);
+
+	const sent = outgoing(state, records, 100);
+	({state} = settle(
+		state,
+		sent,
+		sent.map(() => 'applied'),
+	));
+	assert.equal(settledKeys(state).has('trash:held'), true);
+
+	const again = splitLibrary(emptyStore(), [huge], [], {}, settledKeys(state));
+	assert.equal(capture(state, again, T0 + 1), state);
+
+	const removed = capture(
+		state,
+		splitLibrary(emptyStore(), [], [], {}, settledKeys(state)),
+		T0 + 2,
+	);
+	assert.equal(removed.shadow['trash:held'].deleted, true);
+});
+
+test('an oversized trash entry still waiting to be sent leaves the queue as a delete', () => {
+	const huge = trashedOfBytes('stuck', TRASH_SYNC_MAX_BYTES + 1, '€');
+	const queued = capture(
+		newSyncState('dev'),
+		splitLibrary(emptyStore(), [huge], [], {}, new Set(['trash:stuck'])),
+		T0,
+	);
+	const records = splitLibrary(
+		emptyStore(),
+		[huge],
+		[],
+		{},
+		settledKeys(queued),
+	);
+	const sent = outgoing(capture(queued, records, T0 + 1), records, 100).filter(
+		(change) => change.kind === 'trash',
+	);
+	assert.deepEqual(
+		sent.map((change) => [change.id, change.deleted, 'value' in change]),
+		[['stuck', true, false]],
+	);
 });
 
 test('a deleted trash entry is sent as a delete', () => {

@@ -66,6 +66,15 @@ const without = (shadow: SyncState['shadow'], keys: ReadonlySet<string>) =>
 				Object.entries(shadow).filter(([key]) => !keys.has(key)),
 			);
 
+export const settledKeys = (state: SyncState): Set<string> => {
+	const queued = new Set(state.outbox);
+	return new Set(
+		Object.entries(state.shadow)
+			.filter(([key, entry]) => !entry.deleted && !queued.has(key))
+			.map(([key]) => key),
+	);
+};
+
 export function orderList(
 	keys: readonly string[],
 	current: (key: string) => string | undefined,

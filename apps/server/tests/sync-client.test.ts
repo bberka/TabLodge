@@ -23,6 +23,7 @@ import {
 } from '../../extension/src/shared/sync/compat';
 import type {SyncedSource} from '../../extension/src/shared/sync/library-records';
 import {spreadKeys} from '../../extension/src/shared/sync/order-key';
+import {startClock, tick} from '../../extension/src/shared/sync/clock';
 
 const TOKEN = 'client-test-token-0123456789-abcdefghij';
 
@@ -1035,6 +1036,44 @@ test('an entry too large for the server stays on the device and does not stop sy
 	await until(() => trashIds(b).length === 1 && ids(b.store).length === 1);
 	assert.deepEqual(trashIds(b), ['small']);
 	assert.deepEqual(trashIds(a).toSorted(), ['huge', 'small']);
+	assert.equal((await a.client.status()).error, null);
+});
+
+test('an oversized trash entry already on the server stays on every device until one removes it', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withTrash: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	const huge = trashEntry('older', '€'.repeat(80_000));
+	const pushed = await server.app.request('/v1/changes', {
+		method: 'POST',
+		headers: {authorization: `Bearer ${TOKEN}`},
+		body: JSON.stringify({
+			changes: [
+				{
+					kind: 'trash',
+					id: huge.id,
+					h: tick(startClock(), Date.now()).h,
+					d: 'older-version',
+					value: huge,
+				},
+			],
+		}),
+	});
+	assert.equal(pushed.status, 200);
+
+	await a.client.syncNow();
+	assert.deepEqual(trashIds(a), ['older']);
+	a.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await a.client.syncNow();
+	await a.client.syncNow();
+	const b = makeDevice(server, emptyStore(), {withTrash: true});
+	await b.client.connect(URL_BASE, TOKEN);
+	await b.client.syncNow();
+	assert.deepEqual(trashIds(b), ['older']);
+
+	b.trash = [];
+	b.client.localChanged();
+	await until(() => a.trash.length === 0);
 	assert.equal((await a.client.status()).error, null);
 });
 
