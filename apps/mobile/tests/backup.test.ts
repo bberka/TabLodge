@@ -25,6 +25,7 @@ import {
 	keepSafetyCopy,
 	readSafetyCopy,
 	replaceLibrary,
+	runBackupRestore,
 } from '../src/transfer/restore';
 
 vi.mock('expo-constants', () => ({default: {expoConfig: {version: '9.9.9'}}}));
@@ -486,5 +487,35 @@ describe('restoring replaces the library, with a safety copy first', () => {
 		assert.equal(await readSafetyCopy('private'), undefined);
 		await dropSafetyCopy('regular');
 		assert.equal(await readSafetyCopy('regular'), undefined);
+	});
+
+	test('runBackupRestore reports partial restore when a step after library replacement fails', async () => {
+		const failedBefore = await runBackupRestore({
+			keepSafety: async () => undefined,
+			async replace() {
+				throw new Error('disk full');
+			},
+			afterReplace: async () => undefined,
+		});
+		assert.deepEqual(failedBefore, {status: 'failed'});
+
+		const partial = await runBackupRestore({
+			keepSafety: async () => undefined,
+			replace: async () => undefined,
+			async afterReplace() {
+				throw new Error('thumbnail write failed');
+			},
+		});
+		assert.deepEqual(partial, {
+			status: 'partial',
+			detail: 'thumbnail write failed',
+		});
+
+		const ok = await runBackupRestore({
+			keepSafety: async () => undefined,
+			replace: async () => undefined,
+			afterReplace: async () => undefined,
+		});
+		assert.deepEqual(ok, {status: 'ok'});
 	});
 });

@@ -47,3 +47,29 @@ export async function readSafetyCopy(
 export async function dropSafetyCopy(library: LibraryName): Promise<void> {
 	await removeKeys([keyOf(library)]);
 }
+
+export type RestoreOutcome =
+	{status: 'ok'} | {status: 'partial'; detail: string} | {status: 'failed'};
+
+export async function runBackupRestore(steps: {
+	keepSafety: () => Promise<void>;
+	replace: () => Promise<void>;
+	afterReplace: () => Promise<void>;
+}): Promise<RestoreOutcome> {
+	let replaced = false;
+	try {
+		await steps.keepSafety();
+		await steps.replace();
+		replaced = true;
+		await steps.afterReplace();
+		return {status: 'ok'};
+	} catch (reason) {
+		if (replaced) {
+			const detail =
+				reason instanceof Error && reason.message ? reason.message : '';
+			return {status: 'partial', detail};
+		}
+
+		return {status: 'failed'};
+	}
+}

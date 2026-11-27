@@ -1689,10 +1689,18 @@ export function ImportDialog({
 				}
 
 				await send('ADD_PAGE_COPIES', {copies: full.copies});
-				await restoreBackupImages(full);
+				const restoredImages = await restoreBackupImages(full);
 
 				onOpenChange(false);
 				await onImported?.();
+				if (restoredImages.failed > 0) {
+					showStatus(
+						`Backup added, but ${plural(restoredImages.failed, 'image')} could not be restored.${restoredImages.error ? ` ${restoredImages.error}` : ''}`,
+						true,
+					);
+					return;
+				}
+
 				offerUndo(mergeSummary(merged), merged.undoId, showStatus, async () =>
 					onImported?.(),
 				);
@@ -1712,10 +1720,18 @@ export function ImportDialog({
 				throw new Error(result?.error || 'Could not import this backup.');
 			}
 
-			await restoreBackupImages(full);
+			const restoredImages = await restoreBackupImages(full);
 
 			onOpenChange(false);
 			await onImported?.();
+			if (restoredImages.failed > 0) {
+				showStatus(
+					`Backup imported, but ${plural(restoredImages.failed, 'image')} could not be restored.${restoredImages.error ? ` ${restoredImages.error}` : ''}`,
+					true,
+				);
+				return;
+			}
+
 			offerUndo(
 				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.`,
 				result.undoId,

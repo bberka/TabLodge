@@ -63,6 +63,7 @@ import {
 	offerUndo,
 	type TrashFilter,
 } from './recovery-core';
+import {isRecoveryStorageKey} from './recovery-keys';
 import {cn} from '@/lib/utils';
 
 const REASON_LABELS: Record<
@@ -797,8 +798,6 @@ type UsageText = {
 	images: string;
 };
 
-const RECOVERY_KEY = /\.(?:trash|backups|snapshots)$/;
-
 function BackupsHelpButton() {
 	return (
 		<Popover>
@@ -961,7 +960,7 @@ export function RecoveryTools({
 		refreshQuietly();
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const onChanged = (changes: Record<string, unknown>) => {
-			if (Object.keys(changes).every((key) => !RECOVERY_KEY.test(key))) {
+			if (Object.keys(changes).every((key) => !isRecoveryStorageKey(key))) {
 				return;
 			}
 

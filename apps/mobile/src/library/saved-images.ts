@@ -10,6 +10,7 @@ import {
 } from './image-thumbs';
 import {
 	getLibrary,
+	mutateRegular,
 	nudgeRegular,
 	subscribeLibrary,
 	whenLibraryLoaded,
@@ -27,8 +28,11 @@ async function liveUrls(): Promise<Set<string>> {
 }
 
 async function sweep() {
-	const live = await liveUrls();
-	if (live.size > 0 && (await sweepImageThumbs(live)) > 0) {
+	const gone = await mutateRegular(async () => {
+		const live = await liveUrls();
+		return sweepImageThumbs(live);
+	});
+	if (gone > 0) {
 		nudgeRegular();
 	}
 }
@@ -53,7 +57,7 @@ export async function deleteImageWithUndo(
 	url: string,
 	reopen: (url: string) => void,
 ): Promise<void> {
-	const removed = await removeImageThumb(url);
+	const removed = await mutateRegular(async () => removeImageThumb(url));
 	if (!removed) {
 		return;
 	}
@@ -62,7 +66,9 @@ export async function deleteImageWithUndo(
 	showSnack(IMAGE_DELETED, {
 		label: 'Undo',
 		async run() {
-			await putImageThumbs([removed]);
+			await mutateRegular(async () => {
+				await putImageThumbs([removed]);
+			});
 			nudgeRegular();
 			reopen(url);
 		},
@@ -72,12 +78,16 @@ export async function deleteImageWithUndo(
 export async function restoreImageThumbs(
 	values: readonly unknown[],
 ): Promise<void> {
-	const live = await liveUrls();
-	await putImageThumbs(
-		values.filter(
-			(value) =>
-				isRecord(value) && typeof value.url === 'string' && live.has(value.url),
-		),
-	);
+	await mutateRegular(async () => {
+		const live = await liveUrls();
+		await putImageThumbs(
+			values.filter(
+				(value) =>
+					isRecord(value) &&
+					typeof value.url === 'string' &&
+					live.has(value.url),
+			),
+		);
+	});
 	nudgeRegular();
 }

@@ -296,15 +296,26 @@ export function backupImages(
 	const entries = Array.isArray(parts.images)
 		? (parts.images as unknown[])
 		: [];
+	const encoded = new Map<string, string>();
 	return entries.map((entry) => {
 		if (!isRecord(entry) || typeof entry.url !== 'string') {
 			return entry;
 		}
 
 		const type = IMAGE_TYPES.find((known) => known === entry.type);
-		const file =
-			type && parts.imageFiles?.[backupImageFile({url: entry.url, type})];
+		const fileName = type ? backupImageFile({url: entry.url, type}) : undefined;
+		const file = fileName ? parts.imageFiles?.[fileName] : undefined;
 		const {data: _data, ...thumb} = entry;
-		return file ? {...thumb, data: bytesToBase64(file)} : thumb;
+		if (!file || !fileName) {
+			return thumb;
+		}
+
+		let data = encoded.get(fileName);
+		if (data === undefined) {
+			data = bytesToBase64(file);
+			encoded.set(fileName, data);
+		}
+
+		return {...thumb, data};
 	});
 }

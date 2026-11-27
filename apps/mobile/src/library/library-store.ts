@@ -37,6 +37,7 @@ const SEED_KEY = 'tablodge.dev.seed';
 
 const core = createLibraryCore(LIBRARY_KEY);
 const {mutate, write, notify: notifyStore} = core;
+export const mutateRegular = mutate;
 const regularRetention = () => core.store.settings.trashRetentionDays;
 let loaded = false;
 const {promise: libraryLoaded, resolve: finishLoading} =

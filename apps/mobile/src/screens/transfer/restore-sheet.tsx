@@ -10,6 +10,7 @@ import {
 	keepSafetyCopy,
 	readSafetyCopy,
 	replaceLibrary,
+	runBackupRestore,
 } from '../../transfer/restore';
 import {
 	backupPreferences,
@@ -101,27 +102,39 @@ function RestoreForm({
 			{label: 'Replace', destructive: true},
 			() => {
 				void (async () => {
-					try {
-						await keepSafetyCopy(view, store, Date.now(), backupPreferences());
-						await editIn(view, (current) =>
-							replaceLibrary(current, read.store, Date.now()),
-						);
-						restorePreferences(read.phoneSettings);
-						if (view === 'regular') {
+					const outcome = await runBackupRestore({
+						keepSafety: async () =>
+							keepSafetyCopy(view, store, Date.now(), backupPreferences()),
+						replace: async () =>
+							editIn(view, (current) =>
+								replaceLibrary(current, read.store, Date.now()),
+							),
+						async afterReplace() {
+							restorePreferences(read.phoneSettings);
+							if (view !== 'regular') {
+								return;
+							}
+
 							await restoreCopies(read.copies);
 							await restoreImageThumbs(read.images);
-						}
-
-						showSnack('Backup restored', {
-							label: 'Undo',
-							run() {
-								void undoRestore(view);
-							},
-						});
-						onDone();
-					} catch {
+						},
+					});
+					if (outcome.status === 'failed') {
 						notify('Could not restore', 'Nothing was changed. Try again.');
+						return;
 					}
+
+					const message =
+						outcome.status === 'partial'
+							? `Backup partly restored; some offline copies or images could not be restored${outcome.detail ? ` (${outcome.detail})` : ''}.`
+							: 'Backup restored';
+					showSnack(message, {
+						label: 'Undo',
+						run() {
+							void undoRestore(view);
+						},
+					});
+					onDone();
 				})();
 			},
 		);
