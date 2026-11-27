@@ -8,8 +8,8 @@ Hono sync server: Docker image (Node, SQLite) or Cloudflare Worker with Durable 
 | --- | --- |
 | `src/` | API (`api.ts`), SQLite change log, Node entry (`node.ts`), Worker entry (`worker.ts`) |
 | `scripts/` | `cloudflare-deploy.ts` (bundles button's Worker), `deploy-cloudflare.ts`, `setup-cloudflare.ts`, `transfer.ts` |
-| `cloudflare-deploy/` | Button copy, update workflow; generated `worker.js`, shared `deploy.js` |
-| `Dockerfile`, `compose*.yaml`, `wrangler.jsonc` | Docker and Cloudflare deployment |
+| `cloudflare-deploy/` | Button copy, update workflow, generated `worker.js`, shared `deploy.js` |
+| `Dockerfile`, `compose*.yaml`, `wrangler.jsonc` | Docker, Cloudflare deployment |
 
 Protocol code (`apps/extension/src/shared/sync/`) shared with extension and Android app; server imports it from there.
 
