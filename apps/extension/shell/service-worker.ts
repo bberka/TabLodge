@@ -8601,7 +8601,9 @@ const isUndoRecord = (value: unknown): value is UndoRecord =>
 	typeof value.id === 'string' &&
 	Array.isArray(value.keys) &&
 	isRecord(value.before) &&
-	isRecord(value.after);
+	isRecord(value.after) &&
+	(value.catchUp === undefined ||
+		(isRecord(value.catchUp) && Array.isArray(value.catchUp.bookmarkIds)));
 
 const undoHash = (value: unknown) =>
 	value === undefined ? 'none' : hashText(JSON.stringify(value));
