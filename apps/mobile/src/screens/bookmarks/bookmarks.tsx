@@ -66,6 +66,7 @@ import {
 	sendToPrivate,
 } from '../../private/send-to-private';
 import {takeJump, usePendingJump} from '../../library/jump';
+import {rememberColumn, takeStartColumn} from '../../library/last-used';
 import {SearchElsewhere} from '../search-elsewhere';
 import {SearchTipsSheet} from '../search-tips';
 import {resultCount} from '../../library/search-count';
@@ -130,8 +131,9 @@ export function BookmarksScreen({
 	const imageThumbs = useImageThumbs();
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
-	const [picked, setPicked] = useState('');
-	const [inside, setInside] = useState(false);
+	const [startColumn] = useState(takeStartColumn);
+	const [picked, setPicked] = useState(startColumn ?? '');
+	const [inside, setInside] = useState(startColumn !== undefined);
 	const isListView = usePreferences().bookmarkView === 'list';
 	const search = useSearch();
 	const [tipsOpen, setTipsOpen] = useState(false);
@@ -209,6 +211,11 @@ export function BookmarksScreen({
 	}, [searchWanted]);
 	const isSearching = query.trim().length > 0;
 	const atList = isListView && !inside && !isSearching;
+	useEffect(() => {
+		if (view === 'regular' && !atList && !isSearching) {
+			rememberColumn(columnId);
+		}
+	}, [view, atList, isSearching, columnId]);
 	const fade = useCrossfade(atList);
 	useBackAction(isListView && inside && !isSearching, () => {
 		setInside(false);

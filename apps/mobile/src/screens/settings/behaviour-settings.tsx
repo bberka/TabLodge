@@ -121,6 +121,35 @@ export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 	);
 }
 
+export function StartupCard() {
+	const prefs = usePreferences();
+	return (
+		<SettingsCard
+			section={SECTIONS.startup}
+			icon="home-outline"
+			description="The screen the app opens on."
+		>
+			<SelectRow
+				row={ROWS.startupTab}
+				value={prefs.startupTab}
+				choices={[
+					{id: 'bookmarks', name: 'Bookmarks', icon: 'bookmark-outline'},
+					{id: 'sessions', name: 'Sessions', icon: 'albums-outline'},
+					{
+						id: 'last',
+						name: 'Last used',
+						hint: 'The tab you left, with the column you had open in Bookmarks',
+						icon: 'time-outline',
+					},
+				]}
+				onChange={(startupTab) => {
+					setPreferences({startupTab});
+				}}
+			/>
+		</SettingsCard>
+	);
+}
+
 export function BookmarkBehaviourCard() {
 	const prefs = usePreferences();
 	const settings = useLinkSettings(true);
