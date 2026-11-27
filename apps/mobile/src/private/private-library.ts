@@ -55,6 +55,7 @@ const LOCK_KEY = 'tablodge.private.lock';
 const KEPT_KEY = 'tablodge.private.keptKey';
 const ERASING_KEY = 'tablodge.private.erasing';
 const SENT_PENDING_KEY = 'tablodge.sendprivate.pending';
+const UNPUSHED_KEY = 'tablodge.private.unpushed';
 const prefix = (key: string) => `tablodge.private.${key}`;
 
 type Lock = {
@@ -149,6 +150,12 @@ const serial = async <T>(step: () => Promise<T>): Promise<T> => {
 };
 
 let epoch = 0;
+let editSeq = 0;
+
+const markUnpushed = async () => {
+	editSeq += 1;
+	await writeJson(UNPUSHED_KEY, true);
+};
 
 const setLock = async (next: Lock | undefined) => {
 	epoch += 1;
@@ -311,6 +318,7 @@ function createClient() {
 			return baseCodec.open(change);
 		},
 	};
+	let roundReadSeq = -1;
 	return createSyncClient({
 		async get(key) {
 			return key === SYNC_CONFIG_KEY ? target() : readJson(prefix(key));
@@ -339,7 +347,24 @@ function createClient() {
 				live();
 				return work();
 			}),
-		readLibrary: async () => core.store,
+		async readLibrary() {
+			roundReadSeq = editSeq;
+			return core.store;
+		},
+		async onSynced() {
+			live();
+			await core.mutate(async () => {
+				live();
+				if (roundReadSeq !== editSeq) {
+					return;
+				}
+
+				await removeKeys([UNPUSHED_KEY]);
+				if (roundReadSeq !== editSeq) {
+					await writeJson(UNPUSHED_KEY, true);
+				}
+			});
+		},
 		trash: (() => {
 			const trash = syncedTrash(
 				'private',
@@ -451,6 +476,7 @@ export async function setupPrivate(credential?: Credential): Promise<void> {
 		await settleErase();
 		core.load(emptyStore(Date.now()));
 		await core.write(core.store);
+		await markUnpushed();
 		exists = true;
 		await writeJson(ON_KEY, true);
 		await (credential ? protect(credential) : setLock(undefined));
@@ -477,7 +503,10 @@ async function protect(credential: Credential): Promise<void> {
 }
 
 export async function protectPrivate(credential: Credential): Promise<void> {
-	await serial(async () => protect(credential));
+	await serial(async () => {
+		await protect(credential);
+		await markUnpushed();
+	});
 	stopClient();
 	refreshState();
 	runClient();
@@ -631,6 +660,7 @@ async function eraseSteps(): Promise<void> {
 	await removeKeys([
 		prefix('tablodge.sync.state'),
 		prefix('tablodge.sync.status'),
+		UNPUSHED_KEY,
 		PRIVATE_TRASH_KEY,
 		PRIVATE_KEY_KEY,
 		KEPT_KEY,
@@ -743,6 +773,84 @@ export async function privateServerInfo(): Promise<{
 	}
 }
 
+export type PrivateEraseCopy = 'none' | 'confirmed' | 'uncertain';
+
+const ERASE_NOTICE_BASE =
+	'Erasing deletes the private library from this phone, with its password, and asks for a new one.';
+
+export function privateEraseNotice(copy?: PrivateEraseCopy): string {
+	switch (copy) {
+		case undefined: {
+			return ERASE_NOTICE_BASE;
+		}
+
+		case 'none': {
+			return `${ERASE_NOTICE_BASE} This cannot be undone.`;
+		}
+
+		case 'confirmed': {
+			return `${ERASE_NOTICE_BASE} Your server keeps its copy.`;
+		}
+
+		case 'uncertain': {
+			return `${ERASE_NOTICE_BASE} Your server may have a copy; check it before erasing.`;
+		}
+	}
+}
+
+async function lastPushCompleted(url: string): Promise<boolean> {
+	const [savedStatus, savedState, unpushed, pendingSent] = await Promise.all([
+		readJson(prefix(SYNC_STATUS_KEY)),
+		readJson(prefix('tablodge.sync.state')),
+		readJson(UNPUSHED_KEY),
+		readPending(),
+	]);
+	if (
+		unpushed === true ||
+		pendingSent.length > 0 ||
+		!isRecord(savedStatus) ||
+		savedStatus.url !== url ||
+		savedStatus.phase !== 'idle' ||
+		typeof savedStatus.lastSyncAt !== 'number' ||
+		savedStatus.pending !== 0 ||
+		savedStatus.error !== null ||
+		savedStatus.needsKey === true
+	) {
+		return false;
+	}
+
+	return (
+		isRecord(savedState) &&
+		savedState.joined === true &&
+		Array.isArray(savedState.outbox) &&
+		savedState.outbox.length === 0
+	);
+}
+
+export async function privateEraseCopy(): Promise<PrivateEraseCopy> {
+	const to = await target();
+	if (!to) {
+		return 'none';
+	}
+
+	if (!getPreferences().syncPrivate) {
+		return 'uncertain';
+	}
+
+	let key: {id: string; wrapped: string} | undefined;
+	try {
+		key = await serverKey(to);
+	} catch {
+		return 'uncertain';
+	}
+
+	if (!key || (lock && lock.id !== key.id)) {
+		return 'uncertain';
+	}
+
+	return (await lastPushCompleted(to.url)) ? 'confirmed' : 'uncertain';
+}
+
 export async function openFromServer(
 	credential?: string,
 	isCancelled: () => boolean = () => false,
@@ -849,14 +957,19 @@ export async function editPrivate(
 ): Promise<void> {
 	await core.mutate(async () => {
 		const next = change(core.store);
-		if (next !== core.store) {
-			await core.write(next);
+		if (next === core.store) {
+			return;
 		}
+
+		await core.write(next);
+		await markUnpushed();
 	});
 	client?.localChanged();
 }
 
 export const nudgePrivate = (): void => {
+	editSeq += 1;
+	void writeJson(UNPUSHED_KEY, true).catch(() => undefined);
 	client?.localChanged();
 };
 
@@ -886,6 +999,7 @@ export async function disconnectPrivate(): Promise<void> {
 	await removeKeys([
 		prefix('tablodge.sync.state'),
 		prefix('tablodge.sync.status'),
+		UNPUSHED_KEY,
 	]);
 	await refreshPrivateStatus();
 }
@@ -994,6 +1108,7 @@ export async function takeInSent(): Promise<void> {
 			}
 
 			await core.write(addSent(core.store, received).store);
+			await markUnpushed();
 		});
 		client?.localChanged();
 		const imported = new Set(ready.map((entry) => entry.id));
