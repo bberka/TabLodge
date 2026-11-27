@@ -622,35 +622,50 @@ export function SessionManager({
 			return;
 		}
 
-		revealRef.current = null;
-		const behavior = scrollBehavior();
+		const selector = `#session-${CSS.escape(id)}`;
+		const finishReveal = (card: Element, behavior: ScrollBehavior) => {
+			if (revealRef.current === reveal) {
+				revealRef.current = null;
+			}
+
+			card.scrollIntoView({block: 'center', behavior});
+			if (reveal.focus) {
+				card.querySelector<HTMLElement>('button')?.focus({preventScroll: true});
+			}
+		};
+
+		const existing = document.querySelector(selector);
+		if (existing) {
+			finishReveal(existing, scrollBehavior());
+			return;
+		}
+
 		sessionListRef.current?.scrollToIndex(index, {
 			align: 'center',
-			behavior: behavior === 'smooth' ? 'smooth' : 'auto',
+			behavior: 'auto',
 		});
 		let cancelled = false;
 		let frames = 0;
 		let frame = 0;
 		const focusRevealed = () => {
-			if (cancelled) {
+			if (cancelled || revealRef.current !== reveal) {
 				return;
 			}
 
-			const card = document.querySelector(`#session-${CSS.escape(id)}`);
+			const card = document.querySelector(selector);
 			if (card) {
-				card.scrollIntoView({block: 'center', behavior});
-				if (reveal.focus) {
-					card
-						.querySelector<HTMLElement>('button')
-						?.focus({preventScroll: true});
-				}
-
+				finishReveal(card, 'auto');
 				return;
 			}
 
 			frames += 1;
-			if (frames < 6) {
+			if (frames < 30) {
 				frame = requestAnimationFrame(focusRevealed);
+				return;
+			}
+
+			if (revealRef.current === reveal) {
+				revealRef.current = null;
 			}
 		};
 
