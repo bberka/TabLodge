@@ -66,6 +66,11 @@ const PASSWORD = {value: 'correct horse battery'};
 const SECRET = 'https://secret.example/';
 const PENDING_KEY = 'tablodge.sendprivate.pending';
 const PRIVATE_LIBRARY_KEY = 'tablodge.private.library';
+const REGULAR_LIBRARY_KEY = 'tablodge.library';
+const nextTurn = async () =>
+	new Promise((resolve) => {
+		setImmediate(resolve);
+	});
 
 type App = {
 	regular: typeof RegularModule;
@@ -728,6 +733,45 @@ describe('Send to private storage on the phone', () => {
 		assert.equal(lastSnack()?.message, '“Empty” has no bookmarks to send.');
 		assert.equal(pending(), undefined);
 	});
+
+	for (const [moment, heldKey] of [
+		['the link is being queued', PENDING_KEY],
+		['the regular library is being saved', REGULAR_LIBRARY_KEY],
+	] as const) {
+		test(`an erase that lands while ${moment} leaves the link in the regular library`, async () => {
+			const app = await startApp();
+			await app.privateLibrary.setupPrivate(PASSWORD);
+			const regular = await withRegularLinks(app);
+			const paused = Promise.withResolvers<void>();
+			holds.write.set(heldKey, paused.promise);
+			const sending = app.send.sendToPrivate([
+				{kind: 'bookmark', bookmarkId: regular.bookmarks[0].id},
+			]);
+			while (holds.write.has(heldKey)) {
+				await nextTurn();
+			}
+
+			const erasing = app.privateLibrary.removePrivate();
+			for (let turn = 0; turn < 20; turn += 1) {
+				await nextTurn();
+			}
+
+			paused.resolve();
+			assert.equal(await sending, false);
+			await erasing;
+			assert.equal(
+				lastSnack()?.message,
+				'The private library was being erased. Nothing was sent',
+			);
+			assert.deepEqual(
+				app.regular.getLibrary().bookmarks.map((entry) => entry.url),
+				[SECRET],
+			);
+			assert.ok(memory.get(REGULAR_LIBRARY_KEY)?.includes(SECRET));
+			assert.equal(pending(), undefined);
+			assert.equal(app.privateLibrary.getPrivateState().exists, false);
+		});
+	}
 
 	test('erasing the private library drops links waiting for it', async () => {
 		let app = await startApp();
