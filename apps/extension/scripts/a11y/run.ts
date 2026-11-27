@@ -16,6 +16,7 @@ import {
 } from './harness.ts';
 import {openPage} from './pages.ts';
 import {axeCheck} from './axe.ts';
+import {askBeforeDeletingCheck} from './delete-confirmation.ts';
 import {
 	boardLayoutCheck,
 	bookmarkAddToSessionCheck,
@@ -215,6 +216,7 @@ async function main() {
 		await dialogFocusReturnCheck(env);
 		await searchAnnouncementCheck(env);
 		await bookmarkAddToSessionCheck(env);
+		await askBeforeDeletingCheck(env);
 
 		if (process.env.TABLODGE_CAPTURE_EVIDENCE === '1') {
 			await check('mobile export dialog evidence at DSF 3', async () => {

@@ -79,6 +79,7 @@ import {
 } from '../shared/ui';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
 import {BOOKMARK_SORT_OPTIONS, sortBookmarks} from '../shared/bookmark-rules';
+import {bookmarkDeleteQuestion} from '../shared/delete-question';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
@@ -151,6 +152,7 @@ import {
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
+import {useDeleteConfirmation} from './delete-confirmation';
 import {createPageAutoscroller, watchDragAutoscroll} from './drag-autoscroll';
 import {FinderPalette, FinderTrigger, emitFinderEvent} from './finder';
 import {
@@ -461,6 +463,9 @@ function NewTab() {
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
 	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
+	const {askBeforeDeleting, confirmationDialog} = useDeleteConfirmation(
+		settings.askBeforeDeleting === true,
+	);
 	const bookmarkPageSize = settings.limitBookmarksPerColumn
 		? (settings.bookmarkColumnPageSize ?? 16)
 		: COLUMN_PAGE;
@@ -1102,7 +1107,7 @@ function NewTab() {
 			? sourceSavingInto(column.id, columns, statuses)
 			: undefined;
 		const saved = statuses?.find((item) => item.id === source?.id);
-		if (count === 0 && !source) {
+		if (count === 0 && !source && !settings.askBeforeDeleting) {
 			void deleteColumn(column, null);
 			return;
 		}
@@ -1409,6 +1414,13 @@ function NewTab() {
 		openBookmarkMove(selectedBookmarkIds);
 	}
 
+	function requestDeleteBookmark(bookmark: Bookmark, closeEditor = false) {
+		askBeforeDeleting(
+			bookmarkDeleteQuestion([bookmark]),
+			() => void deleteBookmark(bookmark, closeEditor),
+		);
+	}
+
 	async function deleteBookmark(bookmark: Bookmark, closeEditor = false) {
 		const result = await send('DELETE_BOOKMARK', {bookmarkId: bookmark.id});
 		if (!result?.ok) {
@@ -1437,6 +1449,16 @@ function NewTab() {
 		if (sent) {
 			clearBookmarkSelection();
 		}
+	}
+
+	function requestDeleteSelectedBookmarks() {
+		const ids = new Set(selectedBookmarkIds);
+		askBeforeDeleting(
+			bookmarkDeleteQuestion(
+				bookmarks.filter((bookmark) => ids.has(bookmark.id)),
+			),
+			() => void deleteSelectedBookmarks(),
+		);
 	}
 
 	async function deleteSelectedBookmarks() {
@@ -1788,7 +1810,7 @@ function NewTab() {
 			return;
 		}
 
-		await deleteBookmark(bookmark);
+		requestDeleteBookmark(bookmark);
 	}
 
 	async function addDroppedLinks(
@@ -2643,7 +2665,7 @@ function NewTab() {
 							size="sm"
 							className="text-destructive hover:text-destructive"
 							disabled={busy === 'bookmark-batch'}
-							onClick={() => void deleteSelectedBookmarks()}
+							onClick={requestDeleteSelectedBookmarks}
 						>
 							<Trash2 className="h-4 w-4" />
 							Delete
@@ -3282,7 +3304,7 @@ function NewTab() {
 									<Button
 										type="button"
 										variant="destructive"
-										onClick={() => deleteBookmark(editedBookmark, true)}
+										onClick={() => requestDeleteBookmark(editedBookmark, true)}
 									>
 										<Trash2 />
 										Delete
@@ -3727,6 +3749,7 @@ function NewTab() {
 					request={targetPicker}
 					onClose={() => setTargetPicker(null)}
 				/>
+				{confirmationDialog}
 			</main>
 		</LinkPreviewProvider>
 	);

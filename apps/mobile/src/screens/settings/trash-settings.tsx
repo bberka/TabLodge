@@ -26,6 +26,7 @@ import {useView} from '../../library/view';
 import {SettingsCard} from './settings-card';
 import {ROWS, SECTIONS} from './settings-index';
 import {SelectRow} from './select-row';
+import {Toggle} from './behaviour-settings';
 
 const countLabel = (count: number) =>
 	`${count} ${count === 1 ? 'item' : 'items'}`;
@@ -212,6 +213,13 @@ export function TrashCard() {
 			icon="trash-bin-outline"
 			description="Bring back what you deleted on this phone."
 		>
+			<Toggle
+				row={ROWS.askBeforeDeleting}
+				value={settings.askBeforeDeleting}
+				onChange={(value) => {
+					void setSyncedSetting('askBeforeDeleting', value);
+				}}
+			/>
 			<SelectRow
 				row={ROWS.trashRetention}
 				value={String(settings.trashRetentionDays)}

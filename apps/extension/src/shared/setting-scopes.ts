@@ -115,6 +115,7 @@ export const LIBRARY_SETTINGS = {
 		'Needs the optional downloads permission, which only a click in that browser can grant.',
 	],
 	trashRetentionDays: ['all', BOTH],
+	askBeforeDeleting: ['all', BOTH],
 	autoArchiveDays: ['all', BOTH],
 	sessionNameStyle: ['all', BOTH],
 	sessionNameTemplate: ['all', BOTH],

@@ -164,6 +164,7 @@ export type Settings = {
 	autoBackupKeep: number;
 	autoBackupToDownloads: boolean;
 	trashRetentionDays: number;
+	askBeforeDeleting: boolean;
 	autoArchiveDays: number;
 	sessionNameStyle: SessionNameStyle;
 	sessionNameTemplate: string;

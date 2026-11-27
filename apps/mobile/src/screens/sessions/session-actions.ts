@@ -9,7 +9,9 @@ import {
 	restoreSession,
 	unarchiveSession,
 } from '../../library/session-edits';
-import {edit} from '../../library/library-store';
+import {edit, getShownLibrary} from '../../library/library-store';
+import {askBeforeDeleting} from '../../library/delete-prompt';
+import {sessionDeleteQuestion} from '../../../../extension/src/shared/delete-question';
 import {linkToOpen, type LinkSettings} from '../../library/links';
 import {sessionActionLook} from '../../library/row-actions';
 import {trashDeleted} from '../../library/trash-store';
@@ -94,19 +96,30 @@ export function runSessionAction(
 		}
 
 		case 'delete': {
-			void edit((current) => removeSession(current, session.id, Date.now()));
-			void trashDeleted([{kind: 'session', session}]);
-			showSnack(`Deleted ${session.name}`, {
-				label: 'Undo',
-				run() {
-					void edit((current) => restoreSession(current, session, Date.now()));
-				},
+			askBeforeDeleting(sessionDeleteQuestion([session]), () => {
+				deleteSession(session.id);
 			});
 			break;
 		}
 
 		default:
 	}
+}
+
+function deleteSession(id: string) {
+	const session = getShownLibrary().groups.find((group) => group.id === id);
+	if (!session) {
+		return;
+	}
+
+	void edit((current) => removeSession(current, id, Date.now()));
+	void trashDeleted([{kind: 'session', session}]);
+	showSnack(`Deleted ${session.name}`, {
+		label: 'Undo',
+		run() {
+			void edit((current) => restoreSession(current, session, Date.now()));
+		},
+	});
 }
 
 export function removeTab(session: Session, tabId: string) {

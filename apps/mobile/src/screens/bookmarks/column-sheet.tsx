@@ -15,7 +15,14 @@ import {
 	updateColumn,
 } from '../../library/board-edits';
 import {showSnack} from '../../ui/snackbar';
-import {edit, newId, useLibrary} from '../../library/library-store';
+import {
+	edit,
+	getShownLibrary,
+	newId,
+	useLibrary,
+} from '../../library/library-store';
+import {askBeforeDeleting} from '../../library/delete-prompt';
+import {columnDeleteQuestion} from '../../../../extension/src/shared/delete-question';
 import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {trashDeleted} from '../../library/trash-store';
 import {useColors} from '../../ui/theme';
@@ -26,24 +33,45 @@ export function confirmDeleteColumn(
 	column: {id: string; name: string},
 	onDeleted: () => void,
 ): void {
-	const whole = store.bookmarkColumns.find((entry) => entry.id === column.id);
+	if (store.bookmarkColumns.every((entry) => entry.id !== column.id)) {
+		return;
+	}
+
+	const count = store.bookmarks.filter(
+		(bookmark) => bookmark.columnId === column.id,
+	).length;
+	askBeforeDeleting(
+		columnDeleteQuestion(
+			column.name,
+			count,
+			columnAfterDelete(store, column.id)?.name,
+		),
+		() => {
+			deleteColumnWithUndo(column.id, onDeleted);
+		},
+	);
+}
+
+function columnAfterDelete(store: Store, id: string) {
+	const others = store.bookmarkColumns.filter((entry) => entry.id !== id);
+	return others.find((entry) => entry.isDefault) ?? others[0];
+}
+
+function deleteColumnWithUndo(id: string, onDeleted: () => void): void {
+	const store = getShownLibrary();
+	const whole = store.bookmarkColumns.find((entry) => entry.id === id);
 	if (!whole) {
 		return;
 	}
 
-	const own = store.bookmarks.filter(
-		(bookmark) => bookmark.columnId === column.id,
-	);
-	const others = store.bookmarkColumns.filter(
-		(entry) => entry.id !== column.id,
-	);
-	const target = others.find((entry) => entry.isDefault) ?? others[0];
+	const own = store.bookmarks.filter((bookmark) => bookmark.columnId === id);
+	const target = columnAfterDelete(store, id);
 	void edit((current) =>
-		deleteColumn(current, column.id, target?.id ?? '', Date.now()),
+		deleteColumn(current, id, target?.id ?? '', Date.now()),
 	);
 	void trashDeleted([{kind: 'column', column: whole, bookmarks: own}]);
 	onDeleted();
-	showSnack(`Deleted ${column.name}`, {
+	showSnack(`Deleted ${whole.name}`, {
 		label: 'Undo',
 		run() {
 			void edit((current) => restoreColumn(current, whole, own, Date.now()));

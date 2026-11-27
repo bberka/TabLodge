@@ -164,6 +164,10 @@ export const ROWS = {
 		label: 'Archive sessions not opened for',
 		hint: 'Moves them to the Archived folder when the app starts. Nothing is deleted',
 	},
+	askBeforeDeleting: {
+		label: 'Ask before deleting',
+		hint: 'Confirm before a bookmark, session or column is deleted. The extension uses it too',
+	},
 	trashRetention: {
 		label: 'Keep items in the trash for',
 		hint: 'Then deleted items are removed for good',
@@ -356,8 +360,9 @@ export const SECTIONS = {
 			'undelete',
 			'empty trash',
 			'retention',
+			'confirm',
 		],
-		rows: [ROWS.trashRetention],
+		rows: [ROWS.askBeforeDeleting, ROWS.trashRetention],
 	},
 	private: {
 		title: 'Private library',
