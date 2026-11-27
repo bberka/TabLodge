@@ -322,7 +322,7 @@ function Main() {
 	}, [hasShareIntent, shareIntent, resetShareIntent, openShare]);
 
 	const openTile = useCallback(async (route: TileRoute) => {
-		openingRef.current += 1;
+		const opening = ++openingRef.current;
 		setView('regular');
 		setTab('bookmarks');
 		if (route === 'search') {
@@ -333,6 +333,10 @@ function Main() {
 
 		const quick = Date.now() - BOOT < COLD_MS;
 		const parts = splitShared(await readClipboard());
+		if (opening !== openingRef.current) {
+			return;
+		}
+
 		setDraft((current) => ({
 			key: current.key + 1,
 			text: parts.url ?? '',
@@ -366,6 +370,7 @@ function Main() {
 				return;
 			}
 
+			openingRef.current += 1;
 			setView('regular');
 			setOpen(false);
 			requestJump({screen: 'bookmarks', columnId});
