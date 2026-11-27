@@ -327,10 +327,10 @@ export function AccentPalette({
 					</div>
 					<div className="flex items-center gap-2 border-t border-border px-3 py-2">
 						<div className="min-w-0 flex-1" aria-live="polite">
-							<div className="truncate text-[13px] font-medium">
+							<div className="truncate text-[0.8125rem] font-medium">
 								{focused?.label ?? ''}
 							</div>
-							<div className="truncate text-[11px] text-muted-foreground">
+							<div className="truncate text-[0.6875rem] text-muted-foreground">
 								{focused?.detail ?? ''}
 							</div>
 						</div>

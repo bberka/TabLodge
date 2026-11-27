@@ -11,7 +11,7 @@ import {
 
 export function Kbd({children}: {children: string}) {
 	return (
-		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
+		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[0.625rem] text-muted-foreground">
 			{children}
 		</kbd>
 	);

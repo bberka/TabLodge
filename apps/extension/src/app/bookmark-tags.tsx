@@ -27,7 +27,7 @@ import {cn} from '@/lib/utils';
 type Tagged = Pick<Bookmark, 'url' | 'tags' | 'hiddenKinds'>;
 
 const chip =
-	'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 text-[10px] leading-4 text-muted-foreground';
+	'inline-flex max-w-full items-center truncate rounded-full bg-muted px-1.5 outline outline-1 outline-transparent text-[0.625rem] leading-[1.6] text-muted-foreground';
 
 export function TagChips({
 	bookmark,

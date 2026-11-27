@@ -149,16 +149,18 @@ function PreviewCard({shown, url}: {shown: Shown; url: string}) {
 			)}
 			<div className="space-y-1 p-3">
 				{preview.title && (
-					<p className="line-clamp-2 text-sm font-semibold leading-5">
+					<p className="line-clamp-2 text-sm font-semibold leading-[1.4286]">
 						{preview.title}
 					</p>
 				)}
 				{preview.description && (
-					<p className="line-clamp-3 text-xs leading-4 text-muted-foreground">
+					<p className="line-clamp-3 text-xs leading-[1.3333] text-muted-foreground">
 						{preview.description}
 					</p>
 				)}
-				<p className="truncate text-[11px] text-muted-foreground">{host}</p>
+				<p className="truncate text-[0.6875rem] text-muted-foreground">
+					{host}
+				</p>
 			</div>
 		</div>
 	);

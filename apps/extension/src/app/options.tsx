@@ -1207,7 +1207,7 @@ function Options() {
 					</button>
 				) : (
 					<span
-						className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-[11px] text-muted-foreground sm:flex"
+						className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-[0.6875rem] text-muted-foreground sm:flex"
 						aria-hidden="true"
 					>
 						<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans">
@@ -1269,7 +1269,7 @@ function Options() {
 					</EmptyState>
 				</div>
 			) : (
-				<div className="grid gap-5 lg:col-start-2 lg:row-start-3">
+				<div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:col-start-2 lg:row-start-3">
 					{showAppearance && (
 						<SectionCard
 							id={sectionId(APPEARANCE.title)}
@@ -1627,7 +1627,7 @@ function Options() {
 								<>
 									<SyncSettings showStatus={showStatus} />
 									{!isFirefox && (
-										<p className="mt-4 text-xs leading-5 text-muted-foreground">
+										<p className="mt-4 text-xs leading-[1.6667] text-muted-foreground">
 											Private windows with their own saved storage sync
 											separately. To include them, open Settings in a private
 											window.
@@ -1920,7 +1920,7 @@ function Options() {
 									<p
 										id="excluded-origin-message"
 										className={cn(
-											'min-h-5 text-xs leading-5',
+											'min-h-5 text-xs leading-[1.6667]',
 											siteError
 												? 'font-medium text-destructive'
 												: 'text-muted-foreground',
@@ -1983,7 +1983,7 @@ function Options() {
 									<p
 										id="excluded-origin-message"
 										className={cn(
-											'min-h-5 text-xs leading-5',
+											'min-h-5 text-xs leading-[1.6667]',
 											siteFieldError
 												? 'font-medium text-destructive'
 												: 'text-muted-foreground',
@@ -2020,7 +2020,7 @@ function Options() {
 				</DialogContent>
 			</Dialog>
 			<StatusLine status={status} />
-			<footer className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground lg:col-start-2">
+			<footer className="mt-6 border-t border-border pt-4 text-xs leading-[1.6667] text-muted-foreground lg:col-start-2">
 				<p>
 					{PROJECT.name} reads tab details to save sessions and check for
 					duplicates. It reads a page only when you choose Keep a copy for it,
@@ -2370,12 +2370,12 @@ function SettingRow({
 			<div className="min-w-0">
 				<p className="text-sm font-medium">{label}</p>
 				{Boolean(help) && (
-					<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+					<p className="mt-1 max-w-xl text-xs leading-[1.6667] text-muted-foreground">
 						{help}
 					</p>
 				)}
 				{hint && hint.length > 0 && (
-					<p className="mt-1 text-xs leading-5 text-muted-foreground">
+					<p className="mt-1 text-xs leading-[1.6667] text-muted-foreground">
 						Option:{' '}
 						{hint.map((option, index) => (
 							<Fragment key={option}>
@@ -2676,7 +2676,7 @@ function DataRow({
 				/>
 				<div className="min-w-0">
 					<p className="text-sm font-medium">{label}</p>
-					<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+					<p className="mt-1 max-w-xl text-xs leading-[1.6667] text-muted-foreground">
 						{help}
 					</p>
 				</div>

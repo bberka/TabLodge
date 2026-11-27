@@ -142,7 +142,6 @@
 		box-sizing: border-box;
 	}
 	html {
-		min-width: 320px;
 		min-height: 100%;
 		background: rgb(var(--background));
 	}
@@ -251,7 +250,7 @@ body {
 		BlinkMacSystemFont,
 		'Segoe UI',
 		sans-serif;
-	font-size: 14px;
+	font-size: 0.875rem;
 	-webkit-font-smoothing: antialiased;
 }
 
@@ -354,5 +353,50 @@ body {
 		animation-duration: 0.01ms !important;
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
+	}
+}
+
+@media (forced-colors: active) {
+	:is(button, a).bg-primary {
+		background-color: Highlight;
+		color: HighlightText;
+	}
+	:is(
+		[aria-current],
+		[aria-pressed='true'],
+		[aria-selected='true'],
+		[data-state='active'],
+		[data-state='checked']
+	) {
+		outline: 2px solid Highlight;
+		outline-offset: -2px;
+	}
+	label:has(> input[type='radio']:checked) {
+		outline: 2px solid Highlight;
+		outline-offset: -2px;
+	}
+	.tn-switch[data-state='checked'] > span {
+		background-color: Highlight;
+		border-color: Highlight;
+	}
+}
+
+@media (prefers-contrast: more) {
+	:root {
+		--border: 113 113 122;
+		--input: 63 63 70;
+		--muted-foreground: 63 63 70;
+	}
+	:root[data-theme='dark'] {
+		--border: 113 113 122;
+		--input: 161 161 170;
+		--muted-foreground: 228 228 231;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root[data-theme='system'] {
+			--border: 113 113 122;
+			--input: 161 161 170;
+			--muted-foreground: 228 228 231;
+		}
 	}
 }

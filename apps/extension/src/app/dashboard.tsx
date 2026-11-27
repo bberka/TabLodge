@@ -3401,7 +3401,7 @@ const GroupCard = memo(
 											</span>
 										))}
 										{group.tabs.length > previewTabs.length && (
-											<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+											<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[0.625rem] font-semibold text-muted-foreground ring-2 ring-card">
 												+{group.tabs.length - previewTabs.length}
 											</span>
 										)}
@@ -3769,7 +3769,7 @@ const SavedTab = memo(
 						<span className="flex min-w-0 items-center gap-1.5">
 							<LinkPreview url={tab.url}>
 								<a
-									className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
+									className="truncate text-[0.8125rem] font-semibold hover:text-primary hover:underline"
 									href={linkDestination(tab.url, settings)}
 									target="_blank"
 									rel="noopener noreferrer"
@@ -3828,7 +3828,7 @@ const SavedTab = memo(
 						</span>
 						{displayUrl !== null && (
 							<p
-								className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground"
+								className="mt-0.5 truncate text-[0.6875rem] leading-[1.4545] text-muted-foreground"
 								title={tab.url}
 							>
 								<InsecureMarkFor url={tab.url} settings={settings} />

@@ -164,7 +164,7 @@ export function PasscodeSetup({
 				disabled={disabled}
 				onChange={(confirm) => onChange({...draft, confirm})}
 			/>
-			<p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5">
+			<p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-[1.6667]">
 				<CircleAlert
 					className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
 					aria-hidden="true"
@@ -180,7 +180,7 @@ export function PasscodeSetup({
 						onChange({...draft, acknowledged: checked === true})
 					}
 				/>
-				<Label htmlFor={`${id}-ack`} className="text-sm leading-5">
+				<Label htmlFor={`${id}-ack`} className="text-sm leading-[1.4286]">
 					I understand that a lost password cannot be recovered.
 				</Label>
 			</div>
@@ -231,7 +231,7 @@ export function PasscodeEntry({
 				<p
 					id={`${id}-entry-error`}
 					role="alert"
-					className="flex items-start gap-2 text-xs leading-5 text-destructive"
+					className="flex items-start gap-2 text-xs leading-[1.6667] text-destructive"
 				>
 					<CircleAlert
 						className="mt-0.5 h-3.5 w-3.5 shrink-0"

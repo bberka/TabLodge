@@ -417,7 +417,7 @@ function FullBackupOptions({
 							<Lock className="h-3.5 w-3.5" aria-hidden="true" />
 							Protect with a password
 						</Label>
-						<p className="mt-1 text-xs leading-5 text-muted-foreground">
+						<p className="mt-1 text-xs leading-[1.6667] text-muted-foreground">
 							Optional. Encrypts the whole backup file on this device. Only full
 							backups can be protected; other exports and automatic backups stay
 							plain text.
@@ -504,7 +504,7 @@ function SharePreviewPanel({
 						<h4 className="text-base font-semibold leading-tight wrap-anywhere">
 							{pageTitle}
 						</h4>
-						<p className="mt-1 text-[11px] text-muted-foreground">
+						<p className="mt-1 text-[0.6875rem] text-muted-foreground">
 							Links shared from {PROJECT.name} on{' '}
 							{new Date().toLocaleDateString(undefined, {dateStyle: 'medium'})}{' '}
 							· {plural(counts.links, 'link')}
@@ -533,13 +533,13 @@ function SharePreviewPanel({
 														</h5>
 													)}
 													{createdAt !== null && (
-														<p className="mt-0.5 text-[10px] text-muted-foreground">
+														<p className="mt-0.5 text-[0.625rem] text-muted-foreground">
 															Saved {new Date(createdAt).toLocaleDateString()}
 														</p>
 													)}
 												</div>
 												{!repeatedTitle && (
-													<span className="shrink-0 text-[11px] text-muted-foreground">
+													<span className="shrink-0 text-[0.6875rem] text-muted-foreground">
 														{plural(
 															group.tabs.length + group.moreLinks,
 															'link',
@@ -563,7 +563,7 @@ function SharePreviewPanel({
 														<span className="block text-xs font-semibold text-primary wrap-anywhere">
 															{tab.title || tab.url}
 														</span>
-														<span className="mt-0.5 block text-[10px] text-muted-foreground wrap-anywhere">
+														<span className="mt-0.5 block text-[0.625rem] text-muted-foreground wrap-anywhere">
 															{siteName(tab.url)}
 															{tab.pinned ? ' · Pinned' : ''}
 															{tab.nativeGroup?.title
@@ -578,7 +578,7 @@ function SharePreviewPanel({
 								);
 							})}
 							{preview.moreGroups > 0 && (
-								<p className="text-[11px] text-muted-foreground">
+								<p className="text-[0.6875rem] text-muted-foreground">
 									and {plural(preview.moreGroups, 'more group')}
 								</p>
 							)}
@@ -1048,7 +1048,7 @@ export function ShareDialog({
 								fileText={fileText}
 							/>
 							{chosen.id === 'html' && server === 'old' && (
-								<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+								<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-[1.6667] text-muted-foreground">
 									<Info
 										className="mt-0.5 h-3.5 w-3.5 shrink-0"
 										aria-hidden="true"
@@ -1059,7 +1059,7 @@ export function ShareDialog({
 							{chosen.id === 'html' &&
 								server === 'ready' &&
 								!shared.linkBase && (
-									<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+									<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-[1.6667] text-muted-foreground">
 										<Info
 											className="mt-0.5 h-3.5 w-3.5 shrink-0"
 											aria-hidden="true"
@@ -1075,7 +1075,7 @@ export function ShareDialog({
 								server === 'ready' &&
 								shared.linkBase &&
 								!shared.supportsLivePassword && (
-									<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+									<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-[1.6667] text-muted-foreground">
 										<Info
 											className="mt-0.5 h-3.5 w-3.5 shrink-0"
 											aria-hidden="true"
@@ -1982,7 +1982,7 @@ export function ImportDialog({
 													? 'Drop a file here'
 													: 'Drop a file here, or paste text'}
 										</h3>
-										<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+										<p className="mx-auto mt-1 max-w-md text-xs leading-[1.6667] text-muted-foreground">
 											{everything
 												? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Settings › Data › Export, or Share and export › Everything.`
 												: SUPPORTED_FILES}
@@ -2029,7 +2029,7 @@ export function ImportDialog({
 											>
 												This browser’s bookmarks
 											</h3>
-											<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+											<p className="mt-0.5 text-xs leading-[1.6667] text-muted-foreground">
 												Copies the bookmarks bar and folders. Your browser
 												bookmarks are not changed.
 											</p>
@@ -2058,7 +2058,7 @@ export function ImportDialog({
 										>
 											From a link
 										</h3>
-										<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+										<p className="mt-0.5 text-xs leading-[1.6667] text-muted-foreground">
 											Paste the address of a {PROJECT.name} shared page. Its
 											columns or sessions come in as they were shared.
 										</p>
@@ -2140,7 +2140,7 @@ export function ImportDialog({
 								{error && (
 									<p
 										role="alert"
-										className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5 text-foreground"
+										className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-[1.6667] text-foreground"
 									>
 										<CircleAlert
 											className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
@@ -2198,7 +2198,7 @@ export function ImportDialog({
 									/>
 								</OptionRow>
 							</div>
-							<ul className="space-y-1 text-xs leading-5 text-muted-foreground">
+							<ul className="space-y-1 text-xs leading-[1.6667] text-muted-foreground">
 								{fullMode === 'merge' ? (
 									<Note>
 										Your settings, snapshots, trash bin, and theme stay as they
@@ -2290,7 +2290,7 @@ export function ImportDialog({
 											{parsed.confidence === 'best-effort' && (
 												<Badge
 													variant="outline"
-													className="px-1.5 py-0 text-[10px]"
+													className="px-1.5 py-0 text-[0.625rem]"
 													title="Read from the file’s structure. Check the sample below."
 												>
 													best effort
@@ -2332,7 +2332,7 @@ export function ImportDialog({
 								{(preview.invalid > 0 ||
 									preview.pinnedSkipped > 0 ||
 									parsed.warnings.length > 0) && (
-									<ul className="space-y-1 text-xs leading-5 text-muted-foreground">
+									<ul className="space-y-1 text-xs leading-[1.6667] text-muted-foreground">
 										{preview.invalid > 0 && (
 											<Note>
 												{plural(preview.invalid, 'entry', 'entries')} can’t be
@@ -2391,7 +2391,7 @@ export function ImportDialog({
 														{item.title}
 													</p>
 													<p
-														className="truncate text-[11px] text-muted-foreground"
+														className="truncate text-[0.6875rem] text-muted-foreground"
 														title={item.url}
 													>
 														{kind === 'bookmarks' &&
@@ -2487,7 +2487,7 @@ export function ImportDialog({
 										)}
 								</div>
 								{nothingNew && (
-									<p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+									<p className="flex items-start gap-2 text-xs leading-[1.6667] text-muted-foreground">
 										<Info
 											className="mt-0.5 h-3.5 w-3.5 shrink-0"
 											aria-hidden="true"
@@ -2569,12 +2569,12 @@ function Stat({
 }) {
 	return (
 		<div className="min-w-0 rounded-md border border-border px-3 py-2">
-			<dt className="truncate text-[11px] font-medium text-muted-foreground">
+			<dt className="truncate text-[0.6875rem] font-medium text-muted-foreground">
 				{label}
 			</dt>
 			<dd
 				className={cn(
-					'mt-0.5 text-lg font-semibold tabular-nums leading-6',
+					'mt-0.5 text-lg font-semibold tabular-nums leading-[1.3333]',
 					tone === 'accent'
 						? 'text-primary'
 						: tone === 'warn' && 'text-destructive',
@@ -2684,7 +2684,7 @@ function OptionRow({
 				{help && (
 					<p
 						className={cn(
-							'mt-0.5 text-xs leading-5 text-muted-foreground',
+							'mt-0.5 text-xs leading-[1.6667] text-muted-foreground',
 							inlineControl && 'basis-full',
 						)}
 					>

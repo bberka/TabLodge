@@ -111,12 +111,12 @@ function RadioCard({
 				</span>
 			)}
 			<span className="min-w-0 flex-1">
-				<span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium leading-5">
+				<span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium leading-[1.4286]">
 					{title}
 					{badge}
 				</span>
 				{Boolean(description) && (
-					<span className="mt-0.5 block text-xs leading-5 text-muted-foreground wrap-anywhere">
+					<span className="mt-0.5 block text-xs leading-[1.6667] text-muted-foreground wrap-anywhere">
 						{description}
 					</span>
 				)}
