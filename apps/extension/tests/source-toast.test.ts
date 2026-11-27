@@ -271,3 +271,24 @@ test('when the sole focused Undo button expires after its previous target detach
 	await vi.advanceTimersByTimeAsync(8000);
 	assert.equal(hosts(), 0);
 });
+
+test('a toast shown in a hidden background tab waits until the tab is visible before auto-closing', async () => {
+	let hidden = true;
+	Object.defineProperty(document, 'hidden', {
+		configurable: true,
+		get: () => hidden,
+	});
+	showSourceToast('Added 2 to TabLodge in GitHub.');
+	await vi.advanceTimersByTimeAsync(0);
+	assert.deepEqual(texts(), ['Added 2 to TabLodge in GitHub.']);
+
+	await vi.advanceTimersByTimeAsync(30_000);
+	assert.equal(hosts(), 1);
+
+	hidden = false;
+	document.dispatchEvent(new document.defaultView!.Event('visibilitychange'));
+	await vi.advanceTimersByTimeAsync(7999);
+	assert.equal(hosts(), 1);
+	await vi.advanceTimersByTimeAsync(2);
+	assert.equal(hosts(), 0);
+});

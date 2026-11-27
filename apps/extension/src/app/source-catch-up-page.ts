@@ -181,6 +181,11 @@ export function watchSavedPage({
 		childList: true,
 		subtree: true,
 	});
+	document.addEventListener('visibilitychange', () => {
+		if (!document.hidden) {
+			settle();
+		}
+	});
 	settle();
 	return {
 		refresh() {
