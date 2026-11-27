@@ -322,6 +322,7 @@ function Main() {
 	}, [hasShareIntent, shareIntent, resetShareIntent, openShare]);
 
 	const openTile = useCallback(async (route: TileRoute) => {
+		openingRef.current += 1;
 		setView('regular');
 		setTab('bookmarks');
 		if (route === 'search') {
@@ -330,7 +331,6 @@ function Main() {
 			return;
 		}
 
-		openingRef.current += 1;
 		const quick = Date.now() - BOOT < COLD_MS;
 		const parts = splitShared(await readClipboard());
 		setDraft((current) => ({
@@ -430,7 +430,9 @@ function Main() {
 
 			if (shouldExit) {
 				setTimeout(() => {
-					BackHandler.exitApp();
+					if (opening === openingRef.current) {
+						BackHandler.exitApp();
+					}
 				}, 250);
 			}
 		});
@@ -456,7 +458,9 @@ function Main() {
 
 			if (shouldExit) {
 				setTimeout(() => {
-					BackHandler.exitApp();
+					if (opening === openingRef.current) {
+						BackHandler.exitApp();
+					}
 				}, 250);
 			}
 		});
