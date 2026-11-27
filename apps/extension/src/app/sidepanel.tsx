@@ -567,7 +567,7 @@ function SidePanel() {
 							<strong className="block truncate text-xs font-medium">
 								{title || hostname(url)}
 							</strong>
-							<small className="block truncate text-[11px] text-muted-foreground">
+							<small className="block truncate text-[0.6875rem] text-muted-foreground">
 								<InsecureMarkFor url={url} settings={settings ?? {}} />
 								{hostname(url)}
 							</small>
@@ -716,7 +716,7 @@ function SidePanel() {
 						>
 							{title}
 						</strong>
-						<small className="block truncate text-[11px] text-muted-foreground">
+						<small className="block truncate text-[0.6875rem] text-muted-foreground">
 							{savedUrls.has(url) && (
 								<IconTooltip label="Already saved in a session or bookmark">
 									<span
@@ -877,7 +877,7 @@ function SidePanel() {
 				<div
 					role="tablist"
 					aria-label={`${PROJECT.name} sections`}
-					className="mb-2 grid h-9 grid-cols-3 items-stretch gap-1 rounded-lg bg-muted p-1"
+					className="mb-2 grid min-h-9 grid-cols-3 items-stretch gap-1 rounded-lg bg-muted p-1"
 					onKeyDown={onTabListKeys}
 				>
 					{tabsDef.map(({id, label, count, icon: Icon}) => (
@@ -890,14 +890,14 @@ function SidePanel() {
 							aria-controls="sp-panel"
 							tabIndex={panel === id ? 0 : -1}
 							className={cn(
-								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
 								panel === id && 'bg-background text-foreground shadow-xs',
 							)}
 							onClick={() => setChosenPanel(id)}
 						>
 							<Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-							<span className="truncate">{label}</span>
-							<span className="text-[10px] font-normal text-muted-foreground">
+							<span className="min-w-0 text-center wrap-anywhere">{label}</span>
+							<span className="shrink-0 text-[0.625rem] font-normal text-muted-foreground">
 								{count}
 							</span>
 						</button>

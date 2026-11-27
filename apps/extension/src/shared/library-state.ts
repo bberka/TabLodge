@@ -21,7 +21,10 @@ import {
 	parseSessionEntry,
 	type Plan,
 	type PlannedPart,
+	type PlannedSession,
+	planPart,
 	planParts,
+	planSession,
 	planState,
 	PREMIGRATION_KEY,
 	PREUPGRADE_KEY,
@@ -81,6 +84,7 @@ export const PREMIGRATION_KEEP_MS = 7 * 86_400_000;
 const WRITE_BATCH_CHARS = 2_000_000;
 const READ_BATCH_TABS = 5000;
 const MAX_READ_RETRIES = 4;
+const PAGE_SCAN_STEPS = [1, 4, 15] as const;
 
 type MigrationMarker = {
 	version: 1;
@@ -130,6 +134,24 @@ type Collector = {
 
 export type Checkpoint = {readonly collector: Collector};
 
+export type LibraryScope = {
+	sessions?: readonly string[];
+	bookmarks?: readonly string[] | 'all';
+};
+
+export type ScopedCommit = {from: string; to: string};
+
+export type OpenScope = {
+	raw: Raw;
+	commit(next: Raw, announce?: (commit: ScopedCommit) => void): Promise<void>;
+};
+
+export const stampOf = (entry: Raw) =>
+	`${Number(entry.rev)}:${Number(entry.updatedAt) || 0}`;
+
+const idOf = (item: unknown) =>
+	isRecord(item) && typeof item.id === 'string' ? item.id : '';
+
 export type LibraryState = ReturnType<typeof createLibraryState>;
 
 export function createLibraryState(
@@ -151,10 +173,21 @@ export function createLibraryState(
 
 	const collectors = new Set<Collector>();
 
+	const sessionRevOf = (key: string) => {
+		const dot = key.lastIndexOf('.');
+		return dot >= SESSION_KEY_PREFIX.length ? Number(key.slice(dot + 1)) : NaN;
+	};
+
+	const tracksKey = (collector: Collector, key: string) =>
+		collector.pending.has(key) ||
+		(collector.index.format === 11 &&
+			key.startsWith(SESSION_KEY_PREFIX) &&
+			sessionRevOf(key) <= collector.index.rev);
+
 	const captureReplaced = async (keys: readonly string[]) => {
 		for (const collector of collectors) {
 			const wanted = keys.filter(
-				(key) => collector.pending.has(key) && !collector.records.has(key),
+				(key) => tracksKey(collector, key) && !collector.records.has(key),
 			);
 			try {
 				for (const run of batches(wanted, () => 1, 10, 10)) {
@@ -223,6 +256,23 @@ export function createLibraryState(
 
 	const pageCache = new Map<string, {hash: string; entries: SessionEntry[]}>();
 
+	function parseSessionPage(
+		page: PageRef,
+		value: unknown,
+		verifyHash: boolean,
+	): SessionEntry[] {
+		if (
+			!isRecord(value) ||
+			!Array.isArray(value.items) ||
+			value.items.length !== page.count ||
+			(verifyHash && contentHash(page.key, value) !== page.hash)
+		) {
+			throw new LibraryDamagedError(`${page.key} ${why(value)}`);
+		}
+
+		return checkedSessions(value.items.map((item) => parseSessionEntry(item)));
+	}
+
 	async function loadIndex(entry: Raw, extra?: Raw): Promise<LibraryIndex> {
 		const index = parseIndex(entry);
 		if (index.format === 10) {
@@ -245,17 +295,7 @@ export function createLibraryState(
 				extra,
 			);
 			for (const page of run) {
-				const value = saved[page.key];
-				if (
-					!isRecord(value) ||
-					!Array.isArray(value.items) ||
-					value.items.length !== page.count ||
-					(!extra && contentHash(page.key, value) !== page.hash)
-				) {
-					throw new LibraryDamagedError(`${page.key} ${why(value)}`);
-				}
-
-				const entries = value.items.map((item) => parseSessionEntry(item));
+				const entries = parseSessionPage(page, saved[page.key], !extra);
 				pages.set(page.key, entries);
 				if (!extra) {
 					pageCache.set(page.key, {hash: page.hash, entries});
@@ -355,14 +395,18 @@ export function createLibraryState(
 	}
 
 	async function read(): Promise<Raw | null> {
+		return (await readStamped()).raw;
+	}
+
+	async function readStamped(): Promise<{raw: Raw | null; stamp?: string}> {
 		for (let attempt = 0; ; attempt += 1) {
 			const entry = await getOne(STATE_KEY);
 			if (!isRecord(entry)) {
-				return null;
+				return {raw: null};
 			}
 
 			if (!known(entry)) {
-				return entry;
+				return {raw: entry};
 			}
 
 			let problem: string;
@@ -370,7 +414,10 @@ export function createLibraryState(
 				const index = await loadIndex(entry);
 				const loaded = await loadRecords(index);
 				if (loaded.problems.length === 0) {
-					return assemble(index, loaded.groups, loaded.bookmarks);
+					return {
+						raw: assemble(index, loaded.groups, loaded.bookmarks),
+						stamp: stampOf(entry),
+					};
 				}
 
 				const [first] = loaded.problems;
@@ -456,6 +503,17 @@ export function createLibraryState(
 			);
 		}
 
+		await commitPlan(raw, plan, rev, previous, format);
+	}
+
+	async function commitPlan(
+		raw: Raw,
+		plan: Plan,
+		rev: number,
+		previous: LibraryIndex | null,
+		format: 10 | 11,
+		announce?: (stored: Raw) => void,
+	): Promise<void> {
 		await writeAll([
 			...plan.sessions.filter((session) => !session.unchanged),
 			...writtenParts(plan.sessionPages),
@@ -476,13 +534,346 @@ export function createLibraryState(
 			}
 		}
 
-		await backend.set({
-			[STATE_KEY]: storedIndex(
-				index,
-				[...new Set([...replaced, ...leftover])].filter(
-					(key) => !next.has(key),
-				),
-			),
+		const stored = storedIndex(
+			index,
+			[...new Set([...replaced, ...leftover])].filter((key) => !next.has(key)),
+		);
+		announce?.(stored);
+		await backend.set({[STATE_KEY]: stored});
+	}
+
+	const chunkIds = new Map<string, {hash: string; ids: Set<string>}>();
+
+	async function findChunks(
+		parts: readonly PageRef[],
+		ids: readonly string[],
+	): Promise<Map<number, unknown[]> | undefined> {
+		const live = new Set(parts.map((part) => part.key));
+		for (const key of chunkIds.keys()) {
+			if (!live.has(key)) {
+				chunkIds.delete(key);
+			}
+		}
+
+		const found = new Map<number, unknown[]>();
+		const missing = new Set(ids);
+		const cachedIds = (part: PageRef) => {
+			const cached = chunkIds.get(part.key);
+			return cached?.hash === part.hash ? cached.ids : undefined;
+		};
+
+		const listed: number[] = [];
+		const unknown: number[] = [];
+		for (const [at, part] of parts.entries()) {
+			const cached = cachedIds(part);
+			if (!cached) {
+				unknown.push(at);
+			} else if (ids.some((id) => cached.has(id))) {
+				listed.push(at);
+			}
+		}
+
+		for (const run of batches([...listed, ...unknown], () => 1, 20, 20)) {
+			if (missing.size === 0) {
+				break;
+			}
+
+			const saved = await backend.get(run.map((at) => parts[at].key));
+			for (const at of run) {
+				const part = parts[at];
+				const value = saved[part.key];
+				const items = isRecord(value) ? value.items : undefined;
+				if (!Array.isArray(items) || items.length !== part.count) {
+					return undefined;
+				}
+
+				const held = idsOf(items);
+				chunkIds.set(part.key, {hash: part.hash, ids: held});
+				const wanted = ids.filter((id) => held.has(id));
+				if (wanted.length === 0) {
+					continue;
+				}
+
+				found.set(at, items);
+				for (const id of wanted) {
+					missing.delete(id);
+				}
+			}
+		}
+
+		return found;
+	}
+
+	async function findSessionPages(
+		pages: readonly PageRef[],
+		ids: readonly string[],
+	): Promise<Map<number, SessionEntry[]>> {
+		const found = new Map<number, SessionEntry[]>();
+		if (ids.length === 0 || pages.length === 0) {
+			return found;
+		}
+
+		const live = new Set(pages.map((page) => page.key));
+		for (const key of pageCache.keys()) {
+			if (!live.has(key)) {
+				pageCache.delete(key);
+			}
+		}
+
+		const missing = new Set(ids);
+		const collect = (at: number, entries: SessionEntry[]) => {
+			let matched = false;
+			for (const entry of entries) {
+				if (!missing.has(entry.id)) {
+					continue;
+				}
+
+				missing.delete(entry.id);
+				matched = true;
+			}
+
+			if (matched) {
+				found.set(at, entries);
+			}
+		};
+
+		const unknown: number[] = [];
+		for (const [at, page] of pages.entries()) {
+			const cached = pageCache.get(page.key);
+			if (cached?.hash === page.hash) {
+				collect(at, cached.entries);
+			} else {
+				unknown.push(at);
+			}
+		}
+
+		let offset = 0;
+		for (let step = 0; missing.size > 0 && offset < unknown.length; step += 1) {
+			const size = PAGE_SCAN_STEPS[step] ?? 20;
+			const run = unknown.slice(offset, offset + size);
+			offset += size;
+			const saved = await backend.get(run.map((at) => pages[at].key));
+			for (const at of run) {
+				if (missing.size === 0) {
+					break;
+				}
+
+				const page = pages[at];
+				const entries = parseSessionPage(page, saved[page.key], true);
+				pageCache.set(page.key, {hash: page.hash, entries});
+				collect(at, entries);
+			}
+		}
+
+		return found;
+	}
+
+	async function openScope(scope: LibraryScope): Promise<OpenScope | null> {
+		const entry = await getOne(STATE_KEY);
+		if (!known(entry)) {
+			return null;
+		}
+
+		let index: LibraryIndex;
+		try {
+			index = parseIndex(entry);
+		} catch (error) {
+			if (error instanceof LibraryDamagedError) {
+				return null;
+			}
+
+			throw error;
+		}
+
+		if (index.format !== 11) {
+			return null;
+		}
+
+		const wanted = new Set(scope.sessions);
+		let sessionPages: Map<number, SessionEntry[]>;
+		try {
+			sessionPages = await findSessionPages(index.sessionPages, [...wanted]);
+		} catch (error) {
+			if (error instanceof LibraryDamagedError) {
+				return null;
+			}
+
+			throw error;
+		}
+
+		const openedEntries = index.sessionPages.flatMap((_page, at) =>
+			(sessionPages.get(at) ?? []).filter((session) => wanted.has(session.id)),
+		);
+		const loaded = await loadRecords({
+			...index,
+			sessions: openedEntries,
+			bookmarkParts: scope.bookmarks === 'all' ? index.bookmarkParts : [],
+		});
+		if (loaded.problems.length > 0) {
+			return null;
+		}
+
+		let chunks = new Map<number, unknown[]>();
+		let {bookmarks} = loaded;
+		if (Array.isArray(scope.bookmarks)) {
+			const found = await findChunks(index.bookmarkParts, scope.bookmarks);
+			if (!found) {
+				return null;
+			}
+
+			chunks = found;
+			const ids = new Set<string>(scope.bookmarks);
+			bookmarks = index.bookmarkParts.flatMap((_part, at) =>
+				(chunks.get(at) ?? []).filter((item) => ids.has(idOf(item))),
+			);
+		}
+
+		const from = stampOf(entry);
+		const opened = loaded.groups.map((group) => String(group.id));
+		const openedBookmarks = bookmarks.map((item) => idOf(item));
+		return {
+			raw: assemble(index, loaded.groups, bookmarks),
+			async commit(next, announce) {
+				const current = await getOne(STATE_KEY);
+				if (!known(current) || stampOf(current) !== from) {
+					throw new Error(
+						'The library changed while it was being edited. Try again.',
+					);
+				}
+
+				const editedGroups = new Map(
+					(Array.isArray(next.groups) ? next.groups : []).map(
+						(group: unknown) => [idOf(group), group],
+					),
+				);
+				const scoped = new Set(opened);
+				if ([...editedGroups.keys()].some((id) => !scoped.has(id))) {
+					throw new Error('An edit of single sessions cannot add any.');
+				}
+
+				const dropped = opened.some((id) => !editedGroups.has(id));
+				const previous = dropped
+					? await loadIndex(current)
+					: {...parseIndex(current), sessions: openedEntries};
+				const rev = previous.rev + 1;
+				const plan: Plan = {
+					sessions: dropped
+						? scopedSessions(previous, rev, opened, next)
+						: openedEntries.map((sessionEntry) =>
+								planSession(
+									editedGroups.get(sessionEntry.id),
+									rev,
+									sessionEntry,
+								),
+							),
+					sessionPages: [],
+					bookmarks: [],
+				};
+				const items = Array.isArray(next.bookmarks) ? next.bookmarks : [];
+				if (scope.bookmarks === 'all') {
+					plan.bookmarks = planParts(
+						items,
+						BOOKMARK_CHUNK_KEY_PREFIX,
+						rev,
+						previous.bookmarkParts,
+					);
+				} else {
+					if (
+						items.length !== openedBookmarks.length ||
+						items.some((item, at) => idOf(item) !== openedBookmarks[at])
+					) {
+						throw new Error(
+							'An edit of single bookmarks cannot add, remove, or move any.',
+						);
+					}
+
+					const edited = new Map(
+						items.map((item: unknown) => [idOf(item), item]),
+					);
+					plan.bookmarks = previous.bookmarkParts.map((part, at) => {
+						const stored = chunks.get(at);
+						return stored
+							? planPart(
+									stored.map((item) => edited.get(idOf(item)) ?? item),
+									`${BOOKMARK_CHUNK_KEY_PREFIX}${at}.${rev}`,
+									part,
+								)
+							: {ref: part, value: {items: []}, json: '', unchanged: true};
+					});
+				}
+
+				await carrySidecars(plan, previous);
+				if (dropped) {
+					plan.sessionPages = planParts(
+						plan.sessions.map((session) => session.entry),
+						SESSION_PAGE_KEY_PREFIX,
+						rev,
+						previous.sessionPages,
+						previous.sessions,
+					);
+				} else {
+					const updated = new Map(
+						plan.sessions.map((session) => [session.entry.id, session.entry]),
+					);
+					plan.sessionPages = previous.sessionPages.map((page, at) => {
+						const entries = sessionPages.get(at);
+						return entries
+							? planPart(
+									entries.map((item) => updated.get(item.id) ?? item),
+									`${SESSION_PAGE_KEY_PREFIX}${at}.${rev}`,
+									page,
+								)
+							: {ref: page, value: {items: []}, json: '', unchanged: true};
+					});
+				}
+
+				await commitPlan(next, plan, rev, previous, 11, (stored) => {
+					announce?.({from, to: stampOf(stored)});
+				});
+				for (const page of plan.sessionPages) {
+					if (!page.unchanged) {
+						pageCache.set(page.ref.key, {
+							hash: page.ref.hash,
+							entries: page.value.items as SessionEntry[],
+						});
+					}
+				}
+			},
+		};
+	}
+
+	function scopedSessions(
+		previous: LibraryIndex,
+		rev: number,
+		opened: readonly string[],
+		next: Raw,
+	): PlannedSession[] {
+		const edited = new Map(
+			(Array.isArray(next.groups) ? next.groups : []).map((group: unknown) => [
+				idOf(group),
+				group,
+			]),
+		);
+		const scoped = new Set(opened);
+		if ([...edited.keys()].some((id) => !scoped.has(id))) {
+			throw new Error('An edit of single sessions cannot add any.');
+		}
+
+		return previous.sessions.flatMap((entry): PlannedSession[] => {
+			if (!scoped.has(entry.id)) {
+				return [
+					{
+						entry,
+						key: sessionKey(entry.id, entry.rev),
+						value: {},
+						json: '',
+						unchanged: true,
+					},
+				];
+			}
+
+			const group = edited.get(entry.id);
+			return group === undefined ? [] : [planSession(group, rev, entry)];
 		});
 	}
 
@@ -523,7 +914,10 @@ export function createLibraryState(
 		}
 
 		const changed = plan.bookmarks.filter((part) => !part.unchanged);
-		const sidecars = previous.bookmarkParts.filter((part) => part.sync);
+		const kept = new Set(plan.bookmarks.map((part) => part.ref.key));
+		const sidecars = previous.bookmarkParts.filter(
+			(part) => part.sync && !kept.has(part.key),
+		);
 		if (changed.length === 0 || sidecars.length === 0) {
 			return;
 		}
@@ -904,7 +1298,7 @@ export function createLibraryState(
 
 		let index: LibraryIndex;
 		try {
-			index = await loadIndex(entry);
+			index = parseIndex(entry);
 		} catch (error) {
 			if (error instanceof LibraryDamagedError) {
 				return null;
@@ -969,6 +1363,11 @@ export function createLibraryState(
 		} catch {
 			return null;
 		}
+	}
+
+	async function stamp(): Promise<string | undefined> {
+		const entry = await getOne(STATE_KEY);
+		return known(entry) ? stampOf(entry) : undefined;
 	}
 
 	async function fingerprint(): Promise<string | undefined> {
@@ -1234,6 +1633,9 @@ export function createLibraryState(
 
 	return {
 		read,
+		readStamped,
+		openScope,
+		stamp,
 		readMeta,
 		write,
 		remove,

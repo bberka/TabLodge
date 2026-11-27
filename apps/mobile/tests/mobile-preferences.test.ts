@@ -110,11 +110,23 @@ describe('preference schema', () => {
 		assert.deepEqual(readSyncedPreferences(raw), {
 			swipeRight: 'open',
 			theme: 'light',
-			glassEffect: false,
 		});
 		const loaded = parsePreferences(raw);
 		assert.equal(loaded.openApp, 'org.example');
+		assert.equal(loaded.glassEffect, false);
 		assert.equal('openApp' in syncedPreferences(loaded), false);
+		assert.equal('glassEffect' in syncedPreferences(loaded), false);
+	});
+
+	test('the glass effect is this phone only, so no other phone sets it', () => {
+		assert.equal(ANDROID_PREFERENCES.glassEffect[0], 'device');
+		assert.equal(SYNCED_KEYS.includes('glassEffect'), false);
+		const written = settlePreferences(
+			{},
+			{...defaults, glassEffect: false},
+			{glassEffect: 500},
+		);
+		assert.deepEqual(written.next, {});
 	});
 
 	test('the Icons only bar still reads', () => {
@@ -221,6 +233,21 @@ describe('settling with the other phones', () => {
 		);
 		assert.equal(result.next.swipeRight, 'move');
 		assert.equal(result.next[AT_PREFIX + 'swipeRight'], 7);
+	});
+
+	test('a phone keeps the glass effect it had when the setting became this-phone only', () => {
+		const phoneOff = phone({glassEffect: false}, {});
+		const beforeChange = {glassEffect: true, [`${AT_PREFIX}glassEffect`]: 300};
+		const library = settleAll([phoneOff], beforeChange);
+		assert.equal(phoneOff.prefs.glassEffect, false);
+		assert.deepEqual(library, beforeChange);
+	});
+
+	test("a new phone does not take another phone's glass effect from the library", () => {
+		const fresh = phone({}, {});
+		settleAll([fresh], {glassEffect: false, [`${AT_PREFIX}glassEffect`]: 300});
+		assert.equal(fresh.prefs.glassEffect, defaults.glassEffect);
+		assert.equal(fresh.at.glassEffect, undefined);
 	});
 
 	test('settled phones leave the library alone', () => {

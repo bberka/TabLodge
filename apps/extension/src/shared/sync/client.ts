@@ -1,7 +1,7 @@
 import type {Store} from '../types';
 import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
-import type {TrashEntry} from '../trash';
+import {type TrashEntry, refusedTrash} from '../trash';
 import type {PushResult} from './change-log';
 import {parseChange, recordKey, type SyncChange} from './changes';
 import {
@@ -20,6 +20,7 @@ import {
 	receive,
 	restartAfterServerReset,
 	settle,
+	serverHeldKeys,
 	startResync,
 	type SyncState,
 } from './engine';
@@ -613,6 +614,8 @@ export function createSyncClient(host: SyncHost) {
 	) {
 		return host.mutate(async () => {
 			const store = await host.readLibrary();
+			const stored = parseState(await host.get(SYNC_STATE_KEY));
+			let state = stored ?? newSyncState(host.randomId());
 			const records = splitLibrary(
 				store,
 				trashOn && host.trash ? await host.trash.read() : [],
@@ -620,9 +623,8 @@ export function createSyncClient(host: SyncHost) {
 				settingKindOn && host.outsideSettings
 					? await host.outsideSettings.read()
 					: {},
+				serverHeldKeys(state),
 			);
-			const stored = parseState(await host.get(SYNC_STATE_KEY));
-			let state = stored ?? newSyncState(host.randomId());
 			if (state.joined) {
 				state = await captureLocal(state, records);
 			}
@@ -819,20 +821,18 @@ export function createSyncClient(host: SyncHost) {
 					sentKeys.add(recordKey(change));
 				}
 
+				const sealed = codec
+					? await Promise.all(sent.map(async (change) => codec.seal(change)))
+					: sent;
+				const sendable = sealed.filter((change) => !refusedTrash(change));
 				const body = await request(target, '/v1/changes', {
 					method: 'POST',
-					body: JSON.stringify({
-						changes: codec
-							? await Promise.all(
-									sent.map(async (change) => codec.seal(change)),
-								)
-							: sent,
-					}),
+					body: JSON.stringify({changes: sendable}),
 				});
 				const results =
 					isRecord(body) && Array.isArray(body.results) ? body.results : [];
 				if (
-					results.length !== sent.length ||
+					results.length !== sendable.length ||
 					results.some((result) => !PUSH_RESULTS.has(String(result)))
 				) {
 					throw new SyncError(
@@ -842,7 +842,14 @@ export function createSyncClient(host: SyncHost) {
 				}
 
 				const pulledCursor = current.cursor;
-				const settled = settle(current, sent, results as PushResult[]);
+				const answers = (results as PushResult[]).values();
+				const settled = settle(
+					current,
+					sent,
+					sealed.map((change) =>
+						refusedTrash(change) ? 'unsendable' : answers.next().value!,
+					),
+				);
 				const known =
 					isRecord(body) && Number.isSafeInteger(body.cursor)
 						? Math.max(settled.state.known ?? 0, body.cursor as number)

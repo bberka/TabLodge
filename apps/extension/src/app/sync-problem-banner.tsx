@@ -48,7 +48,7 @@ export function SyncProblemBanner() {
 				</span>
 				<div className="min-w-0">
 					<p className="text-sm font-semibold">{banner.title}</p>
-					<p className="text-xs leading-5 text-muted-foreground">
+					<p className="text-xs leading-[1.6667] text-muted-foreground">
 						{banner.detail}
 					</p>
 				</div>

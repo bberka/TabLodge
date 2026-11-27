@@ -1,4 +1,5 @@
-import {useEffect, useId, useMemo, useRef, useState} from 'react';
+import {useId, useMemo, useState} from 'react';
+import {useVirtualizer} from '@tanstack/react-virtual';
 import {Check, Plus, Search, X} from 'lucide-react';
 import {
 	Button,
@@ -14,14 +15,22 @@ import {
 } from '../shared/ui';
 import {ColumnLabel, FolderLabel} from './icon-label';
 import {plural} from './plural';
+import {
+	filterPickerRows,
+	indexPickerTargets,
+	isCurrentPickerRow,
+	stepPickerRow,
+	type PickerRow,
+	type PickerTarget,
+} from './target-picker-rows';
+import {VIRTUAL_OVERSCAN} from './virtual-rows';
 import {cn} from '@/lib/utils';
 
-export type PickerTarget = {
-	id: string;
-	name: string;
-	icon?: string;
-	color?: string;
-};
+export {type PickerTarget} from './target-picker-rows';
+
+const ROW_HEIGHT = 36;
+const LIST_PADDING = 4;
+const VIEWPORT_HEIGHT = 288;
 
 export type TargetPickerRequest = {
 	title: string;
@@ -49,13 +58,6 @@ export function TargetPickerDialog({
 	);
 }
 
-type Row =
-	| {type: 'target'; target: PickerTarget; current: boolean}
-	| {type: 'create'; name: string};
-
-const isCurrent = (row: Row | undefined) =>
-	row?.type === 'target' && row.current;
-
 function PickerBody({
 	request,
 	onClose,
@@ -67,33 +69,39 @@ function PickerBody({
 		request;
 	const [query, setQuery] = useState('');
 	const [activeIndex, setActiveIndex] = useState<number | null>(null);
+	const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
 	const listId = useId();
-	const activeRef = useRef<HTMLDivElement | null>(null);
-	const needle = query.trim().toLowerCase();
-	const rows = useMemo<Row[]>(() => {
-		const matches = targets
-			.filter((target) => target.name.toLowerCase().includes(needle))
-			.map((target): Row => ({
-				type: 'target',
-				target,
-				current: target.id === currentId,
-			}));
-		return matches.length === 0 && create && needle
-			? [{type: 'create', name: query.trim()}]
-			: matches;
-	}, [targets, currentId, create, needle, query]);
-	const firstChoice = rows.findIndex((row) => !isCurrent(row));
+	const indexed = useMemo(() => indexPickerTargets(targets), [targets]);
+	const rows = useMemo(
+		() => filterPickerRows(indexed, query, currentId, Boolean(create)),
+		[indexed, query, currentId, create],
+	);
+	const firstChoice = rows.findIndex((row) => !isCurrentPickerRow(row));
 	const active = Math.min(
 		activeIndex ?? Math.max(firstChoice, 0),
 		Math.max(rows.length - 1, 0),
 	);
 	const activeRow = rows[active];
-	useEffect(() => {
-		activeRef.current?.scrollIntoView({block: 'nearest'});
-	}, [active, rows]);
+	const virtualizer = useVirtualizer({
+		count: rows.length,
+		getScrollElement: () => viewport,
+		estimateSize: () => ROW_HEIGHT,
+		overscan: VIRTUAL_OVERSCAN,
+		paddingStart: LIST_PADDING,
+		paddingEnd: LIST_PADDING,
+		getItemKey(index) {
+			const row = rows[index];
+			return row?.type === 'create' ? 'create' : (row?.target.id ?? index);
+		},
+		initialRect: {width: 0, height: VIEWPORT_HEIGHT},
+	});
+	const virtualItems = virtualizer.getVirtualItems();
+	const activeMounted =
+		activeRow !== undefined &&
+		virtualItems.some((item) => item.index === active);
 
-	function choose(row: Row | undefined) {
-		if (!row || isCurrent(row)) {
+	function choose(row: PickerRow | undefined) {
+		if (!row || isCurrentPickerRow(row)) {
 			return;
 		}
 
@@ -106,14 +114,13 @@ function PickerBody({
 	}
 
 	function step(direction: 1 | -1) {
-		let next = active + direction;
-		while (isCurrent(rows[next])) {
-			next += direction;
+		const next = stepPickerRow(rows, active, direction);
+		if (next === null) {
+			return;
 		}
 
-		if (next >= 0 && next < rows.length) {
-			setActiveIndex(next);
-		}
+		setActiveIndex(next);
+		virtualizer.scrollToIndex(next, {align: 'auto'});
 	}
 
 	const status =
@@ -141,7 +148,7 @@ function PickerBody({
 						aria-controls={listId}
 						aria-autocomplete="list"
 						aria-activedescendant={
-							activeRow ? `${listId}-${active}` : undefined
+							activeMounted ? `${listId}-${active}` : undefined
 						}
 						autoComplete="off"
 						className="pl-8"
@@ -150,6 +157,7 @@ function PickerBody({
 						onChange={(event) => {
 							setQuery(event.target.value);
 							setActiveIndex(null);
+							virtualizer.scrollToOffset(0);
 						}}
 						onKeyDown={(event) => {
 							if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -165,31 +173,51 @@ function PickerBody({
 				<span role="status" className="sr-only">
 					{status}
 				</span>
-				<ScrollArea className="h-72 rounded-md border border-border">
+				<ScrollArea
+					viewportRef={setViewport}
+					className="h-72 rounded-md border border-border"
+				>
 					<div
 						id={listId}
 						role="listbox"
 						aria-label={`${title}, ${kind}s`}
-						className="p-1"
+						className="relative"
+						style={
+							rows.length > 0 ? {height: virtualizer.getTotalSize()} : undefined
+						}
 					>
-						{rows.map((row, index) => {
-							const selected = index === active;
-							const id = `${listId}-${index}`;
-							const current = isCurrent(row);
+						{virtualItems.map((item) => {
+							const row = rows[item.index];
+							if (!row) {
+								return null;
+							}
+
+							const selected = item.index === active;
+							const id = `${listId}-${item.index}`;
+							const current = isCurrentPickerRow(row);
 							return (
 								<div
-									key={row.type === 'create' ? 'create' : row.target.id}
-									ref={selected ? activeRef : undefined}
+									key={item.key}
 									id={id}
 									role="option"
 									aria-selected={selected}
 									aria-disabled={current || undefined}
+									aria-posinset={item.index + 1}
+									aria-setsize={rows.length}
+									style={{
+										position: 'absolute',
+										top: 0,
+										left: LIST_PADDING,
+										right: LIST_PADDING,
+										height: ROW_HEIGHT,
+										transform: `translateY(${item.start}px)`,
+									}}
 									className={cn(
-										'flex min-h-9 cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm',
+										'flex cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm',
 										selected && 'bg-accent text-accent-foreground',
 										current && 'cursor-not-allowed text-muted-foreground',
 									)}
-									onMouseMove={() => !current && setActiveIndex(index)}
+									onMouseMove={() => !current && setActiveIndex(item.index)}
 									onClick={() => choose(row)}
 								>
 									{row.type === 'create' ? (

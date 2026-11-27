@@ -1,25 +1,3 @@
-/*
-The sync scope of every setting in the extension and the Android app, each with its reason. One of three:
-
-- `all`: syncs to every browser and phone, because both apps read it and it means the same in each.
-- `platform`: syncs to every device of one kind, all browsers or all phones, because the other app has no use for it.
-- `device`: never syncs, not even to a second device of the same kind. Only for what cannot mean anything on another
-  device: its name, its connection, a permission only it can grant, its installed apps, its private library,
-  dismissals and remembered state.
-
-On the wire `all` and `platform` travel alike. Library settings reach every device, and only the app that reads one
-acts on it: the phone reads exactly the library settings scoped `all` (tests/setting-scopes.test.ts checks its
-source). The phone's own preferences travel in the library's `mobileApp` setting, which only phones read, and the
-extension's theme and accents as `setting` records the phone holds without reading. A setting scoped `device` stays
-out of every record. Every one still syncs only while Settings › Sync › Sync settings is on.
-
-A new setting needs an entry here, or the extension and the app do not compile; the default is `all` or, when the other
-app has no use for it, `platform`. A narrower scope needs a reason that names what binds it to the device.
-docs/PRIVACY.md lists every `device` entry under "What stays on each device", which the test checks.
-
-No imports: the Android app and the tests read this file too.
-*/
-
 export type SettingScope = 'all' | 'platform' | 'device';
 type Scoped<Scope extends SettingScope = SettingScope> = readonly [
 	Scope,
@@ -42,9 +20,6 @@ const SECURITY =
 const APPS = 'The browsers installed on this phone.';
 const HINT = 'A per-screen hint, dismissed on this device.';
 
-/**
-Extension settings in the library (`Settings`), except `heldSettings`, which only carries a newer version's settings.
-*/
 export const LIBRARY_SETTINGS = {
 	closeOnSave: [
 		'platform',
@@ -155,9 +130,6 @@ export const LIBRARY_SETTINGS = {
 	],
 } as const satisfies Record<string, Scoped>;
 
-/**
-Extension settings kept outside the library under their own storage keys, and the ids the platform ones sync under.
-*/
 export const EXTENSION_STORAGE = {
 	uiTheme: ['platform', LOOK],
 	uiAccent: ['platform', LOOK],
@@ -210,16 +182,15 @@ export const EXTENSION_STORAGE = {
 	'tablodge.sessionFolderHintDismissed': ['device', HINT],
 } as const satisfies Record<string, Scoped>;
 
-/**
-Android app preferences. They never reach a browser, so none is `all`: a setting both apps share belongs in the
-library's settings instead.
-*/
 export const ANDROID_PREFERENCES = {
 	look: ['platform', PHONE_LOOK],
 	floatingBar: ['platform', PHONE_LOOK],
 	barSize: ['platform', PHONE_LOOK],
 	barLabels: ['platform', PHONE_LOOK],
-	glassEffect: ['platform', PHONE_LOOK],
+	glassEffect: [
+		'device',
+		'Whether this phone frosts its floating bar and buttons, which depends on its graphics: a slow phone turns it off for itself.',
+	],
 	messagePosition: ['platform', PHONE_LOOK],
 	theme: ['platform', PHONE_LOOK],
 	accent: ['platform', PHONE_LOOK],
@@ -272,9 +243,6 @@ export const ANDROID_PREFERENCES = {
 	privateOpenApp: ['device', APPS],
 } as const satisfies Record<string, Scoped<'platform' | 'device'>>;
 
-/**
-The keys of `registry` with the scope `scope`.
-*/
 export const keysScoped = <Key extends string>(
 	registry: Readonly<Record<Key, Scoped>>,
 	scope: SettingScope,

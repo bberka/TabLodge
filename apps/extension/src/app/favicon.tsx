@@ -1,4 +1,10 @@
-import {memo, useEffect, useState, useSyncExternalStore} from 'react';
+import {
+	memo,
+	useCallback,
+	useState,
+	useSyncExternalStore,
+	type RefCallback,
+} from 'react';
 import {FileText, Film, Image, type LucideIcon} from 'lucide-react';
 import {isFirefox} from '../shared/browser';
 import {
@@ -12,12 +18,14 @@ import type {Settings} from '../shared/types';
 import {
 	SITE_ICONS_KEY,
 	normalizeSiteIcons,
+	serverIconHost,
 	siteIconFor,
 	type SiteIcons,
 } from '../shared/site-icons';
 import {STATE_KEY} from '../shared/library-index';
 import {SYNC_CONFIG_KEY} from '../shared/sync/client';
 import {hostOf} from '../shared/web-url';
+import {createMissingIconCache, type MissingIconCache} from './favicon-check';
 import {send} from './message-client';
 import {InsecureMarkFor} from './insecure-mark';
 
@@ -104,25 +112,33 @@ function subscribeToSiteIcons(listener: () => void) {
 	};
 }
 
-const useSiteIcon = (url: string) =>
-	useSyncExternalStore(subscribeToSiteIcons, () => siteIconFor(siteIcons, url));
+const noopSubscribe = () => () => {};
+
+const useFirefoxIcon = (url: string) =>
+	useSyncExternalStore(isFirefox ? subscribeToSiteIcons : noopSubscribe, () =>
+		isFirefox ? siteIconFor(siteIcons, url) : undefined,
+	);
 
 const useServerIcons = () =>
 	useSyncExternalStore(subscribeToSiteIcons, () => serverIcons);
 
-let defaultIcon: Promise<string> | undefined;
-const iconBytes = async (src: string) => {
+const fetchIconBytes = async (src: string) => {
 	const response = await fetch(src);
-	return new Uint8Array(await response.arrayBuffer()).join(',');
+	return new Uint8Array(await response.arrayBuffer());
 };
 
-async function browserHasNoIcon(url: string) {
-	defaultIcon ??= iconBytes(faviconUrl('https://tablodge.invalid/'));
-	try {
-		return (await iconBytes(faviconUrl(url))) === (await defaultIcon);
-	} catch {
-		return false;
-	}
+let missingIconCache: MissingIconCache | undefined;
+function browserIconCache() {
+	missingIconCache ??= createMissingIconCache({
+		fetchBytes: fetchIconBytes,
+		defaultUrl: faviconUrl('https://tablodge.invalid/'),
+		onResolved(host, missing) {
+			if (missing && Object.hasOwn(siteIcons, host)) {
+				publishIcons();
+			}
+		},
+	});
+	return missingIconCache;
 }
 
 const askedHosts = new Set<string>();
@@ -148,46 +164,61 @@ function onceVisible(element: Element, callback: () => void) {
 	};
 }
 
+function serverIconSnapshot(host: string | undefined): string | undefined {
+	if (!serverIcons || !host) {
+		return undefined;
+	}
+
+	return !isFirefox && browserIconCache().knownMissing(host) !== true
+		? undefined
+		: siteIcons[host];
+}
+
 export function useServerIcon(
 	url: string,
 	known: boolean,
-): [icon: string | undefined, ref: (element: Element | null) => void] {
+): [icon: string | undefined, ref: RefCallback<Element> | undefined] {
+	const host = known ? undefined : serverIconHost(url);
 	const on = useServerIcons();
-	const stored = useSiteIcon(url);
-	const [element, setElement] = useState<Element | null>(null);
-	const [missing, setMissing] = useState('');
-	useEffect(() => {
-		if (!on || known || !element) {
-			return;
-		}
+	const show = useSyncExternalStore(subscribeToSiteIcons, () =>
+		serverIconSnapshot(host),
+	);
+	const knownMissing =
+		on && host && !isFirefox
+			? browserIconCache().knownMissing(host)
+			: undefined;
+	const needsCheck =
+		on &&
+		Boolean(host) &&
+		(isFirefox
+			? !show && !askedHosts.has(host!)
+			: knownMissing === undefined ||
+				(knownMissing && !show && !askedHosts.has(host!)));
+	const observe = useCallback<RefCallback<Element>>(
+		(element) => {
+			if (!element || !host) {
+				return;
+			}
 
-		let live = true;
-		const stop = onceVisible(element, () => {
-			void (async () => {
-				if (!isFirefox && !(await browserHasNoIcon(url))) {
-					return;
-				}
+			return onceVisible(element, () => {
+				void (async () => {
+					if (
+						(!isFirefox &&
+							!(await browserIconCache().isMissing(host, faviconUrl(url)))) ||
+						Object.hasOwn(siteIcons, host) ||
+						askedHosts.has(host)
+					) {
+						return;
+					}
 
-				if (live) {
-					setMissing(url);
-				}
-
-				const host = hostOf(url);
-				if (siteIconFor(siteIcons, url) || askedHosts.has(host)) {
-					return;
-				}
-
-				askedHosts.add(host);
-				await send('GET_SERVER_ICON', {url});
-			})();
-		});
-		return () => {
-			live = false;
-			stop();
-		};
-	}, [on, known, element, url]);
-	const show = on && (isFirefox || missing === url) ? stored : undefined;
-	return [show, setElement];
+					askedHosts.add(host);
+					await send('GET_SERVER_ICON', {url});
+				})();
+			});
+		},
+		[host, url],
+	);
+	return [show, needsCheck ? observe : undefined];
 }
 
 type FaviconProps = {
@@ -199,8 +230,7 @@ type FaviconProps = {
 
 export const Favicon = memo(
 	({url, label, className = '', fallbackSrc: tabIcon}: FaviconProps) => {
-		const rememberedIcon = useSiteIcon(url);
-		const firefoxIcon = isFirefox ? rememberedIcon : undefined;
+		const firefoxIcon = useFirefoxIcon(url);
 		const devFallbackSrc = devFaviconFor(url);
 		const [serverIcon, observe] = useServerIcon(
 			url,
@@ -219,7 +249,7 @@ export const Favicon = memo(
 				<span
 					ref={observe}
 					aria-hidden="true"
-					className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[10px] font-semibold text-muted-foreground ${className}`}
+					className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[0.625rem] font-semibold text-muted-foreground ${className}`}
 				>
 					{(String(label || hostOf(url)).trim()[0] || '↗').toUpperCase()}
 				</span>
@@ -319,14 +349,14 @@ export function LinkSummary({
 			<span className="min-w-0 flex-1">
 				{title && title !== url && (
 					<strong
-						className="block truncate text-[13px] font-semibold text-foreground"
+						className="block truncate text-[0.8125rem] font-semibold text-foreground"
 						title={title}
 					>
 						{title}
 					</strong>
 				)}
 				<small
-					className="block text-[11px] leading-4 text-muted-foreground wrap-anywhere"
+					className="block text-[0.6875rem] leading-[1.4545] text-muted-foreground wrap-anywhere"
 					title={url}
 				>
 					<InsecureMarkFor url={url} settings={settings} />

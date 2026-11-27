@@ -1,18 +1,5 @@
-/**
-Keeps keyboard and screen-reader focus near where the user was when the focused element disappears
-(for example a session deleted from its menu, with an Undo toast instead of a confirmation).
-
-While the user works, the last focused element outside menus and dialogs is remembered together with
-its neighbors. When focus falls back to the page body and that element is gone, focus moves to the
-nearest surviving neighbor (next, then previous, climbing the ancestors), and otherwise to the
-heading of the section it was in.
-*/
-
 type Anchor = {
 	element: Element;
-	/**
-	The element and each ancestor with the siblings it had when it was focused (up to the enclosing region).
-	*/
 	chain: Array<{
 		node: Element;
 		next: Element | null;
@@ -82,7 +69,6 @@ function describe(element: Element): Anchor {
 function rescue(anchor: Anchor) {
 	for (const {node, parent, next, previous} of anchor.chain) {
 		if (node.isConnected) {
-			// The focused element went away inside this node: stay inside it.
 			if (focusIn(node)) {
 				return;
 			}
@@ -90,7 +76,6 @@ function rescue(anchor: Anchor) {
 			continue;
 		}
 
-		// Nearest surviving sibling that is still next to where the removed node sat.
 		for (let sibling = next; sibling; sibling = sibling.nextElementSibling) {
 			if (sibling.parentElement === parent && focusIn(sibling)) {
 				return;
@@ -123,14 +108,8 @@ function rescue(anchor: Anchor) {
 	document.querySelector<HTMLElement>('main h1, h1')?.focus();
 }
 
-// The last element focused outside menus and dialogs (the control that opened the current dialog).
 let lastOutside: Element | undefined;
 
-/**
-Where focus should go when a dialog closes. Dialogs here are controlled by page state, so Radix has no
-trigger to hand focus back to, and a dialog opened from a menu item has lost that menu by then.
-Null when that element is gone; the rescue above then picks a neighbor.
-*/
 export function focusReturnTarget(): HTMLElement | null {
 	return lastOutside instanceof HTMLElement && lastOutside.isConnected
 		? lastOutside
@@ -152,7 +131,6 @@ export function installFocusRescue() {
 			return;
 		}
 
-		// Dialogs trap focus themselves and hand it back when they close; wait for that.
 		if (
 			document.querySelector(
 				'[role="dialog"], [role="alertdialog"], [role="menu"]',
@@ -189,7 +167,6 @@ export function installFocusRescue() {
 		}
 
 		clearTimeout(timer);
-		// Let React commit the removal and the menu or dialog hand focus back first.
 		timer = setTimeout(() => requestAnimationFrame(() => check(0)), 0);
 	};
 

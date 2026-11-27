@@ -14,6 +14,7 @@ export type ShadowEntry = {
 	hash: string;
 	o?: string;
 	deleted?: true;
+	unaccepted?: true;
 };
 
 export type SyncState = {
@@ -65,6 +66,20 @@ const without = (shadow: SyncState['shadow'], keys: ReadonlySet<string>) =>
 		: Object.fromEntries(
 				Object.entries(shadow).filter(([key]) => !keys.has(key)),
 			);
+
+export const serverHeldKeys = (state: SyncState): Set<string> =>
+	new Set(
+		Object.entries(state.shadow)
+			.filter(([, entry]) => !entry.deleted && !entry.unaccepted)
+			.map(([key]) => key),
+	);
+
+const accepted = ({unaccepted: _, ...entry}: ShadowEntry): ShadowEntry => entry;
+
+const unacceptedIfTrash = (entry: ShadowEntry): ShadowEntry =>
+	entry.kind === 'trash' && !entry.deleted
+		? {...entry, unaccepted: true}
+		: entry;
 
 export function orderList(
 	keys: readonly string[],
@@ -178,7 +193,7 @@ export function capture(
 		}
 
 		changed = true;
-		shadow[key] = {
+		const next: ShadowEntry = {
 			kind: record.kind,
 			id: record.id,
 			...(record.parentId !== undefined && {parentId: record.parentId}),
@@ -187,6 +202,8 @@ export function capture(
 			hash,
 			...(o !== undefined && {o}),
 		};
+		const mayBeUnheld = !entry || entry.deleted || entry.unaccepted;
+		shadow[key] = mayBeUnheld ? unacceptedIfTrash(next) : next;
 		outbox.add(key);
 	}
 
@@ -257,8 +274,9 @@ export function outgoing(
 export function settle(
 	state: SyncState,
 	sent: readonly SyncChange[],
-	results: readonly PushResult[],
+	results: ReadonlyArray<PushResult | 'unsendable'>,
 ): {state: SyncState; refused: number} {
+	const shadow = {...state.shadow};
 	const done = new Set<string>();
 	let refused = 0;
 	for (const [index, change] of sent.entries()) {
@@ -267,13 +285,24 @@ export function settle(
 			done.add(key);
 		}
 
+		const entry = shadow[key];
+		const serverHasIt =
+			results[index] === 'applied' || results[index] === 'superseded';
+		if (serverHasIt && !change.deleted && entry?.unaccepted) {
+			shadow[key] = accepted(entry);
+		}
+
 		if (results[index] === 'stale' || results[index] === 'clock') {
 			refused += 1;
 		}
 	}
 
 	return {
-		state: {...state, outbox: state.outbox.filter((key) => !done.has(key))},
+		state: {
+			...state,
+			shadow,
+			outbox: state.outbox.filter((key) => !done.has(key)),
+		},
 		refused,
 	};
 }
@@ -305,6 +334,10 @@ export function receive(
 		const key = recordKey(change);
 		const entry = shadow[key];
 		if (entry && !supersedes(change, entry)) {
+			if (entry.unaccepted && !change.deleted) {
+				shadow[key] = accepted(entry);
+			}
+
 			return;
 		}
 
@@ -428,6 +461,12 @@ export function restartAfterServerReset(state: SyncState): SyncState {
 		cursor: 0,
 		purged: 0,
 		known: 0,
+		shadow: Object.fromEntries(
+			Object.entries(state.shadow).map(([key, entry]) => [
+				key,
+				unacceptedIfTrash(entry),
+			]),
+		),
 		outbox: Object.keys(state.shadow),
 	};
 }

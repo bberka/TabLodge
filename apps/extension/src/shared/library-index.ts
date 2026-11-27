@@ -410,30 +410,85 @@ export type Plan = {
 	bookmarks: PlannedPart[];
 };
 
+export function planPart(
+	slice: unknown[],
+	key: string,
+	old: PageRef | undefined,
+): PlannedPart {
+	const json = canonicalJson(slice);
+	const hash = hashText(json);
+	const unchanged = old?.hash === hash && old.count === slice.length;
+	return {
+		ref: unchanged ? old : {key, hash, count: slice.length},
+		value: {items: slice},
+		json,
+		unchanged,
+	};
+}
+
 export function planParts(
 	items: readonly unknown[],
 	prefix: string,
 	rev: number,
 	previous: readonly PageRef[],
+	before?: readonly unknown[],
 ): PlannedPart[] {
 	const parts: PlannedPart[] = [];
 	for (let n = 0; n * PAGE_SIZE < items.length; n += 1) {
-		const slice = items.slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE);
-		const json = canonicalJson(slice);
-		const hash = hashText(json);
+		const start = n * PAGE_SIZE;
+		const slice = items.slice(start, start + PAGE_SIZE);
 		const old = previous[n];
-		const unchanged = old?.hash === hash && old.count === slice.length;
-		parts.push({
-			ref: unchanged
-				? old
-				: {key: `${prefix}${n}.${rev}`, hash, count: slice.length},
-			value: {items: slice},
-			json,
-			unchanged,
-		});
+		parts.push(
+			before &&
+				old?.count === slice.length &&
+				slice.every((item, at) => item === before[start + at])
+				? {ref: old, value: {items: slice}, json: '', unchanged: true}
+				: planPart(slice, `${prefix}${n}.${rev}`, old),
+		);
 	}
 
 	return parts;
+}
+
+export function planSession(
+	group: unknown,
+	rev: number,
+	old: SessionEntry | undefined,
+): PlannedSession {
+	if (!isRecord(group) || typeof group.id !== 'string' || group.id === '') {
+		throw new Error('A session has no id, so it cannot be stored.');
+	}
+
+	const json = canonicalJson(group);
+	const hash = hashText(json);
+	if (old?.hash === hash) {
+		return {
+			entry: old,
+			key: sessionKey(old.id, old.rev),
+			value: group,
+			json,
+			unchanged: true,
+		};
+	}
+
+	return {
+		entry: {
+			id: group.id,
+			rev,
+			hash,
+			tabs: Array.isArray(group.tabs) ? group.tabs.length : 0,
+			name: typeof group.name === 'string' ? group.name : '',
+			folderId: typeof group.folderId === 'string' ? group.folderId : '',
+			createdAt: Number(group.createdAt) || 0,
+			updatedAt: Number(group.updatedAt) || 0,
+			...(old?.sync && {sync: old.sync}),
+			...(old?.tabSync && {tabSync: true as const}),
+		},
+		key: sessionKey(group.id, rev),
+		value: group,
+		json,
+		unchanged: false,
+	};
 }
 
 export function planState(
@@ -448,46 +503,15 @@ export function planState(
 	const seen = new Set<string>();
 	const sessions = (Array.isArray(raw.groups) ? raw.groups : []).map(
 		(group: unknown): PlannedSession => {
-			if (!isRecord(group) || typeof group.id !== 'string' || group.id === '') {
-				throw new Error('A session has no id, so it cannot be stored.');
+			const id =
+				isRecord(group) && typeof group.id === 'string' ? group.id : '';
+			const planned = planSession(group, rev, before.get(id));
+			if (seen.has(id)) {
+				throw new Error(`Two sessions share the id ${id}.`);
 			}
 
-			if (seen.has(group.id)) {
-				throw new Error(`Two sessions share the id ${group.id}.`);
-			}
-
-			seen.add(group.id);
-			const json = canonicalJson(group);
-			const hash = hashText(json);
-			const old = before.get(group.id);
-			if (old?.hash === hash) {
-				return {
-					entry: old,
-					key: sessionKey(old.id, old.rev),
-					value: group,
-					json,
-					unchanged: true,
-				};
-			}
-
-			return {
-				entry: {
-					id: group.id,
-					rev,
-					hash,
-					tabs: Array.isArray(group.tabs) ? group.tabs.length : 0,
-					name: typeof group.name === 'string' ? group.name : '',
-					folderId: typeof group.folderId === 'string' ? group.folderId : '',
-					createdAt: Number(group.createdAt) || 0,
-					updatedAt: Number(group.updatedAt) || 0,
-					...(old?.sync && {sync: old.sync}),
-					...(old?.tabSync && {tabSync: true as const}),
-				},
-				key: sessionKey(group.id, rev),
-				value: group,
-				json,
-				unchanged: false,
-			};
+			seen.add(id);
+			return planned;
 		},
 	);
 	const bookmarks = Array.isArray(raw.bookmarks) ? raw.bookmarks : [];

@@ -76,10 +76,14 @@ const xoConfig: XoConfigItem[] = [
 		plugins: {local: {rules: {'no-comments': noComments}}},
 		rules: {'local/no-comments': 'error'},
 	},
-	{
-		files: Object.keys(baseline),
-		rules: {'local/no-comments': 'off'},
-	},
+	...(Object.keys(baseline).length > 0
+		? [
+				{
+					files: Object.keys(baseline),
+					rules: {'local/no-comments': 'off' as const},
+				},
+			]
+		: []),
 	...(xoReact({prettier: true}) as XoConfigItem[]),
 	{files: ['**/*.tsx'], settings: {react: {version: 'detect'}}},
 	{

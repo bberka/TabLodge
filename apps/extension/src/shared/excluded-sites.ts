@@ -1,11 +1,3 @@
-// Pure helpers for the excluded-websites list. An entry is a bare host name that covers the host and all of its
-// subdomains. The service worker keeps its own copy of the normalizer and the matcher (it is a classic script
-// without imports); apps/excluded-sites.test.ts runs both against the same table.
-
-/**
-An entry as a lower-case host name, or null when it is not a usable web host. Accepts "google.com", "*.google.com",
-"https://google.com:8080/path" and old stored origins; a leading "www." is dropped.
-*/
 export function normalizeExcludedHost(value: unknown): string | null {
 	if (typeof value !== 'string') {
 		return null;
@@ -37,9 +29,6 @@ export function normalizeExcludedHost(value: unknown): string | null {
 	}
 }
 
-/**
-True when `host` is an entry or one of its subdomains ("mail.google.com" for "google.com", not "notgoogle.com").
-*/
 export function hostIsExcluded(
 	host: string,
 	entries: readonly string[],
@@ -48,23 +37,11 @@ export function hostIsExcluded(
 }
 
 export type ExcludedLines = {
-	/**
-	New, distinct hosts to add, in input order.
-	*/
 	valid: string[];
-	/**
-	Hosts that are already excluded (or repeated in the input), once each.
-	*/
 	duplicates: string[];
-	/**
-	Non-empty lines that are not a usable website, as typed.
-	*/
 	invalid: string[];
 };
 
-/**
-Sorts the lines of the bulk box: new hosts, ones already excluded, and lines to ignore. Blank lines are skipped.
-*/
 export function parseExcludedLines(
 	text: string,
 	existing: readonly string[],
@@ -85,8 +62,8 @@ export function parseExcludedLines(
 			if (!seen.has(host)) {
 				result.duplicates.push(host);
 			}
+			// eslint-disable-next-line no-empty -- a line repeated in the input is counted once, as new, so this branch adds nothing
 		} else if (seen.has(host)) {
-			// Repeated within the input: counted once as new, not again.
 		} else {
 			result.valid.push(host);
 		}
@@ -99,9 +76,6 @@ export function parseExcludedLines(
 	return result;
 }
 
-/**
-One-line message for the single-site field: why the text cannot be used, or '' when it can.
-*/
 export function excludedHostError(value: string): string {
 	const text = value.trim();
 	if (!text || normalizeExcludedHost(text)) {

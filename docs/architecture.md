@@ -113,6 +113,21 @@ Every write is a copy on write commit with one commit point:
 
 The index is written by every commit, so pages and the context menu code that watch `tablodge.state` keep working. Its session entries carry the name, folder, and timestamps the menus need without reading any tabs. `readSettings` reads only the index.
 
+### Scoped edits
+
+Some edits read and write only what they touch. `openStore` in the worker asks `openScope` for the root, the index pages and records the edit names, normalizes that partial library, and commits it against the same root (a commit is refused when the root changed in between). The page and chunk hashes and the stamps of untouched records are carried as they are.
+
+| Edit | Records read besides the root |
+| --- | --- |
+| Rename, recolor, describe, move to a folder, or archive one session | That session and the session index pages scanned until it is found (cached by page hash within a worker run) |
+| Edit one bookmark | The chunk that holds it. The first such edit after a worker start also reads the chunks before it, to find it |
+| Add, delete, or reorder bookmarks | All bookmark chunks, no session or session index page |
+| Create or edit a folder or a bookmark column, or move a column | None |
+
+Every other edit reads the whole library through `getStore`, as do Undo, sync, exports, and a page's first load. A scoped edit also falls back to the whole read when the library is not in layout 11, when a record it needs is damaged, or when the stored folders are not in normalized form.
+
+An open page holds the `revision` (`<rev>:<updatedAt>`) of the library it shows. When `tablodge.state` changes it asks `GET_STATE_CHANGES` for the changes since that revision. The worker keeps the last 20 changes of scoped edits in memory and answers with the chain from the page's revision to the stored one. The page applies it. When the worker has no complete chain (a whole write, another worker's write, a restart, a lock, or a change too large to keep) or the change does not fit what the page holds, the page loads the whole library again.
+
 ### Migration from the single entry
 
 `migrateStoreOnce` runs inside `mutate` (so inside the mutation queue and the shared storage lock) at each worker start, and again on a later mutation if it failed. While the library is still in the old layout, reads and writes keep working on the old entry (writes stamp schema 9, so older builds can still open it).
@@ -169,7 +184,7 @@ The worker runs `client.ts` as `syncClient` in `service-worker.ts`, wired to `ch
 Each trash entry is a sync record of kind `trash`, keyed by its id, so it follows the same rules as any record: last writer wins, and removing an entry (restore, delete for good, empty, expiry) is a delete that other devices apply. The records come from the host, not from the library: `SyncHost.trash` has `read()` and `apply(put, remove)`, `splitLibrary(store, trash)` turns the entries into records, and `trashOf` turns pulled records back. `apply` adds, replaces, and removes in one step of the host's own trash queue, so a delete made while a round runs is kept. The extension's `readSyncTrash` and `applySyncTrash` and the app's `syncedTrash` (`trash-storage.ts`) implement it; the app's regular and private libraries each pass their own list.
 
 * **Old servers.** A server that does not list `trash` among the `features` of `/v1/status` refuses a push with an unknown kind, which would stop every round. The client asks once every ten minutes and syncs the trash only when the server lists it. Without it, trash records are left out of capture and out of the outbox, so the local trash is not mistaken for deleted. `PROTOCOL_VERSION` stays 1, and an old client skips the trash records it pulls.
-* **Size.** The server refuses a change over 256 KiB. A trash entry over 200,000 serialized characters (`TRASH_SYNC_MAX_CHARS`) is not a record at all and stays on its device. The cached `size` never leaves the device.
+* **Size.** The server refuses a change whose JSON is longer than 256 × 1024 characters (`MAX_CHANGE_BYTES` in `api.ts`). A private library sends each value encrypted and in base64, which is about a third longer than the value's UTF-8 bytes. So a trash entry whose JSON is over 195,056 UTF-8 bytes (`TRASH_SYNC_MAX_BYTES`, which also leaves 2 KiB for the rest of the change) is not a record and stays on its device. An entry the server already holds stays a record whatever its size, so a limit that shrinks, or a resend that queues it again, never deletes it from other devices. The sync state marks a trash entry `unaccepted` from its first capture until a push or pull shows the server has it, and again after a server reset. An entry without the mark counts as held, including one stored by an earlier version. If a held entry, once sealed, is over the server's limit, the push leaves it out and drops it from the queue: nothing is deleted, the server keeps any copy it has, and sync goes on. The cached `size` never leaves the device.
 * **Expiry.** Every device drops an entry at its own `deletedAt` plus the retention, which syncs with the settings, and then sends the delete; those deletes agree, so nothing needs coordinating. The 500 entry and size limits apply after a round too.
 * **Restoring.** Restoring writes the library and removes the entry in the same step, so the other devices receive both together. Two devices restoring the same item at once leave it twice, as the extension does when the item already exists.
 
@@ -298,7 +313,7 @@ Deleting a session folder moves its sessions to Unfiled rather than trashing the
 
 On the dashboard, actions that can be undone run immediately and show an Undo toast. Settings asks first, in a `ConfirmationDialog`, before every destructive or hard to undo action: erasing data, restoring defaults or a section's defaults, removing an excluded website or a source, deleting or clearing snapshots, backups, and trash items, emptying trash, restoring a backup, and disconnecting sync. Those that can be undone still offer Undo afterward. The rule is in [UI rules](agents/ui.md#destructive-actions).
 
-`showStatus(message, false, {action: {label, onClick}})` displays an action toast for six seconds. Delete responses include `trashId`; Undo sends `RESTORE_TRASH`. Undoing removal after a restore brings saved links back but leaves the opened tabs alone. Undoing a move sends a reverse `MOVE_TAB`. Undo after saving and closing tabs restores the saved session into the current window.
+`showStatus(message, false, {action: {label, onClick}})` displays an action toast for six seconds, or longer as the **Messages stay** setting says. An Undo backed by the worker's two minute record carries `expiresAt` (`expiresMs` in the Sources and quote toasts), set to `UNDO_OFFER_MS` in `src/shared/undo-policy.ts`, and the button leaves the toast then, so a toast kept open never offers an Undo the worker would refuse. Delete responses include `trashId`; Undo sends `RESTORE_TRASH`. Undoing removal after a restore brings saved links back but leaves the opened tabs alone. Undoing a move sends a reverse `MOVE_TAB`. Undo after saving and closing tabs restores the saved session into the current window.
 
 For actions the trash cannot represent, the worker's `withUndo` copies affected storage keys before the action and stores hashes of their resulting values afterward. The library is kept as a delta of changed records (see [Undo](#undo) under Library storage) instead of a copy of everything. The response includes `undoId`. `UNDO` succeeds only within two minutes and only if all affected keys still match those hashes, or the library is still at the commit the action ended on. Later edits to the same data cause Undo to be refused.
 
@@ -314,12 +329,26 @@ Opening more than 10 saved links or bookmarks, or restoring a snapshot, also off
 
 * **Extension.** `KEEP_PAGE_COPY` takes a tab id from the popup, the side panel, or the page menu (`tablodge-page-keep-copy` under the page root). The worker refuses private windows and the private worker, injects `page-copy-capture.js` (a classic script built from `shell/page-copy-capture.ts`) with `chrome.scripting` under `activeTab`, which runs the extractor on a clone of the rendered page and leaves the result in the isolated world, then collects it with a second injection (`src/app/page-copy-inject.ts`; injected functions are plain declarations because they travel as source text). The copy is stored under the address of the saved link with the tab's address, or that address without tracking parameters, or else under a new bookmark added after the copy is stored. A menu click answers with a note in the page; the popup and side panel answer with a toast. `DELETE_PAGE_COPY` removes the copy through `withUndo` over the index key and the copy's own key, so the reader's toast offers **Undo** and the alarm purges the record with the other Undo records. `GET_PAGE_COPIES`, `GET_PAGE_COPY`, and `DELETE_PAGE_COPY` serve `reader.html` and the **Open copy** row items, which pages keep current from `storage.onChanged` on `tablodge.copies`.
 * **Lifecycle.** A copy belongs to an address, so a bookmark and a saved tab of one page share it and the phone's Undo, which restores links under new ids, keeps it. The regular worker sweeps after any change to the library, the trash, or Undo: it drops copies whose address is in neither the library nor the trash, inside the library and trash queues so an action's Undo record is written first, and not while an Undo is pending, so emptying the trash removes the copies once the two minutes pass and the Undo is purged. It does nothing when the library cannot be read.
-* **Android.** `src/library/page-copies.ts` keeps copies in the key-value store under the same keys, fetches the page through the server's `/v1/page-source` when the server lists `page-source` and directly otherwise, parses it with `linkedom`, and sweeps two minutes after the regular library or its trash last changed (a restore over the library can still be undone in that time). The private library never gets copies.
+* **Android.** `src/library/page-copies.ts` keeps copies in the key-value store under the same keys, fetches the page through the server's `/v1/page-source` when the server lists `page-source` and directly otherwise, parses it with `linkedom`, and sweeps two minutes after the regular library or its trash last changed (a restore over the library can still be undone in that time). No sweep runs while a snackbar with a button is shown, so under **Until dismissed** its Undo still finds the copies. The private library never gets copies.
 
 | Key | Contents |
 | --- | --- |
 | `tablodge.copies` | `{v: 1, items}`: address, storage key, title, time kept, and stored size of each copy |
 | `tablodge.copy.<hash>` | One copy: `{v: 1, url, title, byline?, savedAt, blocks}` |
+
+## Saved images
+
+**Save image to** keeps a picture with its bookmark ([ADR 37](adr/0037-image-store.md)). `src/shared/image-store.ts` holds the record shapes, the checks, the caps (10 MB per image, 100 MB of originals per device), the index, and the sweep, behind the same three-call storage interface as page copies.
+
+* **Menu.** `contextMenuPlan` adds **Save image to** under the image root, below **Bookmark image to**, with one item per column (`tablodge-image-save:<column id>`), or as a single item (`tablodge-image-save`) when there are no columns. The private worker passes `keepsImages: false`, so a private window has no such item.
+* **Save.** The worker runs `mediaSave` as **Bookmark image to** does, adds the bookmark, then injects `captureImage` (`src/app/image-capture-inject.ts`) into the clicked frame under `activeTab`. It fetches the image in the page, so a same-origin image or one served with CORS headers can be read, draws a WebP thumbnail on a canvas, and returns both as base64. The worker trusts none of it: `parseSavedImage` works out the type from the first bytes and checks the sizes again. An image that is already bookmarked is kept without a second bookmark. An address in the trash is left there. The answer is a note in the page (`imageSaveNote` in `save-media.ts`), which says so when the bookmark was added and the picture was not.
+* **Lifecycle.** An image belongs to an address. The sweep that drops page copies with no link drops images the same way, with the same wait for Undo. `DELETE_SAVED_IMAGE` removes the picture and keeps the bookmark. `ADD_SAVED_IMAGES` puts pictures back, only for an address a link in the library or the trash has.
+
+| Key | Contents |
+| --- | --- |
+| `tablodge.images` | `{v: 1, items}`: address, type, width, height, size, time saved, device, and how many bytes of the original this device holds |
+| `tablodge.image.<hash>` | One original: `{v: 1, url, type, data}`, the bytes as base64 |
+| `tablodge.thumb.<hash>` | One thumbnail: the index fields and `thumb`, a WebP of at most 256 px and 10 KB as base64 |
 
 ## Pages and shared UI
 

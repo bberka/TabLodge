@@ -1,10 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Button} from '../components/ui/button';
 
-/**
-End of a partially rendered long list: it asks for the next batch as it nears the viewport, and stays a
-real button so keyboard and screen-reader users can load more (or reach the rest) without scrolling.
-*/
 export function LoadMore({
 	remaining,
 	step,
@@ -43,7 +39,6 @@ export function LoadMore({
 		);
 		observer.observe(element);
 		return () => observer.disconnect();
-		// Re-observing after each batch re-checks whether the end is still near the viewport.
 	}, [autoLoad, remaining]);
 	const amount = Math.min(step, remaining);
 	const label = compact
@@ -66,11 +61,6 @@ export function LoadMore({
 	);
 }
 
-/**
-How many items of a long list to draw: starts at one `page`, grows by a page per `more()`, and starts over
-when `signature` (the filter, search or sort) changes. `showUpTo(limit)` sets the limit directly, to reveal
-an item further down the list.
-*/
 export function usePagedLimit(signature: string, page: number) {
 	const [state, setState] = useState({signature, limit: page});
 	const limit = state.signature === signature ? state.limit : page;

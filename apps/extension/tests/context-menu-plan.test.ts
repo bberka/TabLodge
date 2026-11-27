@@ -98,6 +98,28 @@ describe('contextMenuPlan', () => {
 		}
 	});
 
+	test('Save image to sits under Bookmark image to, and a private window has none', () => {
+		const imageMenu = (keepsImages: boolean) =>
+			contextMenuPlan(on, columns, [], {...env, keepsImages})
+				.filter((item) => item.parentId === 'tablodge-image-root')
+				.map((item) => item.title);
+		assert.deepEqual(imageMenu(true), ['Bookmark image to', 'Save image to']);
+		assert.deepEqual(imageMenu(false), ['Bookmark image to']);
+
+		const save = contextMenuPlan(on, columns, [], {
+			...env,
+			keepsImages: true,
+		}).filter((item) => item.id?.startsWith('tablodge-image-save'));
+		for (const item of save) {
+			assert.deepEqual(item.contexts, ['image']);
+			assert.deepEqual(
+				item.targetUrlPatterns,
+				['http://*/*', 'https://*/*'],
+				'never offered for a data: or blob: image',
+			);
+		}
+	});
+
 	test('Firefox shows an ampersand in every title, built in or named by the user', () => {
 		const names = [{id: 'rd', name: 'R&D', createdAt: 0, isDefault: false}];
 		const sessions = [{id: 's1', name: 'Q&A'}];

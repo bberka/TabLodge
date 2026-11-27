@@ -1,9 +1,3 @@
-// The content script of Settings › Sources, registered for a site only while the user has it on and the browser
-// grants the site's optional host permission. It reads the page when the user clicks, and when the click was the
-// site's own save, it hands that link to the service worker and shows the result in the page. On the site's own
-// saved page it also reads the list there and offers to add what TabLodge lacks (#377). It changes nothing on the
-// site, except on a site the user set to Save to TabLodge only: there it stops that one click so the site does not
-// save it (src/app/source-keep-off.ts). It never makes a request of its own.
 import {
 	SITE_SOURCES_KEY,
 	siteSourceForUrl,
@@ -48,6 +42,7 @@ import {
 	readRedditSavedPage,
 } from '../src/app/source-reddit';
 import {showSourceToast} from '../src/app/source-toast';
+import {UNDO_OFFER_MS} from '../src/shared/undo-policy';
 import type {ActionResult, SiteSourceOutcome} from '../src/shared/types';
 
 const LOADED = 'tablodgeSiteSource';
@@ -71,7 +66,6 @@ const READERS: Record<SiteSourceId, () => SourceReader> = {
 	medium: () => createMediumReader(document),
 	substack: () => createSubstackReader(document),
 };
-// Sites whose saved page lists the user's saves in a form that can be read reliably (#377, #383).
 const SAVED_PAGES: Partial<Record<SiteSourceId, SavedPageReader>> = {
 	youtube: readYoutubeSavedPage,
 	reddit: readRedditSavedPage,
@@ -81,16 +75,13 @@ const SAVED_PAGES: Partial<Record<SiteSourceId, SavedPageReader>> = {
 };
 const source = siteSourceForUrl(location.href);
 
-// Settings injects the script into open tabs when a site is switched on, so a second copy must stay quiet.
 if (source && !Object.hasOwn(globalThis, LOADED)) {
 	Object.defineProperty(globalThis, LOADED, {value: true});
 	const appName = chrome.runtime.getManifest().short_name ?? 'TabLodge';
 	const siteName = source.column.name;
 	const read = READERS[source.id]();
-	// Off until the worker says otherwise, so a click before its answer reaches the site.
 	let keepOffSite = false;
 
-	// A script left behind by an extension update or removal can no longer reach the worker; it then does nothing.
 	const send = async <T>(message: Record<string, unknown>) => {
 		try {
 			return (await chrome.runtime.sendMessage(message)) as T | undefined;
@@ -108,6 +99,12 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			? `Removed from ${appName}.`
 			: (result?.error ?? `${appName} could not undo that.`);
 	};
+
+	const undoButton = (id: string) => ({
+		label: 'Undo',
+		expiresMs: UNDO_OFFER_MS,
+		run: async () => undo(id),
+	});
 
 	const showSaved = ({
 		outcome,
@@ -127,7 +124,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		const text = messages[outcome];
 		if (text) {
 			showSourceToast(text, {
-				actions: undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : [],
+				actions: undoId ? [undoButton(undoId)] : [],
 			});
 		}
 	};
@@ -140,8 +137,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 				: `${siteName} closed that control, so it did not save this. Shift-click its save to save it there.`,
 	});
 
-	// Save to TabLodge only: the site never saw the click. When the link cannot be saved here, the click goes on to
-	// the site after all, so the user's save is never lost.
 	const handleKept = async (kept: KeptSave) => {
 		const result = await send<ActionResult<'SITE_SOURCE_SAVE'>>({
 			type: 'SITE_SOURCE_SAVE',
@@ -150,8 +145,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			title: kept.link.title,
 			discussion: kept.link.discussion,
 		});
-		// The worker keeps the result for the next page of a site whose save loads one, but a stopped save loaded
-		// none: this page shows it, so a later page in the tab must not show it again.
 		if (source.saveLoadsPage) {
 			void takePending();
 		}
@@ -163,14 +156,12 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		showSourceToast(text, {
 			error,
 			actions: [
-				...(undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : []),
+				...(undoId ? [undoButton(undoId)] : []),
 				...(alsoSave ? [alsoSaveAction(kept)] : []),
 			],
 		});
 	};
 
-	// Clicks pass through while a refresh is out, and only the newest answer counts, so an older one that arrives
-	// late cannot switch it back on.
 	let modeRequest = 0;
 	const readMode = async () => {
 		const request = ++modeRequest;
@@ -197,7 +188,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 				source: source.id,
 			});
 			if (result?.ok && result.reported) {
-				// Under Save to TabLodge only the click was let through, so the site saved it.
 				showSourceToast(
 					keepOffSite
 						? `${appName} can't read this page anymore, so ${siteName} saved it and ${appName} did not.`
@@ -226,9 +216,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		}
 
 		showSaved(result);
-		// Shown here, so a later page in this tab must not show it again. Taken a little later, not at once: on a
-		// site whose save control loads another page, this page can get the result just before it goes, and then
-		// the next page shows it; a page that has gone never takes it.
 		if (source.saveLoadsPage) {
 			setTimeout(() => {
 				void takePending();
@@ -236,7 +223,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		}
 	};
 
-	// A save whose click loaded this page (Hacker News' favorite link) shows its result here.
 	if (source.saveLoadsPage) {
 		void takePending().then((pending) => {
 			if (pending?.ok && pending.saved) {
@@ -251,7 +237,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		: undefined;
 
 	void readMode();
-	// The choice in Settings, and a private window's library choice, can change while the page is open.
 	chrome.storage.onChanged.addListener((changes, area) => {
 		if (!(
 			area === 'local' &&
@@ -267,8 +252,6 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 
 	listenForSaves(globalThis, {
 		read,
-		// A script left behind by an extension update or removal has no runtime id and can't save, so it never stops a
-		// click.
 		keepOff: () => keepOffSite && Boolean(chrome.runtime?.id),
 		onRead(found, kept) {
 			void (kept ? handleKept(kept) : handle(found));

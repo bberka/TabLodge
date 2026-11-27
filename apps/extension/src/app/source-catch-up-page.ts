@@ -1,4 +1,5 @@
 import type {ActionResult} from '../shared/types';
+import {UNDO_OFFER_MS} from '../shared/undo-policy';
 import {
 	CATCH_UP_MAX_LINKS,
 	catchUpCountText,
@@ -58,7 +59,14 @@ export function watchSavedPage({
 				? `Nothing to add: they're in ${appName} already.`
 				: `Added ${added} to ${appName} in ${column}.`;
 		return undoId
-			? {text, action: {label: 'Undo', run: async () => undo(undoId)}}
+			? {
+					text,
+					action: {
+						label: 'Undo',
+						expiresMs: UNDO_OFFER_MS,
+						run: async () => undo(undoId),
+					},
+				}
 			: text;
 	};
 

@@ -1,6 +1,8 @@
+import type {StateChange} from './state-changes';
 import type {SyncStatus} from './sync/client';
 import type {SharedPageMode} from './sync/shared-pages';
 import type {SharedPage} from './sync/shared-pages-client';
+import type {ImageEntry, SavedImage, SavedThumb} from './image-store';
 import type {PageCopy} from './page-copy';
 import type {LinkKind} from './link-kind';
 import type {ToastDuration, ToastPosition} from './toast-prefs';
@@ -264,7 +266,9 @@ export type Store = {
 	updatedAt: number;
 };
 
-export type TabLodgeState = Store & {ok: true};
+export type RevisionedStore = Store & {revision?: string};
+
+export type TabLodgeState = RevisionedStore & {ok: true};
 
 export type SnapshotTab = {
 	url: string;
@@ -418,6 +422,7 @@ export type TabLodgeMessages = {
 	JOIN_PRIVATE_SERVER: {credential: string};
 	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
+	GET_STATE_CHANGES: {since: string};
 	GET_BOOKMARK_PROMPT: {url: string};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
@@ -561,6 +566,11 @@ export type TabLodgeMessages = {
 	GET_PAGE_COPY: {url: string};
 	DELETE_PAGE_COPY: {url: string};
 	ADD_PAGE_COPIES: {copies: unknown};
+	GET_SAVED_IMAGES: {};
+	GET_IMAGE_THUMBS: {urls: string[]};
+	GET_SAVED_IMAGE: {url: string};
+	DELETE_SAVED_IMAGE: {url: string};
+	ADD_SAVED_IMAGES: {images: unknown};
 	GET_TRASH: {};
 	RESTORE_TRASH: {id: string};
 	DELETE_TRASH: {id: string};
@@ -711,7 +721,8 @@ export type TabLodgeResponses = {
 	GET_PRIVATE_SERVER: {privateServer: PrivateServerInfo};
 	JOIN_PRIVATE_SERVER: PrivateLockInfo;
 	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
-	GET_STATE: Store;
+	GET_STATE: RevisionedStore;
+	GET_STATE_CHANGES: {changes?: StateChange[]};
 	GET_BOOKMARK_PROMPT: {
 		bookmarkColumns: BookmarkColumn[];
 		defaultColumnId?: string;
@@ -833,6 +844,11 @@ export type TabLodgeResponses = {
 	GET_PAGE_COPY: {copy: PageCopy | null};
 	DELETE_PAGE_COPY: Undoable;
 	ADD_PAGE_COPIES: {copies: number};
+	GET_SAVED_IMAGES: {items: ImageEntry[]; size: number; budget: number};
+	GET_IMAGE_THUMBS: {thumbs: SavedThumb[]};
+	GET_SAVED_IMAGE: {image: SavedImage | null; thumb: SavedThumb | null};
+	DELETE_SAVED_IMAGE: {};
+	ADD_SAVED_IMAGES: {images: number};
 	GET_TRASH: {
 		items: TrashSummary[];
 		urls: {sessions: string[]; bookmarks: string[]};

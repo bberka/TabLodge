@@ -1605,7 +1605,7 @@ function NewTab() {
 		);
 	}
 
-	function sessionTargets() {
+	const sessionTargetsList = useMemo(() => {
 		const archivedId = archivedFolderId(state?.folders ?? []);
 		return (state?.groups ?? [])
 			.filter((group) => group.folderId !== archivedId)
@@ -1613,9 +1613,9 @@ function NewTab() {
 				id: group.id,
 				name: group.name.trim() || 'Untitled session',
 			}));
-	}
+	}, [state?.folders, state?.groups]);
 
-	const pasteSessions = sessionTargets();
+	const pasteSessions = sessionTargetsList;
 	const pasteSessionId = pasteSessions.some(
 		(session) => session.id === saveSessionId,
 	)
@@ -2308,7 +2308,7 @@ function NewTab() {
 			)}
 		</>
 	);
-	const sessionTargetsForBookmarks = sessionTargets();
+	const sessionTargetsForBookmarks = sessionTargetsList;
 
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
@@ -2318,7 +2318,7 @@ function NewTab() {
 		edit: openColumnEditor,
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
-		sessionTargets,
+		sessionTargets: () => sessionTargetsList,
 		pickTarget: setTargetPicker,
 		remove(column) {
 			void requestDeleteColumn(column);
@@ -2678,7 +2678,7 @@ function NewTab() {
 					)}
 				>
 					<nav aria-label="Bookmark columns" className="md:w-56 md:shrink-0">
-						<ul className="flex gap-1 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
+						<ul className="flex flex-wrap gap-1 pb-1 md:block md:space-y-1 md:pb-0">
 							{focusItems.map((item) => {
 								const active = item.id === activeFocus?.id;
 								const ItemIcon = item.all
@@ -2780,7 +2780,7 @@ function NewTab() {
 										key={item.id}
 										draggable={!isSystem}
 										data-drag-column={isSystem ? undefined : item.id}
-										className="relative shrink-0 md:block"
+										className="relative min-w-0 max-w-full shrink-0 md:block"
 										onDragStart={(event) => handleInternalDragStart(event)}
 										onDragEnd={() => {
 											handleInternalDragEnd();
@@ -3688,7 +3688,7 @@ function NewTab() {
 											</Label>
 											<p
 												id="delete-column-stop-source-note"
-												className="text-xs leading-5 text-muted-foreground"
+												className="text-xs leading-[1.6667] text-muted-foreground"
 											>
 												This removes the site from Sources, also in your other
 												synced browsers. Otherwise your next save on{' '}
@@ -4104,7 +4104,7 @@ const BookmarkColumn = memo(
 						</div>
 					)
 				) : (
-					<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
+					<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-[1.6667] text-muted-foreground">
 						{emptyMessage && siblings.length === 0
 							? emptyMessage
 							: siblings.length > 0
@@ -4472,7 +4472,7 @@ const BookmarkCard = memo(
 										)}
 									/>
 									<span className="min-w-0 flex-1">
-										<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
+										<strong className="block truncate text-[0.8125rem] font-semibold group-hover:text-primary">
 											{(urlOnly || !showUrl) && (
 												<InsecureMarkFor
 													url={bookmark.url}
@@ -4482,7 +4482,7 @@ const BookmarkCard = memo(
 											{cardName}
 										</strong>
 										{showUrl && !urlOnly && (
-											<small className="block truncate text-[11px] leading-4 text-muted-foreground">
+											<small className="block truncate text-[0.6875rem] leading-[1.4545] text-muted-foreground">
 												<InsecureMarkFor
 													url={bookmark.url}
 													settings={urlSettings}
@@ -4499,7 +4499,7 @@ const BookmarkCard = memo(
 								<NoteText
 									notes={bookmark.notes}
 									className={cn(
-										'whitespace-pre-line wrap-anywhere text-[11px] leading-4 text-muted-foreground',
+										'whitespace-pre-line wrap-anywhere text-[0.6875rem] leading-[1.4545] text-muted-foreground',
 										showUrl && !compact ? 'pl-[34px]' : 'pl-[30px]',
 										compact ? 'line-clamp-1' : 'line-clamp-2',
 									)}

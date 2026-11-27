@@ -159,12 +159,15 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div className="min-w-0 space-y-1">
 					<Label htmlFor={switchId}>Sync private windows</Label>
-					<p id={helpId} className="text-xs leading-5 text-muted-foreground">
+					<p
+						id={helpId}
+						className="text-xs leading-[1.6667] text-muted-foreground"
+					>
 						{status.connected
 							? `On: this private library syncs with your other browsers and phone, as a separate library on ${server}.`
 							: `Off: this private library stays on this device only. Turn it on to merge it with the library on ${server} and keep your devices the same.`}
 					</p>
-					<p className="flex gap-1.5 text-xs leading-5 text-muted-foreground">
+					<p className="flex gap-1.5 text-xs leading-[1.6667] text-muted-foreground">
 						<Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
 						{encryption}
 					</p>

@@ -157,7 +157,7 @@ function PrivateStorageForm({
 					<RadioCard key={choice.value} {...choice} />
 				))}
 			</RadioCardGroup>
-			<p className="text-xs leading-5 text-muted-foreground">
+			<p className="text-xs leading-[1.6667] text-muted-foreground">
 				Switching does not copy, merge, or delete a library, and switching back
 				reopens it. Snapshots and automatic backups never run in private
 				windows. Files you export stay on disk, even with a temporary library.
@@ -310,7 +310,7 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 					<div className="space-y-4 pb-5">
 						<div className="space-y-1">
 							<h3 className="text-sm font-medium">Library</h3>
-							<p className="text-xs leading-5 text-muted-foreground">
+							<p className="text-xs leading-[1.6667] text-muted-foreground">
 								Where private windows keep their sessions and bookmarks. This
 								applies to every private window.
 							</p>
@@ -337,7 +337,7 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 							</label>
 							<p
 								id="private-new-tab-redirect-description"
-								className="text-xs leading-5 text-muted-foreground"
+								className="text-xs leading-[1.6667] text-muted-foreground"
 							>
 								Chromium does not let extensions replace the private new tab
 								page, so the browser’s page opens first and then switches to the
@@ -363,7 +363,7 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 								</label>
 								<p
 									id="private-accent-description"
-									className="text-xs leading-5 text-muted-foreground"
+									className="text-xs leading-[1.6667] text-muted-foreground"
 								>
 									Tints buttons, focus rings, and selections so private windows
 									are easy to tell apart. Light and dark follow your regular

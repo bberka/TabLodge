@@ -21,5 +21,5 @@ A build that only knows layout 10 sees `schemaVersion` 11 and treats the library
 ## Consequences
 
 * An edit writes the changed piece, the small root, and an Undo entry made of the same pieces.
-* The root stays small, but the session entry list is still read whole on each commit (cached by page hash within a worker run).
-* Reading the whole library still costs time proportional to its size; this change does not make a read cheaper.
+* The root stays small, and scoped edits read only the session index pages they need (cached by page hash within a worker run) instead of loading all session pages. Whole-library writes still load the full session index.
+* Reading the whole library still costs time proportional to its size. Since 2026-11-27 the common single record edits read only the pages and records they touch, and open pages apply the change (see [Scoped edits](../architecture.md#scoped-edits)).

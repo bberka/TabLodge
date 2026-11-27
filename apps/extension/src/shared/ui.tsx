@@ -98,16 +98,12 @@ export function IconTooltip({
 	);
 }
 
-// Search that stays a single icon until it is needed; it remains open while it holds a query.
 type ExpandingSearchProps = {
 	value: string;
 	onChange: (value: string) => void;
 	label: string;
 	placeholder?: string;
 	className?: string;
-	/**
-	What a screen reader hears after the query changes, such as "3 bookmarks found". Empty says nothing.
-	*/
 	status?: string;
 };
 
@@ -122,7 +118,6 @@ export function ExpandingSearch({
 	const [open, setOpen] = React.useState(Boolean(value));
 	const inputRef = React.useRef<HTMLInputElement>(null);
 	const buttonRef = React.useRef<HTMLButtonElement>(null);
-	// Escape closes the field from inside it, so focus goes back to the icon button that opens it.
 	const refocusButtonRef = React.useRef(false);
 	React.useEffect(() => {
 		if (open) {
@@ -132,7 +127,6 @@ export function ExpandingSearch({
 			buttonRef.current?.focus();
 		}
 	}, [open]);
-	// The region stays mounted in both states so a screen reader treats later text as an update.
 	const announcement = (
 		<span role="status" className="sr-only">
 			{status}
@@ -191,9 +185,6 @@ export function ExpandingSearch({
 	);
 }
 
-/**
-A confirmation for destructive actions on the Settings page. Dashboard, new-tab and side-panel actions run at once with an Undo toast instead.
-*/
 export function ConfirmationDialog({
 	open,
 	onOpenChange,
@@ -210,17 +201,11 @@ export function ConfirmationDialog({
 	onOpenChange: (open: boolean) => void;
 	title: React.ReactNode;
 	description?: React.ReactNode;
-	/**
-	Extra body content, such as choices.
-	*/
 	children?: React.ReactNode;
 	confirmLabel?: React.ReactNode;
 	confirmDisabled?: boolean;
 	busy?: boolean;
 	onConfirm: () => void;
-	/**
-	Runs once the dialog has closed, just before focus goes back to what opened it.
-	*/
 	onCloseAutoFocus?: () => void;
 }) {
 	return (

@@ -631,7 +631,7 @@ function Popup() {
 		return (
 			<main
 				className={cn(
-					'flex w-[380px] items-center justify-center text-foreground',
+					'flex w-[380px] max-w-full items-center justify-center text-foreground',
 					'h-[560px]',
 				)}
 			>
@@ -660,12 +660,12 @@ function Popup() {
 	return (
 		<main
 			className={cn(
-				'flex w-[380px] flex-col overflow-hidden text-foreground',
+				'flex w-[380px] max-w-full flex-col overflow-hidden text-foreground',
 				'h-[560px]',
 			)}
 		>
-			<header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-				<h1 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
+			<header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+				<h1 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
 					{privateWindow ? (
 						<span
 							role="img"
@@ -899,7 +899,7 @@ function Popup() {
 							: `Close ${plural(duplicateCount, 'duplicate tab')}`}
 					</Button>
 					{!state?.settings?.includePinnedTabs && (
-						<div className="flex h-8 items-center justify-between gap-3 rounded-md border border-dashed border-border px-3">
+						<div className="flex min-h-8 items-center justify-between gap-3 rounded-md border border-dashed border-border px-3">
 							<Label
 								htmlFor="popup-include-pinned"
 								className="flex min-w-0 cursor-pointer items-center gap-3 text-xs font-medium text-muted-foreground"

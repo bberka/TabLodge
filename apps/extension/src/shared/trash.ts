@@ -21,7 +21,11 @@ export const TRASH_KINDS: ReadonlySet<string> = new Set([
 	'folder',
 ]);
 
-export const TRASH_SYNC_MAX_CHARS = 200_000;
+const SERVER_MAX_CHANGE_SIZE = 256 * 1024;
+const CHANGE_ENVELOPE_ROOM = 2048;
+const AES_GCM_TAG_BYTES = 16;
+export const TRASH_SYNC_MAX_BYTES =
+	((SERVER_MAX_CHANGE_SIZE - CHANGE_ENVELOPE_ROOM) / 4) * 3 - AES_GCM_TAG_BYTES;
 
 export const isTrashEntry = (value: unknown): value is TrashEntry =>
 	isRecord(value) &&
@@ -54,9 +58,18 @@ export function parseTrashEntry(value: unknown): TrashEntry | undefined {
 	};
 }
 
-export function syncedTrash(entry: TrashEntry): TrashEntry | undefined {
+const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
+
+export const refusedTrash = (change: {kind: string}) =>
+	change.kind === 'trash' &&
+	JSON.stringify(change).length > SERVER_MAX_CHANGE_SIZE;
+
+export function syncedTrash(
+	entry: TrashEntry,
+	onServer = false,
+): TrashEntry | undefined {
 	const {size: _size, ...value} = entry;
-	return JSON.stringify(value).length <= TRASH_SYNC_MAX_CHARS
+	return onServer || utf8Bytes(JSON.stringify(value)) <= TRASH_SYNC_MAX_BYTES
 		? value
 		: undefined;
 }

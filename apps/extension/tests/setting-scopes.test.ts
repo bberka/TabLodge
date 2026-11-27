@@ -119,6 +119,9 @@ const DATA_KEYS = new Set([
 	'tablodge.undo',
 	'tablodge.copies',
 	'tablodge.copy.',
+	'tablodge.images',
+	'tablodge.image.',
+	'tablodge.thumb.',
 	'tablodge.siteIcons',
 	'tablodge.siteIcons.missing',
 	'tablodge.sync.state',
@@ -207,4 +210,39 @@ test('the phone reads exactly the library settings scoped to all devices', () =>
 			`"${key}" is scoped to all devices but the phone never reads it: scope it platform, or add it to the app.`,
 		);
 	}
+});
+
+test('the appearance and backup settings have the platform scope, and the glass effect stays on the device', () => {
+	const registries: Array<[string, Record<string, readonly [string, string]>]> =
+		[
+			['EXTENSION_STORAGE', EXTENSION_STORAGE],
+			['ANDROID_PREFERENCES', ANDROID_PREFERENCES],
+			['LIBRARY_SETTINGS', LIBRARY_SETTINGS],
+		];
+	const platform: Array<[string, string]> = [
+		['EXTENSION_STORAGE', 'uiTheme'],
+		['EXTENSION_STORAGE', 'uiAccent'],
+		['ANDROID_PREFERENCES', 'look'],
+		['ANDROID_PREFERENCES', 'theme'],
+		['ANDROID_PREFERENCES', 'accent'],
+		['ANDROID_PREFERENCES', 'floatingBar'],
+		['ANDROID_PREFERENCES', 'barSize'],
+		['ANDROID_PREFERENCES', 'barLabels'],
+		['LIBRARY_SETTINGS', 'snapshotsEnabled'],
+		['LIBRARY_SETTINGS', 'snapshotIntervalMinutes'],
+		['LIBRARY_SETTINGS', 'snapshotKeep'],
+		['LIBRARY_SETTINGS', 'autoBackup'],
+		['LIBRARY_SETTINGS', 'autoBackupKeep'],
+	];
+	for (const [name, key] of platform) {
+		const registry = registries.find(([n]) => n === name)?.[1];
+		assert.equal(
+			registry?.[key]?.[0],
+			'platform',
+			`"${key}" syncs to every device of one kind, so its scope is platform.`,
+		);
+	}
+
+	assert.equal(ANDROID_PREFERENCES.glassEffect[0], 'device');
+	assert.equal(LIBRARY_SETTINGS.autoBackupToDownloads[0], 'device');
 });

@@ -11,7 +11,9 @@ import {
 	orderList,
 	outgoing,
 	receive,
+	restartAfterServerReset,
 	settle,
+	serverHeldKeys,
 	startResync,
 	type SyncState,
 } from '../src/shared/sync/engine';
@@ -20,7 +22,11 @@ import {
 	splitLibrary,
 	trashOf,
 } from '../src/shared/sync/library-records';
-import {TRASH_SYNC_MAX_CHARS, type TrashEntry} from '../src/shared/trash';
+import {
+	syncedTrash,
+	TRASH_SYNC_MAX_BYTES,
+	type TrashEntry,
+} from '../src/shared/trash';
 import {normalizeBookmarkColumn} from '../src/shared/library-normalize';
 import {sourceColumnSite} from '../src/shared/source-columns';
 
@@ -516,10 +522,225 @@ test('trash entries are records of their own that never reach the library', () =
 
 test('the size cache stays on the device, and an entry too large for the server is not a record', () => {
 	const small = {...trashed('a', 1), size: 42};
-	const huge = trashed('b', 2, {text: 'x'.repeat(TRASH_SYNC_MAX_CHARS)});
+	const huge = trashed('b', 2, {text: 'x'.repeat(TRASH_SYNC_MAX_BYTES)});
 	const records = splitLibrary(emptyStore(), [small, huge]);
 	assert.equal(records.has('trash:b'), false);
 	assert.equal('size' in (records.get('trash:a')!.value as object), false);
+});
+
+const utf8Bytes = (value: unknown) =>
+	new TextEncoder().encode(JSON.stringify(value)).length;
+
+const trashedOfBytes = (id: string, bytes: number, unit: string) => {
+	const room = bytes - utf8Bytes(trashed(id, 1, {text: ''}));
+	const width = new TextEncoder().encode(unit).length;
+	const text = unit.repeat(Math.floor(room / width)) + 'x'.repeat(room % width);
+	return trashed(id, 1, {text});
+};
+
+for (const [name, unit] of [
+	['two byte', 'é'],
+	['three byte', '€'],
+	['four byte', '😀'],
+]) {
+	test(`the trash size limit counts the bytes of ${name} characters`, () => {
+		const under = trashedOfBytes('under', TRASH_SYNC_MAX_BYTES, unit);
+		const over = trashedOfBytes('over', TRASH_SYNC_MAX_BYTES + 1, unit);
+		assert.equal(utf8Bytes(under), TRASH_SYNC_MAX_BYTES);
+		assert.equal(utf8Bytes(over), TRASH_SYNC_MAX_BYTES + 1);
+		assert.ok(JSON.stringify(over).length < TRASH_SYNC_MAX_BYTES);
+
+		const records = splitLibrary(emptyStore(), [under, over]);
+		assert.equal(records.has('trash:under'), true);
+		assert.equal(records.has('trash:over'), false);
+	});
+}
+
+test('the device only size cache does not count towards the trash size limit', () => {
+	const entry = trashedOfBytes('full', TRASH_SYNC_MAX_BYTES, '€');
+	assert.deepEqual(syncedTrash({...entry, size: 123_456}), entry);
+});
+
+test('an oversized trash entry the server already holds is not sent as a delete', () => {
+	const huge = trashedOfBytes('held', TRASH_SYNC_MAX_BYTES + 1, '€');
+	const records = splitLibrary(
+		emptyStore(),
+		[huge],
+		[],
+		{},
+		new Set(['trash:held']),
+	);
+	let state = {...capture(newSyncState('dev'), records, T0), joined: true};
+	assert.equal(serverHeldKeys(state).has('trash:held'), false);
+
+	const sent = outgoing(state, records, 100);
+	({state} = settle(
+		state,
+		sent,
+		sent.map(() => 'applied'),
+	));
+	assert.equal(serverHeldKeys(state).has('trash:held'), true);
+
+	const again = splitLibrary(
+		emptyStore(),
+		[huge],
+		[],
+		{},
+		serverHeldKeys(state),
+	);
+	assert.equal(capture(state, again, T0 + 1), state);
+
+	const removed = capture(
+		state,
+		splitLibrary(emptyStore(), [], [], {}, serverHeldKeys(state)),
+		T0 + 2,
+	);
+	assert.equal(removed.shadow['trash:held'].deleted, true);
+});
+
+test('an oversized trash entry the server never accepted leaves the queue as a delete', () => {
+	const huge = trashedOfBytes('stuck', TRASH_SYNC_MAX_BYTES + 1, '€');
+	const queued = capture(
+		newSyncState('dev'),
+		splitLibrary(emptyStore(), [huge], [], {}, new Set(['trash:stuck'])),
+		T0,
+	);
+	const records = splitLibrary(
+		emptyStore(),
+		[huge],
+		[],
+		{},
+		serverHeldKeys(queued),
+	);
+	const sent = outgoing(capture(queued, records, T0 + 1), records, 100).filter(
+		(change) => change.kind === 'trash',
+	);
+	assert.deepEqual(
+		sent.map((change) => [change.id, change.deleted, 'value' in change]),
+		[['stuck', true, false]],
+	);
+});
+
+const hugeTrash = trashedOfBytes('huge', TRASH_SYNC_MAX_BYTES + 1, '€');
+
+const snapshotOf = (state: SyncState, trash: TrashEntry[] = [hugeTrash]) =>
+	splitLibrary(emptyStore(), trash, [], {}, serverHeldKeys(state));
+
+const holdingHugeTrash = (): SyncState => {
+	const records = splitLibrary(
+		emptyStore(),
+		[hugeTrash],
+		[],
+		{},
+		new Set(['trash:huge']),
+	);
+	const state = {...capture(newSyncState('dev'), records, T0), joined: true};
+	const sent = outgoing(state, records, 100);
+	return settle(
+		state,
+		sent,
+		sent.map(() => 'applied'),
+	).state;
+};
+
+const withResetHashes = (state: SyncState): SyncState => ({
+	...state,
+	shadow: Object.fromEntries(
+		Object.entries(state.shadow).map(([key, entry]) => [
+			key,
+			entry.deleted ? entry : {...entry, hash: ''},
+		]),
+	),
+});
+
+const sentTrash = (state: SyncState) =>
+	outgoing(state, snapshotOf(state), 100).filter(
+		(change) => change.kind === 'trash',
+	);
+
+test('a trash entry the server holds is not deleted when a resend is never acknowledged', () => {
+	const held = holdingHugeTrash();
+	const reset = withResetHashes(held);
+	const queued = capture(reset, snapshotOf(reset), T0 + 1);
+	assert.ok(queued.outbox.includes('trash:huge'));
+
+	const next = capture(queued, snapshotOf(queued), T0 + 2);
+
+	assert.equal(next.shadow['trash:huge'].deleted, undefined);
+	assert.deepEqual(
+		sentTrash(next).map((change) => [change.deleted, 'value' in change]),
+		[[undefined, true]],
+	);
+});
+
+test('a queued trash entry stored before acceptance was tracked is not deleted', () => {
+	const state = holdingHugeTrash();
+	const stored = {
+		...state,
+		outbox: ['trash:huge'],
+		shadow: {'trash:huge': state.shadow['trash:huge']},
+	};
+	assert.equal('unaccepted' in stored.shadow['trash:huge'], false);
+
+	const next = capture(stored, snapshotOf(stored), T0 + 1);
+
+	assert.equal(next.shadow['trash:huge'].deleted, undefined);
+});
+
+test('an oversized trash entry the server never accepted stays on the device', () => {
+	const first = capture(
+		newSyncState('dev'),
+		snapshotOf(newSyncState('dev')),
+		T0,
+	);
+	assert.equal(first.shadow['trash:huge'], undefined);
+	assert.deepEqual(sentTrash(first), []);
+
+	const small = [trashed('huge', 1)];
+	const queued = capture(
+		newSyncState('dev'),
+		snapshotOf(newSyncState('dev'), small),
+		T0,
+	);
+	for (const result of ['stale', 'clock', 'unsendable'] as const) {
+		const sent = outgoing(queued, snapshotOf(queued, small), 100);
+		const {state} = settle(
+			queued,
+			sent,
+			sent.map(() => result),
+		);
+		assert.equal(serverHeldKeys(state).has('trash:huge'), false, result);
+	}
+});
+
+test('a pulled copy of a queued trash entry shows the server holds it', () => {
+	const records = snapshotOf(newSyncState('dev'), [trashed('a', 1)]);
+	const queued = capture(newSyncState('dev'), records, T0);
+	assert.equal(serverHeldKeys(queued).has('trash:a'), false);
+
+	const changes = outgoing(queued, records, 100).filter(
+		(change) => change.kind === 'trash',
+	);
+	const {state} = receive(
+		queued,
+		records,
+		{changes, cursor: 1, purged: 0},
+		T0 + 1,
+	);
+
+	assert.equal(serverHeldKeys(state).has('trash:a'), true);
+});
+
+test('a server reset forgets that the server held a trash entry', () => {
+	const restarted = restartAfterServerReset(holdingHugeTrash());
+	assert.equal(serverHeldKeys(restarted).has('trash:huge'), false);
+
+	const next = capture(restarted, snapshotOf(restarted), T0 + 1);
+
+	assert.deepEqual(
+		sentTrash(next).map((change) => [change.deleted, 'value' in change]),
+		[[true, false]],
+	);
 });
 
 test('a deleted trash entry is sent as a delete', () => {
