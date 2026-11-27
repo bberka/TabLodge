@@ -321,6 +321,20 @@ Opening more than 10 saved links or bookmarks, or restoring a snapshot, also off
 | `tablodge.copies` | `{v: 1, items}`: address, storage key, title, time kept, and stored size of each copy |
 | `tablodge.copy.<hash>` | One copy: `{v: 1, url, title, byline?, savedAt, blocks}` |
 
+## Saved images
+
+**Save image to** keeps a picture with its bookmark ([ADR 37](adr/0037-image-store.md)). `src/shared/image-store.ts` holds the record shapes, the checks, the caps (10 MB per image, 100 MB of originals per device), the index, and the sweep, behind the same three-call storage interface as page copies.
+
+* **Menu.** `contextMenuPlan` adds **Save image to** under the image root, below **Bookmark image to**, with one item per column (`tablodge-image-save:<column id>`), or as a single item (`tablodge-image-save`) when there are no columns. The private worker passes `keepsImages: false`, so a private window has no such item.
+* **Save.** The worker runs `mediaSave` as **Bookmark image to** does, adds the bookmark, then injects `captureImage` (`src/app/image-capture-inject.ts`) into the clicked frame under `activeTab`. It fetches the image in the page, so a same-origin image or one served with CORS headers can be read, draws a WebP thumbnail on a canvas, and returns both as base64. The worker trusts none of it: `parseSavedImage` works out the type from the first bytes and checks the sizes again. An image that is already bookmarked is kept without a second bookmark. An address in the trash is left there. The answer is a note in the page (`imageSaveNote` in `save-media.ts`), which says so when the bookmark was added and the picture was not.
+* **Lifecycle.** An image belongs to an address. The sweep that drops page copies with no link drops images the same way, with the same wait for Undo. `DELETE_SAVED_IMAGE` removes the picture and keeps the bookmark. `ADD_SAVED_IMAGES` puts pictures back, only for an address a link in the library or the trash has.
+
+| Key | Contents |
+| --- | --- |
+| `tablodge.images` | `{v: 1, items}`: address, type, width, height, size, time saved, device, and how many bytes of the original this device holds |
+| `tablodge.image.<hash>` | One original: `{v: 1, url, type, data}`, the bytes as base64 |
+| `tablodge.thumb.<hash>` | One thumbnail: the index fields and `thumb`, a WebP of at most 256 px and 10 KB as base64 |
+
 ## Pages and shared UI
 
 The new tab dashboard contains sessions and bookmark columns. Settings and Help have their own pages. The popup is a compact chooser; its **Open TabLodge** action opens the dashboard. The side panel has bookmarks, sessions, and open tabs, with search and actions suited to its narrow layout.

@@ -60,6 +60,7 @@ import {
 } from '../src/shared/site-icons';
 import {
 	IMAGE_COLUMN_PREFIX,
+	IMAGE_SAVE_PREFIX,
 	LINK_COLUMN_PREFIX,
 	MEDIA_COLUMN_PREFIX,
 	MENU,
@@ -152,10 +153,21 @@ import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {showQuoteToast} from '../src/app/quote-toast';
 import {toastEdges, toastMs, toastPlace} from '../src/shared/toast-prefs';
 import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
+import {
+	captureImage,
+	type CapturedImage,
+} from '../src/app/image-capture-inject';
 import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {isSourceColumnId} from '../src/shared/source-columns';
-import {mediaSave} from '../src/shared/save-media';
+import {
+	IMAGE_BUDGET,
+	IMAGE_MAX_BYTES,
+	THUMB_MAX_BYTES,
+	THUMB_MAX_SIDE,
+	createImageStore,
+} from '../src/shared/image-store';
+import {imageSaveNote, mediaSave} from '../src/shared/save-media';
 import {
 	bookmarkDuplicates,
 	defaultTargetSession,
@@ -7367,6 +7379,11 @@ const pageCopies = createCopyStore({
 	set: async (items) => chrome.storage.local.set(items),
 	remove: async (keys) => chrome.storage.local.remove(keys),
 });
+const savedImages = createImageStore({
+	get: async (keys) => chrome.storage.local.get(keys),
+	set: async (items) => chrome.storage.local.set(items),
+	remove: async (keys) => chrome.storage.local.remove(keys),
+});
 const PRIVATE_COPY_ERROR = 'Copies are never kept from private windows.';
 let copySweep: Promise<void> | undefined;
 let sweepAgain = false;
@@ -7463,7 +7480,8 @@ function deletePageCopy(
 async function sweepPageCopies() {
 	if (
 		privateContext ||
-		(await pageCopies.list()).length === 0 ||
+		((await pageCopies.list()).length === 0 &&
+			(await savedImages.list()).length === 0) ||
 		(await readUndo()).length > 0
 	) {
 		return;
@@ -7475,7 +7493,9 @@ async function sweepPageCopies() {
 	}
 
 	const store = await getStore();
-	await pageCopies.sweep(copyLinkUrls(store, await readTrash()));
+	const live = copyLinkUrls(store, await readTrash());
+	await pageCopies.sweep(live);
+	await savedImages.sweep(live);
 }
 
 async function notePage(tabId: number, text: string, failed: boolean) {
@@ -7564,6 +7584,153 @@ async function addPageCopies(values: unknown): Promise<number> {
 				typeof value.url === 'string' &&
 				saved.has(value.url) &&
 				!have.has(value.url),
+		),
+	);
+}
+
+async function captureTabImage(
+	tabId: number,
+	frameId: number | undefined,
+	source: string,
+): Promise<CapturedImage> {
+	try {
+		const [injected] = await chrome.scripting.executeScript({
+			target: {tabId, ...(isInteger(frameId) && {frameIds: [frameId]})},
+			func: captureImage,
+			args: [source, IMAGE_MAX_BYTES, THUMB_MAX_SIDE, THUMB_MAX_BYTES],
+		});
+		const result: unknown = injected?.result;
+		return isRecord(result) && typeof result.ok === 'boolean'
+			? (result as CapturedImage)
+			: {ok: false, reason: 'blocked'};
+	} catch {
+		return {ok: false, reason: 'blocked'};
+	}
+}
+
+async function saveImage(
+	info: MenuClickData,
+	tab: chrome.tabs.Tab | undefined,
+	columnId: string | undefined,
+): Promise<{ok: boolean; text: string}> {
+	const store = await getStore();
+	const plan = mediaSave(
+		{
+			mediaType: 'image',
+			srcUrl: info.srcUrl,
+			pageUrl: info.pageUrl ?? tab?.url,
+		},
+		bookmarkDuplicates(
+			store.bookmarks,
+			columnId,
+			store.settings.saveDuplicateHandling,
+		).isDuplicate,
+		pruneTrash(await readTrash(), store.settings.trashRetentionDays),
+	);
+	const url = normalizeUrl(info.srcUrl);
+	if (privateContext || tab?.incognito || !isInteger(tab?.id) || !url) {
+		return {ok: false, text: imageSaveNote({bookmark: 'unsupported'})};
+	}
+
+	if (!plan.ok && plan.reason !== 'saved') {
+		return {ok: false, text: imageSaveNote({bookmark: plan.reason})};
+	}
+
+	if (plan.ok) {
+		const added =
+			columnId === undefined
+				? await addBookmark({url: plan.url, title: plan.title})
+				: await bookmarkToColumn(plan.url, plan.title, columnId);
+		if (!added.ok) {
+			return {ok: false, text: added.error};
+		}
+	}
+
+	const bookmark = plan.ok ? 'added' : 'saved';
+	const captured = await captureTabImage(tab.id, info.frameId, url);
+	if (!captured.ok) {
+		return {
+			ok: false,
+			text: imageSaveNote({bookmark, failure: captured.reason}),
+		};
+	}
+
+	const kept = await savedImages.keep({
+		...captured,
+		url,
+		savedAt: Date.now(),
+		device: (await savedHere()).deviceName ?? '',
+	});
+	return kept.ok
+		? {ok: true, text: imageSaveNote({bookmark})}
+		: {ok: false, text: imageSaveNote({bookmark, failure: kept.reason})};
+}
+
+async function saveImageFromMenu(
+	info: MenuClickData,
+	tab: chrome.tabs.Tab | undefined,
+	columnId: string | undefined,
+) {
+	const result = await saveImage(info, tab, columnId).catch(
+		(error: unknown) => ({
+			ok: false,
+			text: errorMessage(error) || `${APP_NAME} could not save this image.`,
+		}),
+	);
+	if (isInteger(tab?.id) && (await notePage(tab.id, result.text, !result.ok))) {
+		return;
+	}
+
+	if (!result.ok) {
+		console.warn(result.text);
+	}
+
+	flashBadge(tab, result.ok);
+}
+
+async function getSavedImages(): Promise<ActionResult<'GET_SAVED_IMAGES'>> {
+	const items = privateContext ? [] : await savedImages.list();
+	return {
+		ok: true,
+		items,
+		size: items.reduce((sum, item) => sum + item.held, 0),
+		budget: IMAGE_BUDGET,
+	};
+}
+
+async function getSavedImage(
+	url: string,
+): Promise<ActionResult<'GET_SAVED_IMAGE'>> {
+	if (privateContext) {
+		return {ok: true, image: null, thumb: null};
+	}
+
+	const [thumb] = await savedImages.thumbs([url]);
+	return {
+		ok: true,
+		image: (await savedImages.read(url)) ?? null,
+		thumb: thumb ?? null,
+	};
+}
+
+async function addSavedImages(values: unknown): Promise<number> {
+	if (privateContext || !Array.isArray(values)) {
+		return 0;
+	}
+
+	const saved = copyLinkUrls(await getStore(), await readTrash());
+	const held = new Set(
+		(await savedImages.list())
+			.filter((item) => item.held > 0)
+			.map((item) => item.url),
+	);
+	return savedImages.restore(
+		values.filter(
+			(value: unknown) =>
+				isRecord(value) &&
+				typeof value.url === 'string' &&
+				saved.has(value.url) &&
+				!held.has(value.url),
 		),
 	);
 }
@@ -10660,6 +10827,36 @@ async function handleMessage(
 			return {ok: true, copies: await addPageCopies(message.copies)};
 		}
 
+		case 'GET_SAVED_IMAGES': {
+			return getSavedImages();
+		}
+
+		case 'GET_IMAGE_THUMBS': {
+			return {
+				ok: true,
+				thumbs:
+					privateContext || !Array.isArray(message.urls)
+						? []
+						: await savedImages.thumbs(message.urls.map(String)),
+			};
+		}
+
+		case 'GET_SAVED_IMAGE': {
+			return getSavedImage(String(message.url));
+		}
+
+		case 'DELETE_SAVED_IMAGE': {
+			if (!privateContext) {
+				await savedImages.remove(String(message.url));
+			}
+
+			return {ok: true};
+		}
+
+		case 'ADD_SAVED_IMAGES': {
+			return {ok: true, images: await addSavedImages(message.images)};
+		}
+
 		case 'GET_TRASH': {
 			return getTrash();
 		}
@@ -11365,6 +11562,7 @@ function rebuildContextMenus(
 					hasSidePanel: HAS_SIDE_PANEL,
 					hasTabContext: HAS_TAB_MENU,
 					hasAmpersandAccessKeys: IS_FIREFOX,
+					keepsImages: !privateContext,
 				},
 				await excludeMenuState(store.settings),
 			);
@@ -11915,6 +12113,15 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 				);
 			},
 			id !== MENU.linkBookmarkNew,
+		);
+		return;
+	}
+
+	if (id === MENU.imageSave || id.startsWith(IMAGE_SAVE_PREFIX)) {
+		void saveImageFromMenu(
+			info,
+			tab,
+			id === MENU.imageSave ? undefined : id.slice(IMAGE_SAVE_PREFIX.length),
 		);
 		return;
 	}
