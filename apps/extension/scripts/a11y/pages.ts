@@ -109,11 +109,33 @@ export async function openPage(
 	return page;
 }
 
+async function waitForFiniteAnimations(page: Page) {
+	await page.evaluate(async () => {
+		const {document} = globalThis as typeof globalThis & {
+			document: {
+				getAnimations(): Array<{
+					finished: Promise<unknown>;
+					effect?: {getTiming?: () => {iterations?: number}} | null;
+				}>;
+			};
+		};
+		const finite = document
+			.getAnimations()
+			.filter(
+				(animation) => animation.effect?.getTiming?.().iterations !== Infinity,
+			);
+		await Promise.allSettled(
+			finite.map(async (animation) => animation.finished),
+		);
+	});
+}
+
 export async function axeViolationLines(
 	page: Page,
 	source: string,
 	runOnly: AxeOptions['runOnly'] = {type: 'tag', values: AXE_TAGS},
 ) {
+	await waitForFiniteAnimations(page);
 	await page.evaluate(source);
 	const results = await page.evaluate(
 		async (options: AxeOptions['runOnly']) =>
