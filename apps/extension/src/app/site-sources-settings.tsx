@@ -9,6 +9,7 @@ import {
 	ChevronDown,
 	CircleAlert,
 	CircleHelp,
+	ExternalLink,
 	Plus,
 	Power,
 	RotateCcw,
@@ -38,6 +39,12 @@ import {send, type ShowStatus} from './common';
 import {Favicon} from './favicon';
 import {ColumnLabel} from './icon-label';
 import {PROJECT} from './project';
+import {
+	openSavedPagesStatus,
+	openSavedPageTabs,
+	savedPagesPlan,
+	skippedSourcesHint,
+} from './open-saved-pages';
 import {removeSiteSource, turnOnSiteSources} from './site-source-access';
 import {
 	SITE_SOURCES,
@@ -64,6 +71,8 @@ export const SOURCES_WORDS = [
 	'Ask first',
 	'catch up',
 	'saved page',
+	'Open saved pages',
+	'Open saved page',
 	`Save to ${PROJECT.name} only`,
 	'keep saves off the site',
 	'On in another browser',
@@ -136,6 +145,7 @@ function KeepOffHelpButton({site}: {site: string}) {
 export function useSiteSources(showStatus: ShowStatus) {
 	const [sources, setSources] = useState<SiteSourceStatus[]>();
 	const [busy, setBusy] = useState<SiteSourceId>();
+	const [openingSavedPages, setOpeningSavedPages] = useState(false);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const isPrivateWindow = chrome.extension?.inIncognitoContext;
 
@@ -248,9 +258,53 @@ export function useSiteSources(showStatus: ShowStatus) {
 		);
 	}
 
+	const savedPages = savedPagesPlan(SITE_SOURCES, sources);
+
+	async function openAllSavedPages() {
+		if (openingSavedPages) {
+			return;
+		}
+
+		setOpeningSavedPages(true);
+		try {
+			const result = await openSavedPageTabs(savedPages.openable, {
+				group: true,
+			});
+			const feedback = openSavedPagesStatus({
+				opened: result.opened,
+				skipped: savedPages.skipped,
+				failed: result.failed,
+			});
+			showStatus(feedback.text, feedback.isError);
+		} finally {
+			setOpeningSavedPages(false);
+		}
+	}
+
+	async function openSourceSavedPage(source: SiteSource) {
+		if (openingSavedPages || !source.savedPageUrl) {
+			return;
+		}
+
+		setOpeningSavedPages(true);
+		try {
+			const result = await openSavedPageTabs([source], {group: false});
+			const feedback = openSavedPagesStatus({
+				opened: result.opened,
+				skipped: [],
+				failed: result.failed,
+			});
+			showStatus(feedback.text, feedback.isError);
+		} finally {
+			setOpeningSavedPages(false);
+		}
+	}
+
 	return {
 		sources,
 		busy,
+		openingSavedPages,
+		savedPages,
 		triggerRef,
 		privateWindow: isPrivateWindow,
 		status,
@@ -258,10 +312,52 @@ export function useSiteSources(showStatus: ShowStatus) {
 		remove,
 		chooseColumn,
 		chooseKeepOff,
+		openAllSavedPages,
+		openSourceSavedPage,
 	};
 }
 
 export type SiteSourcesController = ReturnType<typeof useSiteSources>;
+
+export function SourcesHeaderActions({
+	controller,
+}: {
+	controller: SiteSourcesController;
+}) {
+	const {privateWindow, savedPages, openingSavedPages, openAllSavedPages} =
+		controller;
+	if (privateWindow) {
+		return null;
+	}
+
+	const hasOpenable = savedPages.openable.length > 0;
+	const skippedHint =
+		savedPages.skipped.length > 0
+			? skippedSourcesHint(savedPages.skipped)
+			: undefined;
+	const openButton = hasOpenable ? (
+		<Button
+			variant="outline"
+			size="sm"
+			disabled={openingSavedPages}
+			onClick={() => void openAllSavedPages()}
+		>
+			<ExternalLink className="h-4 w-4" aria-hidden="true" />
+			Open saved pages
+		</Button>
+	) : null;
+
+	return (
+		<div className="flex flex-wrap items-center gap-2 max-sm:[&>*]:flex-1">
+			{openButton && skippedHint ? (
+				<IconTooltip label={skippedHint}>{openButton}</IconTooltip>
+			) : (
+				openButton
+			)}
+			<AddSiteSource controller={controller} />
+		</div>
+	);
+}
 
 export function AddSiteSource({
 	controller,
@@ -640,7 +736,14 @@ export function SiteSourcesSettings({
 	settings: Partial<Settings>;
 	onCatchUpChange: (mode: SourceCatchUpMode) => void;
 }) {
-	const {sources, privateWindow, status, remove} = controller;
+	const {
+		sources,
+		openingSavedPages,
+		privateWindow,
+		status,
+		remove,
+		openSourceSavedPage,
+	} = controller;
 	const [removing, setRemoving] = useState<SiteSource>();
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [openId, setOpenId] = useState<SiteSourceId>();
@@ -696,26 +799,45 @@ export function SiteSourcesSettings({
 						const entry = status(source);
 						const isOpen = openId === source.id;
 						const panelId = `${panelBaseId}-${source.id}`;
+						const canOpenSavedPage = Boolean(
+							entry?.enabled && source.savedPageUrl,
+						);
 						return (
 							<li key={source.id} data-site-source={source.id}>
-								<button
-									type="button"
-									className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-									aria-expanded={isOpen}
-									aria-controls={isOpen ? panelId : undefined}
-									onClick={() => {
-										setOpenId(isOpen ? undefined : source.id);
-									}}
-								>
-									<SiteSummary source={source} entry={entry} />
-									<ChevronDown
-										className={cn(
-											'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-											isOpen && 'rotate-180',
-										)}
-										aria-hidden="true"
-									/>
-								</button>
+								<div className="flex min-h-12 items-center">
+									<button
+										type="button"
+										className="flex min-h-12 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+										aria-expanded={isOpen}
+										aria-controls={isOpen ? panelId : undefined}
+										onClick={() => {
+											setOpenId(isOpen ? undefined : source.id);
+										}}
+									>
+										<SiteSummary source={source} entry={entry} />
+										<ChevronDown
+											className={cn(
+												'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+												isOpen && 'rotate-180',
+											)}
+											aria-hidden="true"
+										/>
+									</button>
+									{canOpenSavedPage && (
+										<IconTooltip label={`Open saved page for ${source.label}`}>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="mr-2 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+												disabled={openingSavedPages}
+												aria-label={`Open saved page for ${source.label}`}
+												onClick={() => void openSourceSavedPage(source)}
+											>
+												<ExternalLink className="h-4 w-4" aria-hidden="true" />
+											</Button>
+										</IconTooltip>
+									)}
+								</div>
 								{isOpen && (
 									<div
 										id={panelId}

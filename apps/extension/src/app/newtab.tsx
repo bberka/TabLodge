@@ -113,6 +113,7 @@ import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
+import {deleteSavedImage, openSavedImage, useSavedImages} from './saved-images';
 import {
 	SEND_TO_PRIVATE_LABEL,
 	sendLinksToPrivate,
@@ -265,6 +266,7 @@ type BookmarkAction =
 	| 'select'
 	| 'select-range'
 	| 'send-private'
+	| 'delete-image'
 	| 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
@@ -1747,6 +1749,11 @@ function NewTab() {
 				bookmark,
 				action === 'move-up' ? 'earlier' : 'later',
 			);
+			return;
+		}
+
+		if (action === 'delete-image') {
+			await deleteSavedImage(bookmark.url, showStatus);
 			return;
 		}
 
@@ -4242,6 +4249,7 @@ const BookmarkCard = memo(
 	}: BookmarkCardProps) => {
 		const [menuOpen, setMenuOpen] = useState(false);
 		const copyUrls = usePageCopyUrls();
+		const savedImage = useSavedImages().get(bookmark.url);
 		const sendState = useSendToPrivate();
 		const act = (action: BookmarkAction) => () => {
 			void onAction(action, bookmark);
@@ -4291,6 +4299,20 @@ const BookmarkCard = memo(
 			hidden: !copyUrls.has(bookmark.url),
 			onSelect: () => void openPageCopy(bookmark.url),
 		};
+		const openImage: MenuAction = {
+			id: 'open-image',
+			label: 'Open image',
+			icon: ACTION_ICONS.savedImage,
+			hidden: !savedImage,
+			onSelect: () => void openSavedImage(bookmark.url),
+		};
+		const imageRemoval: MenuAction = {
+			id: 'delete-image',
+			label: 'Delete image',
+			icon: ACTION_ICONS.deleteImage,
+			hidden: !savedImage,
+			onSelect: act('delete-image'),
+		};
 		const remove: MenuAction = {
 			id: 'delete',
 			label: 'Delete',
@@ -4306,6 +4328,8 @@ const BookmarkCard = memo(
 			copy,
 			archiveCopy,
 			pageCopy,
+			openImage,
+			imageRemoval,
 			{type: 'separator'},
 			{
 				id: 'select',
@@ -4360,6 +4384,14 @@ const BookmarkCard = memo(
 		];
 		const previews = useLinkPreviewsOn();
 		const showUrl = urlMode !== 'none';
+		const roomy = showUrl && !compact;
+		const iconSize = roomy ? 'h-6 w-6' : 'h-5 w-5';
+		const textIndent = roomy ? 'pl-[34px]' : 'pl-[30px]';
+		const iconHidden =
+			selectionMode !== 'off' &&
+			(selectionMode === 'on' || selected
+				? 'invisible'
+				: 'group-hover:invisible group-focus-within:invisible');
 		const urlOnly = urlMode === 'url-only';
 		const cardName = urlOnly
 			? displayUrl(bookmark.url, urlSettings.simplifyUrls)
@@ -4459,18 +4491,26 @@ const BookmarkCard = memo(
 										void onAction('click', bookmark);
 									}}
 								>
-									<BookmarkIcon
-										url={bookmark.url}
-										label={siteName(bookmark.url)}
-										className={cn(
-											showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
-											'rounded-sm',
-											selectionMode !== 'off' &&
-												(selectionMode === 'on' || selected
-													? 'invisible'
-													: 'group-hover:invisible group-focus-within:invisible'),
-										)}
-									/>
+									{savedImage ? (
+										<img
+											src={savedImage.thumb}
+											alt=""
+											data-saved-image=""
+											loading="lazy"
+											decoding="async"
+											className={cn(
+												roomy ? '-m-1 h-8 w-8' : iconSize,
+												'shrink-0 rounded-sm bg-muted object-cover ring-1 ring-border',
+												iconHidden,
+											)}
+										/>
+									) : (
+										<BookmarkIcon
+											url={bookmark.url}
+											label={siteName(bookmark.url)}
+											className={cn(iconSize, 'rounded-sm', iconHidden)}
+										/>
+									)}
 									<span className="min-w-0 flex-1">
 										<strong className="block truncate text-[0.8125rem] font-semibold group-hover:text-primary">
 											{(urlOnly || !showUrl) && (
@@ -4500,7 +4540,7 @@ const BookmarkCard = memo(
 									notes={bookmark.notes}
 									className={cn(
 										'whitespace-pre-line wrap-anywhere text-[0.6875rem] leading-[1.4545] text-muted-foreground',
-										showUrl && !compact ? 'pl-[34px]' : 'pl-[30px]',
+										textIndent,
 										compact ? 'line-clamp-1' : 'line-clamp-2',
 									)}
 									onOpen={(url) => {
@@ -4510,10 +4550,7 @@ const BookmarkCard = memo(
 							)}
 							<TagChips
 								bookmark={bookmark}
-								className={cn(
-									'mt-0.5',
-									showUrl && !compact ? 'pl-[34px]' : 'pl-[30px]',
-								)}
+								className={cn('mt-0.5', textIndent)}
 							/>
 						</div>
 						{quickActions.map((quickAction) => {

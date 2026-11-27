@@ -1,4 +1,5 @@
 import {pageAddress} from '../../../extension/src/shared/quotes';
+import type {AfterShare} from '../settings/preference-schema';
 import {extractUrls, splitShared} from './store-shape';
 
 export type SharedFile = {
@@ -127,4 +128,11 @@ export function cacheCopies(share: IncomingShare, cacheUri: string): string[] {
 			? [file.path]
 			: [],
 	);
+}
+
+export function shouldCloseAfterShare(
+	quick: boolean,
+	afterShare: AfterShare,
+): boolean {
+	return quick && afterShare === 'close';
 }

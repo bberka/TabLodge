@@ -212,6 +212,10 @@ export const ANDROID_PREFERENCES = {
 		'platform',
 		"A phone only lookup of the page on the save screen, which also fills in the title of a bare shared address; the extension's tab already has its title. Not the extension's hover card, `linkPreviews`.",
 	],
+	afterShare: [
+		'platform',
+		"Whether the Android app closes or stays open after a share that started it; mirrors the extension's `closeOnSave`, which closes browser tabs.",
+	],
 	backgroundSync: [
 		'platform',
 		'Syncing with the app closed, which means the same on every phone.',

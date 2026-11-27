@@ -24,6 +24,7 @@ const PAGES = [
 	'add-bookmark.html',
 	'palette.html',
 	'reader.html',
+	'image.html',
 ];
 
 type Reply = {ok: boolean; error?: string};

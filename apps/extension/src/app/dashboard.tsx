@@ -75,7 +75,6 @@ import {
 } from '../components/ui/action-menu';
 import {DropIndicator} from '../components/ui/drop-indicator';
 import {scrollBehavior} from '../shared/motion';
-import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import type {
 	BookmarkColumn,
@@ -109,7 +108,17 @@ import {
 } from '../shared/session-folders';
 import {sharedPageSource} from '../shared/sync/shared-pages-client';
 import {duplicatesNote, saveMessage} from '../shared/save-feedback';
-import {VirtualRows} from './virtual-rows';
+import {
+	VirtualRows,
+	WindowVirtualRows,
+	type WindowVirtualRowsHandle,
+} from './virtual-rows';
+import {
+	groupSelectedTabs,
+	pruneGroupIdSet,
+	pruneSelectedTabKeys,
+	selectedSessions,
+} from './session-selection';
 import {SortMenu} from './sort-menu';
 import {inPrivateWindow} from './private-config';
 import {
@@ -242,8 +251,8 @@ const NO_COLUMNS: BookmarkColumn[] = [];
 const NO_SETTINGS: Partial<Settings> = {};
 const NO_ORIGINS: readonly string[] = [];
 const NO_SELECTION = new Set<string>();
+const NO_TABS: SavedTabRecord[] = [];
 const SendPrivateIcon = ACTION_ICONS.sendPrivate;
-const SESSION_PAGE = 40;
 
 const SESSION_LINKS_MAX_HEIGHT = '44rem';
 const SESSION_SORT_OPTIONS = [
@@ -368,12 +377,13 @@ export function SessionManager({
 		expandAll ? !collapsed.has(id) : expanded.has(id);
 
 	const visibleGroups = useMemo(() => {
-		const search = parseSearchQuery(query.trim());
-		const filtering = hasOperators(search);
-		const needle = search.text.toLocaleLowerCase();
-		const folderName = new Map(
-			folders.map((folder) => [folder.id, folder.name]),
-		);
+		const trimmed = query.trim();
+		const search = trimmed ? parseSearchQuery(trimmed) : null;
+		const filtering = search ? hasOperators(search) : false;
+		const needle = search ? search.text.toLocaleLowerCase() : '';
+		const folderName = filtering
+			? new Map(folders.map((folder) => [folder.id, folder.name]))
+			: null;
 		const filtered = groups.filter((group) => {
 			if (
 				folderId === ALL
@@ -381,6 +391,10 @@ export function SessionManager({
 					: group.folderId !== folderId
 			) {
 				return false;
+			}
+
+			if (!needle && !filtering) {
+				return true;
 			}
 
 			const texts = [
@@ -402,10 +416,11 @@ export function SessionManager({
 							.includes(needle),
 					)) &&
 				(!filtering ||
+					!search ||
 					passesOperators(
 						search,
 						texts,
-						sessionFacets(group, folderName.get(group.folderId)),
+						sessionFacets(group, folderName?.get(group.folderId)),
 					))
 			);
 		});
@@ -431,14 +446,11 @@ export function SessionManager({
 
 		return filtered;
 	}, [groups, folders, archivedId, folderId, query, sort]);
-	const [visibleLimit, showMore, showUpTo] = usePagedLimit(
-		`${folderId}|${query}|${sort}`,
-		SESSION_PAGE,
+	const visibleGroupIndex = useMemo(
+		() => new Map(visibleGroups.map((group, index) => [group.id, index])),
+		[visibleGroups],
 	);
-	const renderedGroups = useMemo(
-		() => visibleGroups.slice(0, visibleLimit),
-		[visibleGroups, visibleLimit],
-	);
+	const sessionListRef = useRef<WindowVirtualRowsHandle>(null);
 	const folderNames = useMemo(
 		() => new Map(folders.map((folder) => [folder.id, folder.name])),
 		[folders],
@@ -454,27 +466,24 @@ export function SessionManager({
 			byFolder: counts,
 		};
 	}, [groups, archivedId]);
-	const selectedByGroup = useMemo(() => {
-		const byGroup = new Map<string, Set<string>>();
-		for (const key of selected) {
-			const [groupId, tabId] = JSON.parse(key) as [string, string];
-			let ids = byGroup.get(groupId);
-			if (!ids) {
-				ids = new Set();
-				byGroup.set(groupId, ids);
-			}
-
-			ids.add(tabId);
-		}
-
-		return byGroup;
-	}, [selected]);
+	const selectedByGroup = useMemo(
+		() => groupSelectedTabs(selected),
+		[selected],
+	);
+	const selectedSources = useMemo(
+		() => selectedSessions(groups, selectedByGroup),
+		[groups, selectedByGroup],
+	);
 	const selectedTabsForDrag = useMemo(
 		() =>
-			groups.flatMap((group) =>
-				group.tabs.filter((tab) => selected.has(tabKey(group.id, tab.id))),
-			),
-		[groups, selected],
+			selectedSources.length === 0
+				? NO_TABS
+				: selectedSources.flatMap((group) => group.tabs),
+		[selectedSources],
+	);
+	const selectedCount = useMemo(
+		() => selectedSources.reduce((sum, group) => sum + group.tabs.length, 0),
+		[selectedSources],
 	);
 
 	useEffect(() => {
@@ -514,14 +523,9 @@ export function SessionManager({
 		}
 
 		const groupIds = new Set(groups.map((group) => group.id));
-		setExpanded((old) => new Set([...old].filter((id) => groupIds.has(id))));
-		setCollapsed((old) => new Set([...old].filter((id) => groupIds.has(id))));
-		const valid = new Set(
-			groups.flatMap((group) =>
-				group.tabs.map((tab) => tabKey(group.id, tab.id)),
-			),
-		);
-		setSelected((old) => new Set([...old].filter((key) => valid.has(key))));
+		setExpanded((old) => pruneGroupIdSet(old, groupIds));
+		setCollapsed((old) => pruneGroupIdSet(old, groupIds));
+		setSelected((old) => pruneSelectedTabKeys(old, groups));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `state` on purpose
 	}, [state]);
 
@@ -613,29 +617,64 @@ export function SessionManager({
 		}
 
 		const {id} = reveal;
-
 		const index = visibleGroups.findIndex((group) => group.id === id);
 		if (index === -1) {
 			return;
 		}
 
-		if (index >= visibleLimit) {
-			showUpTo(index + SESSION_PAGE);
+		const selector = `#session-${CSS.escape(id)}`;
+		const finishReveal = (card: Element, behavior: ScrollBehavior) => {
+			if (revealRef.current === reveal) {
+				revealRef.current = null;
+			}
+
+			card.scrollIntoView({block: 'center', behavior});
+			if (reveal.focus) {
+				card.querySelector<HTMLElement>('button')?.focus({preventScroll: true});
+			}
+		};
+
+		const existing = document.querySelector(selector);
+		if (existing) {
+			finishReveal(existing, scrollBehavior());
 			return;
 		}
 
-		revealRef.current = null;
-		const frame = requestAnimationFrame(() => {
-			const card = document.querySelector(`#session-${CSS.escape(id)}`);
-			card?.scrollIntoView({block: 'center', behavior: scrollBehavior()});
-			if (reveal.focus) {
-				card
-					?.querySelector<HTMLElement>('button')
-					?.focus({preventScroll: true});
-			}
+		sessionListRef.current?.scrollToIndex(index, {
+			align: 'center',
+			behavior: 'auto',
 		});
-		return () => cancelAnimationFrame(frame);
-	}, [revealTick, visibleGroups, visibleLimit, showUpTo]);
+		let cancelled = false;
+		let frames = 0;
+		let frame = 0;
+		const focusRevealed = () => {
+			if (cancelled || revealRef.current !== reveal) {
+				return;
+			}
+
+			const card = document.querySelector(selector);
+			if (card) {
+				finishReveal(card, 'auto');
+				return;
+			}
+
+			frames += 1;
+			if (frames < 30) {
+				frame = requestAnimationFrame(focusRevealed);
+				return;
+			}
+
+			if (revealRef.current === reveal) {
+				revealRef.current = null;
+			}
+		};
+
+		frame = requestAnimationFrame(focusRevealed);
+		return () => {
+			cancelled = true;
+			cancelAnimationFrame(frame);
+		};
+	}, [revealTick, visibleGroups]);
 
 	useEffect(() => {
 		if (selected.size === 0) {
@@ -757,16 +796,7 @@ export function SessionManager({
 	}
 
 	function selectedGroups() {
-		return groups.flatMap((group) => {
-			const tabs = group.tabs.filter((tab) =>
-				selected.has(tabKey(group.id, tab.id)),
-			);
-			return tabs.length > 0 ? [{...group, tabs}] : [];
-		});
-	}
-
-	function selectedTabCount() {
-		return selectedGroups().reduce((sum, group) => sum + group.tabs.length, 0);
+		return selectedSources;
 	}
 
 	async function restoreGroup(
@@ -1156,13 +1186,14 @@ export function SessionManager({
 	}
 
 	function canMoveGroup(groupId: string, direction: MoveDirection) {
-		return Boolean(
-			neighborId(
-				visibleGroups.map((entry) => entry.id),
-				groupId,
-				direction,
-			),
-		);
+		const index = visibleGroupIndex.get(groupId);
+		if (index === undefined) {
+			return false;
+		}
+
+		return direction === 'earlier'
+			? index > 0
+			: index < visibleGroups.length - 1;
 	}
 
 	function folderDropTarget(targetId: string) {
@@ -1661,7 +1692,6 @@ export function SessionManager({
 		);
 	}
 
-	const selectedCount = selectedTabCount();
 	async function sendSelectedToPrivate() {
 		const sent = await sendLinksToPrivate(
 			selectedGroups().flatMap((group) =>
@@ -1682,7 +1712,6 @@ export function SessionManager({
 		setAnchor(null);
 	}
 
-	const selectedSources = selectedGroups();
 	const splitSource =
 		selectedSources.length === 1
 			? groups.find(
@@ -2216,32 +2245,34 @@ export function SessionManager({
 									: 'This folder is empty. Save a session or move one here from its details.'}
 							</EmptyState>
 						) : (
-							<div className="space-y-2">
-								{renderedGroups.map((group) => (
-									<GroupCard
-										key={group.id}
-										group={group}
-										folderName={folderNames.get(group.folderId)}
-										settings={settings}
-										wide={wide}
-										isExpanded={isOpen(group.id)}
-										selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
-										selectedTabsForDrag={selectedTabsForDrag}
-										selectionActive={selected.size > 0}
-										canSwitch={canSwitch}
-										actions={cardActions}
-										dragStore={dragStore}
-									/>
-								))}
-							</div>
-						)}
-						{visibleGroups.length > renderedGroups.length && (
-							<LoadMore
-								remaining={visibleGroups.length - renderedGroups.length}
-								step={SESSION_PAGE}
-								noun="sessions"
-								onMore={showMore}
-							/>
+							<WindowVirtualRows
+								handleRef={sessionListRef}
+								count={visibleGroups.length}
+								estimate={64}
+								gap={8}
+								itemKey={(index) => visibleGroups[index].id}
+							>
+								{(index) => {
+									const group = visibleGroups[index];
+									return (
+										<GroupCard
+											group={group}
+											folderName={folderNames.get(group.folderId)}
+											settings={settings}
+											wide={wide}
+											isExpanded={isOpen(group.id)}
+											selectedTabs={
+												selectedByGroup.get(group.id) ?? NO_SELECTION
+											}
+											selectedTabsForDrag={selectedTabsForDrag}
+											selectionActive={selected.size > 0}
+											canSwitch={canSwitch}
+											actions={cardActions}
+											dragStore={dragStore}
+										/>
+									);
+								}}
+							</WindowVirtualRows>
 						)}
 					</div>
 				</div>

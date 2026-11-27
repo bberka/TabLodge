@@ -67,6 +67,11 @@ export const SERVER_FEATURES: ReadonlyArray<{
 		missing: 'Bookmark tags stay on this device.',
 	},
 	{
+		name: 'thumbs',
+		since: '0.4.0',
+		missing: 'Saved image thumbnails stay on the device that saved them.',
+	},
+	{
 		name: 'sources',
 		since: '0.4.0',
 		missing: 'Sources settings in the browser extension stay in each browser.',

@@ -2502,7 +2502,8 @@ var TOMBSTONE_KINDS = /* @__PURE__ */ new Set([
   "trash",
   "note",
   "tag",
-  "source"
+  "source",
+  "thumb"
 ]);
 
 // ../extension/src/shared/sync/order-key.ts
@@ -3199,7 +3200,8 @@ var FEATURES = [
   "tags",
   "page-source",
   "sources",
-  "settings"
+  "settings",
+  "thumbs"
 ];
 var PREVIEWS_PER_MINUTE = 600;
 var PREVIEW_CACHE_SIZE = 500;

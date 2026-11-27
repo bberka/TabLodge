@@ -17,6 +17,7 @@ import {
 } from '../private/private-library';
 import {getPreferences} from '../settings/preferences';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
+import {thumbSync} from './image-thumbs';
 import {syncLiveSharedPages} from './shared-pages';
 import {emptyStore, isStore} from './store-shape';
 import {DEFAULTS as LINK_DEFAULTS, type LinkSettings} from './links';
@@ -60,6 +61,7 @@ export const syncClient = createSyncClient({
 	mutate,
 	readLibrary: async () => core.store,
 	trash: syncedTrash('regular', regularRetention),
+	thumbs: thumbSync,
 	writeLibrary: write,
 	async backup() {},
 	async onSynced(target, server) {

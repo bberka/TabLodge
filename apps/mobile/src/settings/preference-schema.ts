@@ -56,6 +56,9 @@ export type BarSize = (typeof BAR_SIZES)[number];
 const BAR_LABELS = ['active', 'always', 'never'] as const;
 export type BarLabels = (typeof BAR_LABELS)[number];
 
+const AFTER_SHARE = ['close', 'stay'] as const;
+export type AfterShare = (typeof AFTER_SHARE)[number];
+
 export type Preferences = {
 	look: Look;
 	floatingBar: boolean;
@@ -78,6 +81,7 @@ export type Preferences = {
 	syncPrivate: boolean;
 	backgroundSync: boolean;
 	savePreview: boolean;
+	afterShare: AfterShare;
 	accent: string;
 	theme: Theme;
 	showPrivateButton: boolean;
@@ -115,7 +119,7 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	look: field('auto', oneOf(LOOKS)),
 	floatingBar: field(true, bool),
 	barSize: field('scroll', oneOf(BAR_SIZES)),
-	barLabels: field('active', oneOf(BAR_LABELS)),
+	barLabels: field('always', oneOf(BAR_LABELS)),
 	glassEffect: field(true, bool),
 	lastColumnId: field('', text),
 	tapAction: field('open', oneOf(['open', 'edit'])),
@@ -136,6 +140,7 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	syncPrivate: field(true, bool),
 	backgroundSync: field(true, bool),
 	savePreview: field(true, bool),
+	afterShare: field('close', oneOf(AFTER_SHARE)),
 	accent: field('default', (raw) => (isAccent(raw) ? raw : undefined)),
 	theme: field('system', oneOf(['system', 'light', 'dark'])),
 	showPrivateButton: field(true, bool),

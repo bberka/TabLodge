@@ -19,6 +19,7 @@ import {
 	type IncomingShare,
 	readShare,
 	type ShareOutcome,
+	shouldCloseAfterShare,
 } from './src/library/shared-content';
 import {
 	FileTooLargeError,
@@ -56,7 +57,7 @@ import {
 	startPrivate,
 	wakePrivate,
 } from './src/private/private-library';
-import {loadPreferences} from './src/settings/preferences';
+import {getPreferences, loadPreferences} from './src/settings/preferences';
 import {requestJump, usePendingJump} from './src/library/jump';
 import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
 import {ConnectSheet} from './src/screens/settings/connect-sheet';
@@ -81,6 +82,8 @@ import {startWidgetSnapshot} from './src/library/widget-sync';
 import {startBackgroundSync} from './src/library/background-sync';
 import {startPageCopies} from './src/library/page-copies';
 import {ReaderHost} from './src/screens/copy/reader';
+import {ImageViewerHost} from './src/screens/image/viewer';
+import {startSavedImages} from './src/library/saved-images';
 import {readClipboard} from './modules/quick-tiles';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
@@ -196,6 +199,7 @@ function Main() {
 
 	useEffect(() => {
 		void startPageCopies().catch(() => undefined);
+		void startSavedImages().catch(() => undefined);
 	}, []);
 
 	useEffect(() => startPrivateAutoLock(), []);
@@ -207,7 +211,7 @@ function Main() {
 			setSharedFile(undefined);
 			openImport(undefined);
 			if (outcome.kind === 'refused') {
-				if (quick) {
+				if (shouldCloseAfterShare(quick, getPreferences().afterShare)) {
 					ToastAndroid.show(FILE_REFUSED, ToastAndroid.LONG);
 					BackHandler.exitApp();
 				} else {
@@ -380,9 +384,13 @@ function Main() {
 
 	const finishQuote = (saved?: SavedQuote) => {
 		setOpen(false);
+		const closeAfter = shouldCloseAfterShare(
+			draft.quick,
+			getPreferences().afterShare,
+		);
 		if (saved) {
 			const message = `Quote saved to ${saved.placed}`;
-			if (Platform.OS === 'android' && draft.quick) {
+			if (Platform.OS === 'android' && closeAfter) {
 				ToastAndroid.show(message, ToastAndroid.SHORT);
 			} else {
 				showSnack(message, {
@@ -405,7 +413,7 @@ function Main() {
 			}
 		}
 
-		if (draft.quick) {
+		if (closeAfter) {
 			setTimeout(() => {
 				BackHandler.exitApp();
 			}, 250);
@@ -414,15 +422,19 @@ function Main() {
 
 	const finish = (saved?: string) => {
 		setOpen(false);
+		const closeAfter = shouldCloseAfterShare(
+			draft.quick,
+			getPreferences().afterShare,
+		);
 		if (saved) {
-			if (Platform.OS === 'android' && draft.quick) {
+			if (Platform.OS === 'android' && closeAfter) {
 				ToastAndroid.show(saved, ToastAndroid.SHORT);
 			} else {
 				showSnack(saved);
 			}
 		}
 
-		if (draft.quick) {
+		if (closeAfter) {
 			setTimeout(() => {
 				BackHandler.exitApp();
 			}, 250);
@@ -463,6 +475,7 @@ function Main() {
 			<SharedPagesHost />
 			<OpenInHost />
 			<ReaderHost />
+			<ImageViewerHost />
 			<ImportSheet
 				key={`import-${fileKey}`}
 				source={sharedFile?.kind === 'import' ? sharedFile.source : undefined}

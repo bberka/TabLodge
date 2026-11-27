@@ -170,6 +170,7 @@ import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {isSourceColumnId} from '../src/shared/source-columns';
 import {
 	IMAGE_BUDGET,
+	IMAGE_INDEX_KEY,
 	IMAGE_MAX_BYTES,
 	THUMB_MAX_BYTES,
 	THUMB_MAX_SIDE,
@@ -1130,6 +1131,10 @@ const syncClient = privateContext
 			readLibrary: getStore,
 			trash: {read: readSyncTrash, apply: applySyncTrash},
 			sources: {read: readSyncSources, apply: applySyncSources},
+			thumbs: {
+				read: async () => savedImages.synced(),
+				apply: async (put, remove) => savedImages.applySynced(put, remove),
+			},
 			outsideSettings: {
 				defaults: OUTSIDE_SETTING_DEFAULTS,
 				read: readOutsideSettings,
@@ -1165,9 +1170,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
 	}
 
 	if (
-		[SYNC_NUDGE_KEY, UI_THEME_KEY, UI_ACCENT_KEY, PRIVATE_CONFIG_KEY].some(
-			(key) => Object.hasOwn(changes, key),
-		)
+		[
+			SYNC_NUDGE_KEY,
+			UI_THEME_KEY,
+			UI_ACCENT_KEY,
+			PRIVATE_CONFIG_KEY,
+			IMAGE_INDEX_KEY,
+		].some((key) => Object.hasOwn(changes, key))
 	) {
 		syncClient?.localChanged();
 	}
@@ -7817,20 +7826,29 @@ async function addSavedImages(values: unknown): Promise<number> {
 	}
 
 	const saved = copyLinkUrls(await getStore(), await readTrash());
-	const held = new Set(
-		(await savedImages.list())
-			.filter((item) => item.held > 0)
-			.map((item) => item.url),
+	const known = new Map(
+		(await savedImages.list()).map((item) => [item.url, item.held > 0]),
 	);
-	return savedImages.restore(
-		values.filter(
-			(value: unknown) =>
-				isRecord(value) &&
-				typeof value.url === 'string' &&
-				saved.has(value.url) &&
-				!held.has(value.url),
-		),
+	const wanted = values.filter(
+		(value: unknown): value is Raw =>
+			isRecord(value) &&
+			typeof value.url === 'string' &&
+			saved.has(value.url) &&
+			known.get(value.url) !== true,
 	);
+	const kept = await savedImages.restore(
+		wanted.filter((value) => typeof value.data === 'string'),
+	);
+	const thumbs = wanted.filter(
+		(value) => typeof value.data !== 'string' && !known.has(String(value.url)),
+	);
+	if (thumbs.length === 0) {
+		return kept;
+	}
+
+	const before = (await savedImages.list()).length;
+	await savedImages.applySynced(thumbs, []);
+	return kept + (await savedImages.list()).length - before;
 }
 
 async function getPageCopies(): Promise<ActionResult<'GET_PAGE_COPIES'>> {
@@ -7877,6 +7895,7 @@ async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
 		snapshots: {version: 1, history: await readSnapshotHistory()},
 		trash: {version: 1, items: await readTrash()},
 		copies: privateContext ? [] : await pageCopies.all(),
+		images: privateContext ? [] : await savedImages.thumbs(),
 	};
 }
 
@@ -9096,6 +9115,8 @@ async function getStorageUsage(): Promise<ActionResult<'GET_STORAGE_USAGE'>> {
 		backups: await bytes([BACKUPS_KEY]),
 		trash: await bytes([TRASH_KEY]),
 		state: await bytes([STORAGE_KEY]),
+		images: privateContext ? 0 : (await savedImages.usage()).size,
+		imageBudget: IMAGE_BUDGET,
 	};
 	return {ok: true, usage};
 }

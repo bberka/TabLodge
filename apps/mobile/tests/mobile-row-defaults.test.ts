@@ -10,7 +10,7 @@ import {ROWS} from '../src/screens/settings/settings-index';
 import type {Preferences} from '../src/settings/preferences';
 
 const prefs = {
-	barLabels: 'active',
+	barLabels: 'always',
 	privateLockMinutes: 5,
 	openApp: '',
 	showSavedOn: true,
@@ -30,7 +30,7 @@ describe('row defaults', () => {
 
 	test('a row away from its default is changed', () => {
 		assert.equal(
-			isChanged(ROWS.barLabels, change({barLabels: 'always'}), defaults),
+			isChanged(ROWS.barLabels, change({barLabels: 'active'}), defaults),
 			true,
 		);
 		assert.equal(
@@ -74,7 +74,7 @@ describe('row defaults', () => {
 		];
 		assert.equal(
 			resetLabel(ROWS.barLabels, defaults, choices),
-			'Reset to Open tab only',
+			'Reset to All tabs',
 		);
 	});
 

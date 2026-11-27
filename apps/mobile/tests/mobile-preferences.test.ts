@@ -39,6 +39,7 @@ const changed: Preferences = {
 	sessionTap: 'open',
 	sessionMain: 'archive',
 	savePreview: false,
+	afterShare: 'stay',
 	accent: '#336699',
 	theme: 'dark',
 	compactSessions: true,
@@ -135,6 +136,10 @@ describe('preference schema', () => {
 		assert.equal(bar.barLabels, 'never');
 	});
 
+	test('the bottom bar names every tab until the setting says otherwise', () => {
+		assert.equal(defaults.barLabels, 'always');
+	});
+
 	test('an old site icon choice that asked nobody carries over as the shared Letter tiles only', () => {
 		assert.equal(legacySiteIconsOf('off'), 'browser');
 		assert.equal(legacySiteIconsOf('direct'), 'browser');
@@ -148,6 +153,17 @@ describe('preference schema', () => {
 	test('anything that is not an object loads as the defaults', () => {
 		assert.deepEqual(parsePreferences(null), defaults);
 		assert.deepEqual(parsePreferences('x'), defaults);
+	});
+
+	test('afterShare defaults to close, accepts stay, rejects invalid values, and syncs to phones only', () => {
+		assert.equal(defaults.afterShare, 'close');
+		assert.equal(ANDROID_PREFERENCES.afterShare[0], 'platform');
+		assert.equal(parsePreferences({afterShare: 'stay'}).afterShare, 'stay');
+		assert.equal(parsePreferences({afterShare: 'invalid'}).afterShare, 'close');
+		assert.deepEqual(readSyncedPreferences({afterShare: 'stay'}), {
+			afterShare: 'stay',
+		});
+		assert.deepEqual(readSyncedPreferences({afterShare: 'invalid'}), {});
 	});
 });
 

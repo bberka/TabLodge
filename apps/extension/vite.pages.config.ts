@@ -22,6 +22,7 @@ const appEntries: Record<string, string> = {
 	'add-bookmark.html': '../src/app/add-bookmark.tsx',
 	'palette.html': '../src/app/palette.tsx',
 	'reader.html': '../src/app/reader.tsx',
+	'image.html': '../src/app/image-viewer.tsx',
 };
 
 const sourceEntryPlugin: Plugin = {

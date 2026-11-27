@@ -119,6 +119,7 @@ try {
 		'add-bookmark',
 		'palette',
 		'reader',
+		'image',
 	]) {
 		const page = pageName === 'newtab' ? dashboard : await context.newPage();
 		page.setDefaultTimeout(10_000);
@@ -170,7 +171,7 @@ try {
 			}
 		}
 
-		if (pageName !== 'help' && pageName !== 'reader') {
+		if (pageName !== 'help' && pageName !== 'reader' && pageName !== 'image') {
 			await page
 				.locator('html[data-startup-pending="0"]')
 				.waitFor({state: 'attached'});

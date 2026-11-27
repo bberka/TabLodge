@@ -8890,6 +8890,8 @@ test('storage usage reports each area', async () => {
 	assert.equal(response.usage.backups > 0, true);
 	assert.equal(response.usage.trash > 0, true);
 	assert.equal(response.usage.state > 0, true);
+	assert.equal(response.usage.images, 0);
+	assert.equal(response.usage.imageBudget, 100_000_000);
 });
 
 test('undo paths: restore-and-remove, move between sessions and close-after-save are reversible', async () => {
@@ -13627,6 +13629,11 @@ test('a saved image follows its bookmark into the trash and goes when the trash 
 	const bookmark = harness.state.bookmarks.find((entry) => entry.url === url);
 	assert.ok(bookmark, 'the image is bookmarked');
 	assert.equal(imageKeys(), 2, 'the original and its thumbnail');
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_STORAGE_USAGE'})).usage.images,
+		70,
+		'Settings counts the bytes of the originals',
+	);
 
 	await harness.sendMessage({
 		type: 'DELETE_BOOKMARK',
@@ -13681,6 +13688,85 @@ test('a private window keeps no image', async () => {
 		),
 		[],
 	);
+});
+
+test('a full backup lists the saved images, and a restore brings back originals and thumbnails only for saved addresses', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: {
+			ok: true,
+			type: 'image/png',
+			width: 640,
+			height: 480,
+			data: PNG,
+			thumb: WEBP,
+		},
+	});
+	const url = 'https://cdn.example/full/cat.png';
+	await harness.fire(
+		'contextMenuClicked',
+		{
+			menuItemId: 'tablodge-image-save',
+			mediaType: 'image',
+			srcUrl: url,
+			pageUrl: 'https://photos.example/album',
+		},
+		{id: 1, windowId: 1, url: 'https://photos.example/album'},
+	);
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(backup.images.length, 1);
+	assert.equal(backup.images[0].held, true);
+	assert.equal(
+		'data' in backup.images[0],
+		false,
+		'originals travel one message each, not inside the backup message',
+	);
+	const original = (await harness.sendMessage({type: 'GET_SAVED_IMAGE', url}))
+		.image;
+
+	const fresh = createWorkerHarness(stateWithSession());
+	const restored = await fresh.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	const {held: _held, ...thumb} = structuredClone(backup.images[0]);
+	const added = await fresh.sendMessage({
+		type: 'ADD_SAVED_IMAGES',
+		images: [
+			structuredClone(original),
+			{...thumb, url: 'https://cdn.example/never-saved.png'},
+		],
+	});
+	assert.equal(added.images, 1);
+	assert.equal(
+		(await fresh.sendMessage({type: 'GET_SAVED_IMAGE', url})).image?.data,
+		PNG,
+	);
+
+	const phoneBackup = createWorkerHarness(stateWithSession());
+	await phoneBackup.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+	});
+	assert.equal(
+		(
+			await phoneBackup.sendMessage({
+				type: 'ADD_SAVED_IMAGES',
+				images: [thumb],
+			})
+		).images,
+		1,
+		'a thumbnail with no original is kept as one',
+	);
+	const shown = await phoneBackup.sendMessage({type: 'GET_SAVED_IMAGE', url});
+	assert.equal(shown.image, null);
+	assert.equal(shown.thumb?.thumb, WEBP);
 });
 
 const capturedPage = {
