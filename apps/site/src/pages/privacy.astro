@@ -63,7 +63,7 @@ const permissions = [
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
 		<h1>Privacy</h1>
-		<p class="note">Last updated: 2026-11-18</p>
+		<p class="note">Last updated: 2026-11-28</p>
 		<p class="lead">
 			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect your data.</strong> It uploads your library only to a sync server you run yourself, and only after you connect one.
 		</p>
@@ -82,7 +82,7 @@ const permissions = [
 		<ul>
 			<li><strong>Extension storage</strong> (<code>chrome.storage.local</code>, keys <code>tablodge.state</code>, <code>tablodge.session.*</code> and <code>tablodge.bookmarks.*</code>): your saved sessions (tab titles, URLs, notes, pinned, tab-group and split-view info), folders, bookmark columns and bookmarks with their notes and tags, settings, and excluded websites.</li>
 			<li><strong>Extension storage</strong> (<code>uiTheme</code>, <code>uiAccent</code>) and the extension's <code>localStorage</code> (<code>tablodge.uiTheme</code>, <code>tablodge.uiAccent</code>): your Light, Dark or System appearance choice and accent color, and a copy used to paint each page in the right theme before it loads. With Sync settings on they follow your other browsers, never your phones.</li>
-			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). After an update that changes how your library is stored, a full copy of the old library is kept for seven days. Snapshots skip private windows and excluded websites.</li>
+			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes; for items a saved page added in a tab you have not seen yet, the ids of those bookmarks are kept up to seven days until you see the notice). After an update that changes how your library is stored, a full copy of the old library is kept for seven days. Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>
 			TabLodge reads tab details to save and restore sessions, find duplicates, show and search open tabs, and capture recovery snapshots. Snapshots are enabled by default and can be turned off in Settings, under Recovery &amp; backups. It reads your browser's bookmark tree only when you ask to import it. If you enable the browser bookmark setting, it also watches for newly created bookmarks to offer to add that page or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache. Firefox has no such cache, so there TabLodge shows an open tab's own icon where the browser provides one, remembers the icon address of each site you open on this device only to show it for saved links to that site, and uses a letter tile for any other site.

@@ -622,9 +622,11 @@ export type TabLodgeMessages = {
 		source: string;
 		links: unknown[];
 		automatic?: boolean;
+		unseen?: boolean;
 	};
 	SITE_SOURCE_CATCH_UP_DISMISS: {source: string; links: unknown[]};
 	SITE_SOURCE_UNDO: {id: string};
+	SITE_SOURCE_UNDO_SEEN: {id: string};
 	QUOTE_UNDO: {id: string};
 	SHOW_TRASH_UNDO: {tabId: number; message: string; trashId: string};
 	TRASH_UNDO: {id: string};
@@ -902,6 +904,7 @@ export type TabLodgeResponses = {
 	SITE_SOURCE_CATCH_UP_ADD: {added: number; column?: string} & Undoable;
 	SITE_SOURCE_CATCH_UP_DISMISS: {};
 	SITE_SOURCE_UNDO: {label: string};
+	SITE_SOURCE_UNDO_SEEN: {};
 	QUOTE_UNDO: {label: string};
 	SHOW_TRASH_UNDO: {};
 	TRASH_UNDO: {message: string};

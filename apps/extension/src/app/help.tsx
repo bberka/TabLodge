@@ -539,7 +539,9 @@ function Help() {
 							sites load their list only when you switch to the tab. When some
 							of the saved items it shows are not in {PROJECT.name}, they are
 							added to the site&apos;s column in the order the site lists them,
-							and a notice says how many, with Undo. Under When a saved page has
+							and a notice says how many, with Undo. The time to undo starts
+							when you first see the notice, so a background tab you open later
+							still offers it, for up to seven days. Under When a saved page has
 							items {PROJECT.name} lacks, choose Ask first to be offered Add
 							them and Not now instead; Not now keeps the notice quiet until
 							something new appears there, and an item answered Not now is never

@@ -38,6 +38,7 @@ import {diffList} from '../src/shared/library-patch';
 import {
 	UNDO_OFFER_MS,
 	UNDO_WINDOW_MS,
+	UNSEEN_UNDO_HOLD_MS,
 	undoableEdit,
 	type UndoableEdit,
 } from '../src/shared/undo-policy';
@@ -7576,7 +7577,7 @@ async function sweepPageCopies() {
 		privateContext ||
 		((await pageCopies.list()).length === 0 &&
 			(await savedImages.list()).length === 0) ||
-		(await readUndo()).length > 0
+		(await readUndo()).some((record) => !record.catchUp)
 	) {
 		return;
 	}
@@ -8574,6 +8575,7 @@ const UNDO_KEY = 'tablodge.undo';
 const ALARM_UNDO = 'tablodge-undo';
 
 const UNDO_KEEP = 3;
+const CATCH_UP_UNDO_KEEP = 20;
 const undoMutate = serialQueue();
 
 type UndoRecord = {
@@ -8584,6 +8586,14 @@ type UndoRecord = {
 	before: Raw;
 	after: Record<string, string>;
 	from?: string;
+	catchUp?: CatchUpUndo;
+};
+
+type CatchUpUndo = {
+	bookmarkIds: string[];
+	addedAt: number;
+	newColumn?: {id: string; hash: string};
+	unseen: boolean;
 };
 
 const isUndoRecord = (value: unknown): value is UndoRecord =>
@@ -8596,13 +8606,16 @@ const isUndoRecord = (value: unknown): value is UndoRecord =>
 const undoHash = (value: unknown) =>
 	value === undefined ? 'none' : hashText(JSON.stringify(value));
 
+const isUndoLive = (record: UndoRecord) =>
+	Number(record.createdAt) >
+	Date.now() - (record.catchUp?.unseen ? UNSEEN_UNDO_HOLD_MS : UNDO_WINDOW_MS);
+
 async function readUndo(): Promise<UndoRecord[]> {
 	const raw = await readKey<Raw>(UNDO_KEY);
-	const cutoff = Date.now() - UNDO_WINDOW_MS;
 	return Array.isArray(raw?.records)
 		? raw.records.filter(
 				(record): record is UndoRecord =>
-					isUndoRecord(record) && Number(record.createdAt) > cutoff,
+					isUndoRecord(record) && isUndoLive(record),
 			)
 		: [];
 }
@@ -8611,6 +8624,19 @@ async function writeUndo(records: UndoRecord[]) {
 	await (records.length === 0
 		? library.remove(UNDO_KEY)
 		: library.set({[UNDO_KEY]: {version: 1, records}}));
+}
+
+async function pushUndo(record: UndoRecord) {
+	await undoMutate(async () => {
+		const records = [record, ...(await readUndo())];
+		const edits = records.filter((entry) => !entry.catchUp);
+		const catchUps = records.filter((entry) => entry.catchUp);
+		await writeUndo([
+			...edits.slice(0, UNDO_KEEP),
+			...catchUps.slice(0, CATCH_UP_UNDO_KEEP),
+		]);
+	});
+	await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
 }
 
 async function withUndo<K extends TabLodgeMessageType>(
@@ -8684,10 +8710,7 @@ async function withUndo<K extends TabLodgeMessageType>(
 			},
 			after,
 		};
-		await undoMutate(async () => {
-			await writeUndo([record, ...(await readUndo())].slice(0, UNDO_KEEP));
-		});
-		await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
+		await pushUndo(record);
 		return {...result, undoId: record.id};
 	} catch {
 		return result;
@@ -8985,6 +9008,42 @@ async function purgeUndo(): Promise<void> {
 	await finishSendCleanup(records);
 }
 
+async function removeCatchUp(
+	record: UndoRecord,
+	{bookmarkIds, addedAt, newColumn}: CatchUpUndo,
+): Promise<ActionResult<'UNDO'>> {
+	const store = await getStore();
+	const added = new Set(bookmarkIds);
+	const unchanged = store.bookmarks.filter(
+		(bookmark) => added.has(bookmark.id) && bookmark.updatedAt === addedAt,
+	);
+	if (unchanged.length !== added.size) {
+		return {ok: false, error: "Can't undo: your data changed since."};
+	}
+
+	store.bookmarks = store.bookmarks.filter(
+		(bookmark) => !added.has(bookmark.id),
+	);
+	if (
+		newColumn &&
+		store.bookmarks.every((bookmark) => bookmark.columnId !== newColumn.id)
+	) {
+		store.bookmarkColumns = store.bookmarkColumns.filter(
+			(column) =>
+				column.id !== newColumn.id || undoHash(column) !== newColumn.hash,
+		);
+	}
+
+	await writeStore(store);
+	await undoMutate(async () => {
+		await writeUndo(
+			(await readUndo()).filter((entry) => entry.id !== record.id),
+		);
+	});
+	await rebuildContextMenus(await getStore());
+	return {ok: true, label: record.label};
+}
+
 function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 	const run = (keys: string[], apply: () => Promise<ActionResult<'UNDO'>>) => {
 		let step = apply;
@@ -9013,6 +9072,11 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 				ok: false,
 				error: "Can't undo: it was too long ago.",
 			};
+		}
+
+		const {catchUp} = record;
+		if (catchUp) {
+			return mutate(() => removeCatchUp(record, catchUp));
 		}
 
 		return run(record.keys, async () => {
@@ -10103,56 +10167,119 @@ async function countSourceCatchUp(
 async function addSourceCatchUp(
 	source: SiteSource,
 	links: unknown,
-	automatic: boolean,
+	{automatic, unseen}: {automatic: boolean; unseen: boolean},
 ): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> {
 	const state = await readSourcesState();
 	if (!state.sites[source.id].enabled || privateSourcesOff()) {
 		return {ok: false, error: `${source.label} is off in ${APP_NAME}.`};
 	}
 
-	return mutate(async () =>
-		withUndo(
-			siteSourceUndoLabel(source),
-			[STORAGE_KEY],
-			async (): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> => {
-				const store = await getStore();
-				const missing = await missingFromSource(store, source, links);
-				const answered = automatic
-					? new Set((await readCatchUpState())[source.id])
-					: undefined;
-				const added = answered
-					? missing.filter((link) => !answered.has(link.url))
-					: missing;
-				if (added.length === 0) {
-					return {ok: true, added: 0};
-				}
+	const label = siteSourceUndoLabel(source);
+	const bookmarkIds: string[] = [];
+	let newColumnId: string | undefined;
+	const now = Date.now();
+	const add = async (): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> => {
+		const store = await getStore();
+		const missing = await missingFromSource(store, source, links);
+		const answered = automatic
+			? new Set((await readCatchUpState())[source.id])
+			: undefined;
+		const added = answered
+			? missing.filter((link) => !answered.has(link.url))
+			: missing;
+		if (added.length === 0) {
+			return {ok: true, added: 0};
+		}
 
-				const now = Date.now();
-				const column = sourceSaveColumn(store, source, state, now);
-				const device = await savedHere();
-				for (const link of added) {
-					const notes = sourceNote(source, link.discussion, link.url);
-					store.bookmarks.push({
-						id: makeId(),
-						title: await bestBookmarkTitle(
-							link.title,
-							link.url,
-							store.settings.cleanTitles,
-						),
-						url: link.url,
-						columnId: column.id,
-						...(notes && {notes}),
-						...device,
-						createdAt: now,
-						updatedAt: now,
-					});
-				}
+		const columnCount = store.bookmarkColumns.length;
+		const column = sourceSaveColumn(store, source, state, now);
+		if (store.bookmarkColumns.length > columnCount) {
+			newColumnId = column.id;
+		}
 
-				await writeStore(store);
-				return {ok: true, added: added.length, column: column.name};
-			},
-		),
-	);
+		const device = await savedHere();
+		for (const link of added) {
+			const notes = sourceNote(source, link.discussion, link.url);
+			const id = makeId();
+			bookmarkIds.push(id);
+			store.bookmarks.push({
+				id,
+				title: await bestBookmarkTitle(
+					link.title,
+					link.url,
+					store.settings.cleanTitles,
+				),
+				url: link.url,
+				columnId: column.id,
+				...(notes && {notes}),
+				...device,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		await writeStore(store);
+		return {ok: true, added: added.length, column: column.name};
+	};
+
+	return mutate(async () => {
+		if (!unseen) {
+			return withUndo(label, [STORAGE_KEY], add);
+		}
+
+		const result = await add();
+		if (bookmarkIds.length === 0) {
+			return result;
+		}
+
+		try {
+			const column = (await getStore()).bookmarkColumns.find(
+				(entry) => entry.id === newColumnId,
+			);
+			const record: UndoRecord = {
+				id: makeId(),
+				label,
+				createdAt: now,
+				keys: [],
+				before: {},
+				after: {},
+				catchUp: {
+					bookmarkIds,
+					addedAt: now,
+					...(column && {
+						newColumn: {id: column.id, hash: undoHash(column)},
+					}),
+					unseen: true,
+				},
+			};
+			await pushUndo(record);
+			return {...result, undoId: record.id};
+		} catch {
+			return result;
+		}
+	});
+}
+
+async function startUndoTime(
+	id: unknown,
+): Promise<ActionResult<'SITE_SOURCE_UNDO_SEEN'>> {
+	const started = await undoMutate(async () => {
+		const records = await readUndo();
+		const record = records.find((entry) => entry.id === id);
+		if (!record?.catchUp?.unseen) {
+			return false;
+		}
+
+		record.createdAt = Date.now();
+		record.catchUp.unseen = false;
+		await writeUndo(records);
+		return true;
+	});
+	if (started) {
+		await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
+	}
+
+	return {ok: true};
 }
 
 async function dismissSourceCatchUp(
@@ -10326,7 +10453,10 @@ async function handleSourceMessage(
 		case 'SITE_SOURCE_CATCH_UP_ADD': {
 			const source = senderSource(message.source, sender);
 			return source
-				? addSourceCatchUp(source, message.links, message.automatic === true)
+				? addSourceCatchUp(source, message.links, {
+						automatic: message.automatic === true,
+						unseen: message.unseen === true,
+					})
 				: {ok: false, error: 'This page cannot save to that source.'};
 		}
 
@@ -10379,6 +10509,10 @@ async function handleSourceMessage(
 			return result.ok
 				? {ok: true, message: `Restored to ${result.placed}.`}
 				: result;
+		}
+
+		case 'SITE_SOURCE_UNDO_SEEN': {
+			return privateSourcesOff() ? {ok: true} : startUndoTime(message.id);
 		}
 
 		case 'SITE_SOURCE_UNDO': {
