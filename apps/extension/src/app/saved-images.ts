@@ -3,8 +3,15 @@ import {
 	IMAGE_DELETED,
 	IMAGE_INDEX_KEY,
 	thumbDataUrl,
+	base64ToBytes,
 	type SavedImage,
+	type SavedThumb,
 } from '../shared/image-store';
+import {
+	backupImageFile,
+	backupImages,
+	type FullBackupParts,
+} from '../shared/full-backup';
 import {send} from './message-client';
 import type {ShowStatus} from './common';
 
@@ -90,7 +97,9 @@ export async function deleteSavedImage(
 	after: () => unknown = () => undefined,
 ) {
 	const before = await send('GET_SAVED_IMAGE', {url});
-	const kept: SavedImage | null = before.ok ? before.image : null;
+	const kept: SavedImage | SavedThumb | null = before.ok
+		? (before.image ?? before.thumb)
+		: null;
 	const result = await send('DELETE_SAVED_IMAGE', {url});
 	if (!result.ok) {
 		showStatus(result.error, true);
@@ -118,4 +127,34 @@ export async function deleteSavedImage(
 				}
 			: {toast: true},
 	);
+}
+
+export async function backupImageParts(
+	thumbs: ReadonlyArray<SavedThumb & {held: boolean}>,
+): Promise<Required<Pick<FullBackupParts, 'images' | 'imageFiles'>>> {
+	const imageFiles: Record<string, Uint8Array> = {};
+	for (const thumb of thumbs) {
+		if (!thumb.held) {
+			continue;
+		}
+
+		const read = await send('GET_SAVED_IMAGE', {url: thumb.url});
+		if (read.ok && read.image) {
+			imageFiles[backupImageFile(read.image)] = base64ToBytes(read.image.data);
+		}
+	}
+
+	return {images: thumbs.map(({held: _held, ...thumb}) => thumb), imageFiles};
+}
+
+export async function restoreBackupImages(
+	parts: Pick<FullBackupParts, 'images' | 'imageFiles'>,
+): Promise<number> {
+	let restored = 0;
+	for (const image of backupImages(parts)) {
+		const added = await send('ADD_SAVED_IMAGES', {images: [image]});
+		restored += added.ok ? added.images : 0;
+	}
+
+	return restored;
 }

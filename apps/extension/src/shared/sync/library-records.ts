@@ -7,6 +7,7 @@ import type {
 	Settings,
 	Store,
 } from '../types';
+import type {SyncedThumb} from '../image-store';
 import type {TombstoneKind} from '../library-sync';
 import {tagFields} from '../bookmark-tags';
 import {bookmarkNotes, DEFAULT_SETTINGS} from '../library-normalize';
@@ -156,7 +157,8 @@ export function orderGroup(
 		case 'trash':
 		case 'note':
 		case 'tag':
-		case 'source': {
+		case 'source':
+		case 'thumb': {
 			return undefined;
 		}
 	}
@@ -213,6 +215,7 @@ export function splitLibrary(
 	sources: readonly SyncedSource[] = [],
 	outside: Readonly<Record<string, unknown>> = {},
 	onServer: ReadonlySet<string> = new Set(),
+	thumbs: readonly SyncedThumb[] = [],
 ): Map<string, LibraryRecord> {
 	const records = new Map<string, LibraryRecord>();
 	const add = (record: LibraryRecord) => records.set(recordKey(record), record);
@@ -270,7 +273,22 @@ export function splitLibrary(
 		add({kind: 'source', id, value});
 	}
 
+	for (const {id, value} of thumbs) {
+		add({kind: 'thumb', id, value});
+	}
+
 	return records;
+}
+
+export function thumbsOf(records: Iterable<LibraryRecord>): unknown[] {
+	const thumbs: unknown[] = [];
+	for (const record of records) {
+		if (record.kind === 'thumb') {
+			thumbs.push(record.value);
+		}
+	}
+
+	return thumbs;
 }
 
 export function sourcesOf(records: Iterable<LibraryRecord>): SyncedSource[] {
@@ -320,6 +338,7 @@ export function assemble(
 		if (
 			record.kind === 'trash' ||
 			record.kind === 'source' ||
+			record.kind === 'thumb' ||
 			(!isRecord(record.value) &&
 				record.kind !== 'preference' &&
 				record.kind !== 'setting')

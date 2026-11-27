@@ -1,5 +1,5 @@
 import {memo} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {openLink} from '../../platform/open-links';
 import type {Bookmark} from '../../../../extension/src/shared/types';
@@ -24,6 +24,7 @@ import {RowTags, spokenTags} from './tags';
 
 function BookmarkRowView({
 	bookmark,
+	thumbnail,
 	selecting,
 	checked,
 	onToggle,
@@ -33,6 +34,7 @@ function BookmarkRowView({
 	onDelete,
 }: {
 	bookmark: Bookmark;
+	thumbnail?: string;
 	selecting: boolean;
 	checked: boolean;
 	onToggle: (bookmark: Bookmark) => void;
@@ -95,7 +97,7 @@ function BookmarkRowView({
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
-				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${spokenNote(bookmark.notes)}` : ''}${spokenTags(bookmark)}`}
+				accessibilityLabel={`${thumbnail ? 'Saved image, ' : ''}${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${spokenNote(bookmark.notes)}` : ''}${spokenTags(bookmark)}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
@@ -163,6 +165,20 @@ function BookmarkRowView({
 						name={checked ? 'checkmark-circle' : 'ellipse-outline'}
 						size={28}
 						color={checked ? colors.accent : colors.muted}
+					/>
+				) : thumbnail ? (
+					<Image
+						accessible={false}
+						source={{uri: thumbnail}}
+						resizeMode="cover"
+						style={{
+							width: compact ? 32 : 40,
+							height: compact ? 32 : 40,
+							borderRadius: 6,
+							borderWidth: StyleSheet.hairlineWidth,
+							borderColor: colors.border,
+							backgroundColor: colors.border,
+						}}
 					/>
 				) : (
 					<BookmarkIcon url={bookmark.url} size={compact ? 32 : 40} />

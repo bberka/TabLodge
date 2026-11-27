@@ -1,5 +1,17 @@
 import assert from 'node:assert/strict';
 import {test, vi} from 'vite-plus/test';
+import {toBase64} from '../../extension/src/shared/private-lock';
+import {
+	THUMB_MAX_BYTES,
+	createImageStore,
+	imageId,
+	type ImageStore,
+} from '../../extension/src/shared/image-store';
+import {
+	PNG,
+	memoryStorage,
+	picture,
+} from '../../extension/tests/image-fixtures';
 import {createApi} from '../src/api';
 import {isAuthMessage} from '../src/live';
 import {exportLibrary, importLibrary} from '../src/transfer';
@@ -43,6 +55,7 @@ function makeServer(options: {legacy?: boolean} = {}) {
 	let rewriteStatus: ((body: Record<string, unknown>) => unknown) | undefined;
 	const requests: string[] = [];
 	const pushes: number[] = [];
+	const pushed: string[] = [];
 	const sockets = new Set<FakeSocket>();
 	let currentLog = new ChangeLog();
 	const createServerApi = () =>
@@ -80,6 +93,7 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		setStatusFails(value: boolean) {
 			statusFails = value;
 		},
+		pushed,
 		setLegacy(value: boolean) {
 			legacy = value;
 		},
@@ -96,6 +110,7 @@ function makeServer(options: {legacy?: boolean} = {}) {
 
 			requests.push(new URL(url).pathname);
 			if (init.method === 'POST' && new URL(url).pathname === '/v1/changes') {
+				pushed.push(String(init.body));
 				pushes.push(
 					(JSON.parse(String(init.body)) as {changes: unknown[]}).changes
 						.length,
@@ -129,16 +144,23 @@ function makeServer(options: {legacy?: boolean} = {}) {
 					...body,
 					features: body.features.filter(
 						(feature) =>
-							!['trash', 'notes', 'tags', 'sources', 'settings'].includes(
-								feature,
-							),
+							![
+								'trash',
+								'notes',
+								'tags',
+								'sources',
+								'settings',
+								'thumbs',
+							].includes(feature),
 					),
 				});
 			}
 
 			if (
 				init.method === 'POST' &&
-				/"kind":"(?:trash|note|tag|source|setting)"/.test(String(init.body))
+				/"kind":"(?:trash|note|tag|source|setting|thumb)"/.test(
+					String(init.body),
+				)
 			) {
 				return Response.json({error: 'bad_change'}, {status: 400});
 			}
@@ -237,6 +259,7 @@ type Device = {
 	trash: TrashEntry[];
 	sources: SyncedSource[];
 	editedDuringApply?: () => boolean;
+	images: ImageStore;
 	outside: Record<string, unknown>;
 	storage: Map<string, unknown>;
 	backups: string[];
@@ -256,6 +279,7 @@ function makeDevice(
 	{
 		withTrash = false,
 		withSources = false,
+		withImages = false,
 		withOutside = false,
 		beforeNotes = false,
 		storage = new Map<string, unknown>(),
@@ -264,10 +288,12 @@ function makeDevice(
 ) {
 	let queue = Promise.resolve();
 	const backups: string[] = [];
+	const images = createImageStore(memoryStorage().storage);
 	const device: Device = {
 		store,
 		trash: [],
 		sources: [],
+		images,
 		outside: {...OUTSIDE_DEFAULTS},
 		storage,
 		backups,
@@ -304,7 +330,9 @@ function makeDevice(
 					...body,
 					changes: body.changes?.filter(
 						(change) =>
-							!['note', 'tag', 'source', 'setting'].includes(change.kind),
+							!['note', 'tag', 'source', 'setting', 'thumb'].includes(
+								change.kind,
+							),
 					),
 				});
 			},
@@ -347,6 +375,12 @@ function makeDevice(
 								...structuredClone(put),
 							];
 						},
+					}
+				: undefined,
+			thumbs: withImages
+				? {
+						read: async () => images.synced(),
+						apply: async (put, remove) => images.applySynced(put, remove),
 					}
 				: undefined,
 			outsideSettings: withOutside
@@ -1332,6 +1366,7 @@ test('a server without some features keeps syncing and lists what stays on the d
 		[
 			'notes',
 			'tags',
+			'thumbs',
 			'sources',
 			'settings',
 			'trash',
@@ -1705,4 +1740,151 @@ test('a local change waits 2.5 s after the last write, and a steady stream still
 	} finally {
 		vi.useRealTimers();
 	}
+});
+
+const pictured = (id: string): Store['bookmarks'][number] => ({
+	...bookmark(id),
+	url: 'https://cdn.example/cat.png',
+});
+
+test('a saved image sends its thumbnail and never its bytes, and the other device names who holds the original', async () => {
+	const server = makeServer();
+	const a = makeDevice(
+		server,
+		{...emptyStore(), bookmarks: [pictured('b1')]},
+		{withImages: true},
+	);
+	const b = makeDevice(server, emptyStore(), {withImages: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	const sent = server.pushed;
+	sent.length = 0;
+
+	assert.ok((await a.images.keep(picture())).ok);
+	a.client.localChanged();
+	await until(() => sent.length > 0);
+	await b.client.syncNow();
+
+	const [thumb] = await b.images.thumbs();
+	assert.deepEqual(
+		{url: thumb.url, device: thumb.device, held: thumb.held},
+		{url: 'https://cdn.example/cat.png', device: 'Desk', held: false},
+	);
+	assert.equal(await b.images.read(thumb.url), undefined);
+	assert.equal((await b.images.usage()).size, 0);
+	assert.ok(sent.join('').includes('"kind":"thumb"'));
+	assert.ok(
+		!sent.join('').includes(PNG),
+		'the original never leaves the device',
+	);
+	assert.equal((await a.images.read(thumb.url))?.data, PNG);
+
+	await b.client.syncNow();
+	await a.client.syncNow();
+	assert.equal((await a.client.status()).pending, 0);
+	assert.equal((await b.client.status()).pending, 0, 'nothing is sent back');
+});
+
+test('deleting a saved image on one device removes it on the others, original included', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withImages: true});
+	const b = makeDevice(server, emptyStore(), {withImages: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	await a.images.keep(picture());
+	a.client.localChanged();
+	await a.client.syncNow();
+	await b.client.syncNow();
+	assert.equal((await b.images.list()).length, 1);
+
+	await b.images.remove('https://cdn.example/cat.png');
+	b.client.localChanged();
+	await b.client.syncNow();
+	await a.client.syncNow();
+	assert.deepEqual(await a.images.list(), []);
+	assert.equal(await a.images.read('https://cdn.example/cat.png'), undefined);
+});
+
+test('a server without the thumbs feature keeps syncing and the images stay on the device', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(
+		server,
+		{...emptyStore(), bookmarks: [pictured('b1')]},
+		{withImages: true},
+	);
+	const b = makeDevice(server, emptyStore(), {withImages: true});
+	await a.images.keep(picture());
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(b.store), ['b1']);
+	assert.deepEqual(await b.images.list(), []);
+	assert.equal((await a.client.status()).error, null);
+	assert.equal((await a.client.status()).pending, 0);
+	assert.equal((await a.images.list()).length, 1);
+});
+
+test('a version from before thumbnails never sees or erases them', async () => {
+	const server = makeServer();
+	const a = makeDevice(
+		server,
+		{...emptyStore(), bookmarks: [pictured('b1')]},
+		{withImages: true},
+	);
+	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
+	await a.images.keep(picture());
+	await a.client.connect(URL_BASE, TOKEN);
+	await old.client.connect(URL_BASE, TOKEN);
+	old.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
+	}));
+	await until(() => a.store.bookmarks[0]?.title === 'Renamed');
+	await old.client.syncNow();
+	await a.client.syncNow();
+	assert.equal((await a.images.list()).length, 1);
+
+	const fresh = makeDevice(server, emptyStore(), {withImages: true});
+	await fresh.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(
+		(await fresh.images.synced()).map((record) => record.id),
+		[imageId('https://cdn.example/cat.png')],
+	);
+});
+
+test('more thumbnails than one request can carry go up in several pushes', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withImages: true});
+	const b = makeDevice(server, emptyStore(), {withImages: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	const {data: _data, thumb: _thumb, ...meta} = picture();
+	const thumb = toBase64(
+		Uint8Array.from({length: THUMB_MAX_BYTES}, (_, index) =>
+			'RIFF....WEBP'.codePointAt(index % 12)!,
+		),
+	);
+	const count = 450;
+	await a.images.applySynced(
+		Array.from({length: count}, (_, index) => ({
+			...meta,
+			thumb,
+			url: `https://cdn.example/${index}/${'p'.repeat(14_000)}.png`,
+		})),
+		[],
+	);
+	server.pushed.length = 0;
+	a.client.localChanged();
+	await a.client.syncNow();
+
+	assert.equal((await a.client.status()).error, null);
+	assert.equal((await a.client.status()).pending, 0);
+	assert.ok(server.pushed.length > 1, 'one request would be over 8 MB');
+	for (const body of server.pushed) {
+		assert.ok(body.length < 8 * 1024 * 1024);
+		for (const change of (JSON.parse(body) as {changes: unknown[]}).changes) {
+			assert.ok(JSON.stringify(change).length < 256 * 1024);
+		}
+	}
+
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.equal((await b.images.list()).length, count);
 });

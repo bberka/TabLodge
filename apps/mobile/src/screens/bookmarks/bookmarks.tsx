@@ -1,6 +1,8 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {Animated, FlatList, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useImageThumbs} from '../../library/image-thumbs';
+import {openImageViewer} from '../image/viewer';
 import {SyncProblemBanner} from '../../ui/sync-problem-banner';
 import type {Bookmark} from '../../../../extension/src/shared/types';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
@@ -125,6 +127,7 @@ export function BookmarksScreen({
 	const view = useView();
 	const sendable = canSendToPrivate(view, usePrivateState());
 	const copyUrls = useCopyUrls();
+	const imageThumbs = useImageThumbs();
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
@@ -311,6 +314,18 @@ export function BookmarksScreen({
 					hasCopy: copyUrls.has(rowMenuBookmark.url),
 					isPrivate: view === 'private',
 				}),
+				...(view === 'regular' && imageThumbs.has(rowMenuBookmark.url)
+					? [
+							{
+								icon: 'image-outline' as const,
+								label: 'Open image',
+								color: colors.info,
+								onPress() {
+									openImageViewer(rowMenuBookmark.url);
+								},
+							},
+						]
+					: []),
 				...(sendable
 					? [
 							{
@@ -864,6 +879,11 @@ export function BookmarksScreen({
 							) : (
 								<BookmarkRow
 									bookmark={item}
+									thumbnail={
+										view === 'regular'
+											? imageThumbs.get(item.url)?.uri
+											: undefined
+									}
 									selecting={selection.active}
 									checked={selection.ids.has(item.id)}
 									onToggle={toggleRow}

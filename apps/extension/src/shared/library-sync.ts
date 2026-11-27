@@ -12,7 +12,8 @@ export type TombstoneKind =
 	| 'trash'
 	| 'note'
 	| 'tag'
-	| 'source';
+	| 'source'
+	| 'thumb';
 export type Tombstone = {
 	kind: TombstoneKind;
 	id: string;
@@ -37,6 +38,7 @@ export const TOMBSTONE_KINDS: ReadonlySet<string> = new Set([
 	'note',
 	'tag',
 	'source',
+	'thumb',
 ]);
 export const syncText = (value: unknown) =>
 	typeof value === 'string' && value !== '' && value.length <= SYNC_TEXT_MAX

@@ -81,6 +81,8 @@ import {startWidgetSnapshot} from './src/library/widget-sync';
 import {startBackgroundSync} from './src/library/background-sync';
 import {startPageCopies} from './src/library/page-copies';
 import {ReaderHost} from './src/screens/copy/reader';
+import {ImageViewerHost} from './src/screens/image/viewer';
+import {startSavedImages} from './src/library/saved-images';
 import {readClipboard} from './modules/quick-tiles';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
@@ -196,6 +198,7 @@ function Main() {
 
 	useEffect(() => {
 		void startPageCopies().catch(() => undefined);
+		void startSavedImages().catch(() => undefined);
 	}, []);
 
 	useEffect(() => startPrivateAutoLock(), []);
@@ -463,6 +466,7 @@ function Main() {
 			<SharedPagesHost />
 			<OpenInHost />
 			<ReaderHost />
+			<ImageViewerHost />
 			<ImportSheet
 				key={`import-${fileKey}`}
 				source={sharedFile?.kind === 'import' ? sharedFile.source : undefined}

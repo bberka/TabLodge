@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
+import {restoreImageThumbs} from '../../library/saved-images';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {type BackupRead, readBackup} from '../../transfer/backup';
 import {confirm, notify} from '../../ui/dialog';
@@ -108,6 +109,7 @@ function RestoreForm({
 						restorePreferences(read.phoneSettings);
 						if (view === 'regular') {
 							await restoreCopies(read.copies);
+							await restoreImageThumbs(read.images);
 						}
 
 						showSnack('Backup restored', {
