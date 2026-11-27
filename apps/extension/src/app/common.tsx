@@ -9,6 +9,7 @@ import {
 	type ReactNode,
 } from 'react';
 import {Bookmark, CircleAlert, CircleCheck, Info, X} from 'lucide-react';
+import {applyStateChanges} from '../shared/state-changes';
 import {
 	Card,
 	CardContent,
@@ -259,6 +260,50 @@ function shareValue<T extends object>(previous: T | undefined, next: T): T {
 		: next;
 }
 
+function withSharedReferences(
+	old: TabLodgeState | null,
+	next: TabLodgeState,
+): TabLodgeState {
+	const groups = Array.isArray(next.groups) ? next.groups : [];
+	const folders = Array.isArray(next.folders)
+		? next.folders
+		: [{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true}];
+	const bookmarkColumns = Array.isArray(next.bookmarkColumns)
+		? next.bookmarkColumns
+		: [
+				{
+					id: 'bookmark-default',
+					name: 'Bookmarks',
+					createdAt: 0,
+					isDefault: true,
+				},
+			];
+	const bookmarks = Array.isArray(next.bookmarks) ? next.bookmarks : [];
+	return {
+		...next,
+		groups: shareUnchanged(old?.groups, groups),
+		folders: shareUnchanged(old?.folders, folders),
+		bookmarkColumns: shareUnchanged(old?.bookmarkColumns, bookmarkColumns),
+		bookmarks: shareUnchanged(old?.bookmarks, bookmarks),
+		settings:
+			next.settings && old?.settings
+				? shareValue(old.settings, next.settings)
+				: next.settings,
+	};
+}
+
+function withSharedRoot(
+	old: TabLodgeState,
+	next: TabLodgeState,
+): TabLodgeState {
+	return {
+		...next,
+		folders: shareUnchanged(old.folders, next.folders),
+		bookmarkColumns: shareUnchanged(old.bookmarkColumns, next.bookmarkColumns),
+		settings: shareValue(old.settings, next.settings),
+	};
+}
+
 const RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
 const wait = (ms: number) =>
 	new Promise<void>((resolve) => {
@@ -278,6 +323,11 @@ export function useTabLodgeState(
 	const initialRequestRef = useRef(initialRequest);
 	const latestRequestRef = useRef(0);
 	const mountedRef = useRef(true);
+	const heldRef = useRef<TabLodgeState | null>(null);
+	const hold = useCallback((next: TabLodgeState) => {
+		heldRef.current = next;
+		setState(next);
+	}, []);
 	const load = useCallback(async (): Promise<TabLodgeState | null> => {
 		latestRequestRef.current += 1;
 		const request = latestRequestRef.current;
@@ -314,32 +364,7 @@ export function useTabLodgeState(
 				return result;
 			}
 
-			const groups = Array.isArray(result.groups) ? result.groups : [];
-			const folders = Array.isArray(result.folders)
-				? result.folders
-				: [{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true}];
-			const bookmarkColumns = Array.isArray(result.bookmarkColumns)
-				? result.bookmarkColumns
-				: [
-						{
-							id: 'bookmark-default',
-							name: 'Bookmarks',
-							createdAt: 0,
-							isDefault: true,
-						},
-					];
-			const bookmarks = Array.isArray(result.bookmarks) ? result.bookmarks : [];
-			setState((old) => ({
-				...result,
-				groups: shareUnchanged(old?.groups, groups),
-				folders: shareUnchanged(old?.folders, folders),
-				bookmarkColumns: shareUnchanged(old?.bookmarkColumns, bookmarkColumns),
-				bookmarks: shareUnchanged(old?.bookmarks, bookmarks),
-				settings:
-					result.settings && old?.settings
-						? shareValue(old.settings, result.settings)
-						: result.settings,
-			}));
+			hold(withSharedReferences(heldRef.current, result));
 			setError('');
 			return result;
 		} catch (reason) {
@@ -360,7 +385,41 @@ export function useTabLodgeState(
 				setLoading(false);
 			}
 		}
-	}, []);
+	}, [hold]);
+
+	const applyChanges = useCallback(async (): Promise<TabLodgeState | null> => {
+		const since = heldRef.current?.revision;
+		if (!since) {
+			return load();
+		}
+
+		const answer = await send('GET_STATE_CHANGES', {since});
+		const held = heldRef.current;
+		const next =
+			held && answer.ok && answer.changes
+				? applyStateChanges(held, answer.changes)
+				: undefined;
+		if (!next) {
+			return load();
+		}
+
+		if (mountedRef.current) {
+			if (next !== held) {
+				hold(withSharedRoot(held!, next));
+			}
+
+			setError('');
+		}
+
+		return heldRef.current;
+	}, [hold, load]);
+
+	const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+	const refresh = useCallback(async () => {
+		const run = queueRef.current.then(applyChanges, applyChanges);
+		queueRef.current = run;
+		return run;
+	}, [applyChanges]);
 
 	useEffect(() => {
 		mountedRef.current = true;
@@ -393,7 +452,7 @@ export function useTabLodgeState(
 			}
 
 			clearTimeout(timer);
-			timer = setTimeout(() => void load(), STORAGE_RELOAD_DELAY_MS);
+			timer = setTimeout(() => void refresh(), STORAGE_RELOAD_DELAY_MS);
 		};
 
 		chrome.storage.onChanged.addListener(onChanged);
@@ -402,8 +461,8 @@ export function useTabLodgeState(
 			clearTimeout(timer);
 			chrome.storage.onChanged.removeListener(onChanged);
 		};
-	}, [load]);
-	return {state, error, loading, reload: load};
+	}, [load, refresh]);
+	return {state, error, loading, reload: refresh};
 }
 
 export function LoadingLine({className = ''}: {className?: string}) {

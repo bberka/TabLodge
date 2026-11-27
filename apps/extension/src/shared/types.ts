@@ -1,3 +1,4 @@
+import type {StateChange} from './state-changes';
 import type {SyncStatus} from './sync/client';
 import type {SharedPageMode} from './sync/shared-pages';
 import type {SharedPage} from './sync/shared-pages-client';
@@ -265,7 +266,9 @@ export type Store = {
 	updatedAt: number;
 };
 
-export type TabLodgeState = Store & {ok: true};
+export type RevisionedStore = Store & {revision?: string};
+
+export type TabLodgeState = RevisionedStore & {ok: true};
 
 export type SnapshotTab = {
 	url: string;
@@ -419,6 +422,7 @@ export type TabLodgeMessages = {
 	JOIN_PRIVATE_SERVER: {credential: string};
 	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
+	GET_STATE_CHANGES: {since: string};
 	GET_BOOKMARK_PROMPT: {url: string};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
@@ -717,7 +721,8 @@ export type TabLodgeResponses = {
 	GET_PRIVATE_SERVER: {privateServer: PrivateServerInfo};
 	JOIN_PRIVATE_SERVER: PrivateLockInfo;
 	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
-	GET_STATE: Store;
+	GET_STATE: RevisionedStore;
+	GET_STATE_CHANGES: {changes?: StateChange[]};
 	GET_BOOKMARK_PROMPT: {
 		bookmarkColumns: BookmarkColumn[];
 		defaultColumnId?: string;

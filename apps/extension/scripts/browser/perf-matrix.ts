@@ -271,6 +271,29 @@ const traffic = await worker.evaluate(() => {
 });
 row.editStorage = `${traffic.sets} sets, ${traffic.keys} keys, ${Math.round(traffic.chars / 1024)} KB, biggest value ${Math.round(traffic.biggest / 1024)} KB`;
 
+const visibleName = `visible ${Date.now()}`;
+await step('editUntilShownOnPage', async () => {
+	await send(
+		library.bookmarks.length > 0
+			? {
+					type: 'UPDATE_BOOKMARK',
+					bookmarkId: library.bookmarks[0].id,
+					fields: {title: visibleName},
+				}
+			: {
+					type: 'UPDATE_GROUP',
+					groupId: library.groups[0].id,
+					fields: {name: visibleName},
+				},
+	);
+	await page.getByText(visibleName).first().waitFor({timeout: 90_000});
+});
+
+await restartWorker();
+await step('firstEditAfterWorkerRestart', () =>
+	send({...editMessage, fields: {...editMessage.fields}}),
+);
+
 const typing = await page.evaluate(
 	async (label) => {
 		document.querySelector(`[aria-label="${CSS.escape(label)}"]`)?.click();
