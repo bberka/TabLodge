@@ -549,7 +549,7 @@ describe('restoring replaces the library, with a safety copy first', () => {
 		assert.equal(seen.at(-1), original);
 	});
 
-	test('loadLibrary resolves whenLibraryLoaded to false on read failure and true for an empty library', async () => {
+	test('loadLibrary resolves whenLibraryLoaded to false on read failure, malformed JSON, or wrong-shape data, and true for first run or a valid empty library', async () => {
 		vi.stubGlobal('__DEV__', false);
 		try {
 			vi.resetModules();
@@ -561,6 +561,25 @@ describe('restoring replaces the library, with a safety copy first', () => {
 			assert.equal(await failingStore.whenLibraryLoaded(), false);
 
 			vi.resetModules();
+			memory.set('tablodge.library', '{not valid json');
+			const malformedStore = await import('../src/library/library-store');
+			await malformedStore.loadLibrary();
+			assert.equal(await malformedStore.whenLibraryLoaded(), false);
+
+			vi.resetModules();
+			memory.set('tablodge.library', JSON.stringify({wrong: true}));
+			const wrongShapeStore = await import('../src/library/library-store');
+			await wrongShapeStore.loadLibrary();
+			assert.equal(await wrongShapeStore.whenLibraryLoaded(), false);
+
+			vi.resetModules();
+			memory.delete('tablodge.library');
+			const firstRunStore = await import('../src/library/library-store');
+			await firstRunStore.loadLibrary();
+			assert.equal(await firstRunStore.whenLibraryLoaded(), true);
+
+			vi.resetModules();
+			memory.set('tablodge.library', JSON.stringify(emptyStore(NOW)));
 			const emptyLibraryStore = await import('../src/library/library-store');
 			await emptyLibraryStore.loadLibrary();
 			assert.equal(await emptyLibraryStore.whenLibraryLoaded(), true);

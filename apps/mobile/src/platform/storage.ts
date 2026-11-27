@@ -8,10 +8,15 @@ const SECURE_KEYS = new Set([SYNC_CONFIG_KEY, PRIVATE_KEY_KEY, KEPT_KEY_KEY]);
 
 const secure = (key: string) => key.replaceAll(/[^\w\-.]/g, '_');
 
-export async function readJson(key: string): Promise<unknown> {
+export async function readRaw(key: string): Promise<string | undefined> {
 	const text = SECURE_KEYS.has(key)
 		? await SecureStore.getItemAsync(secure(key))
 		: await Storage.getItem(key);
+	return text ?? undefined;
+}
+
+export async function readJson(key: string): Promise<unknown> {
+	const text = await readRaw(key);
 	if (!text) {
 		return undefined;
 	}

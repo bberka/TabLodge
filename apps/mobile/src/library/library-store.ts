@@ -16,7 +16,7 @@ import {
 	usePrivateStore,
 } from '../private/private-library';
 import {getPreferences} from '../settings/preferences';
-import {readJson, removeKeys, writeJson} from '../platform/storage';
+import {readJson, readRaw, removeKeys, writeJson} from '../platform/storage';
 import {thumbSync} from './image-thumbs';
 import {syncLiveSharedPages} from './shared-pages';
 import {emptyStore, isStore} from './store-shape';
@@ -104,15 +104,25 @@ export async function loadLibrary(): Promise<void> {
 	loaded = true;
 	let ok = false;
 	try {
-		await loadSaved();
-		ok = true;
+		ok = await loadSaved();
 	} finally {
 		finishLoading(ok);
 	}
 }
 
-async function loadSaved(): Promise<void> {
-	const saved = await readJson(LIBRARY_KEY);
+async function loadSaved(): Promise<boolean> {
+	const raw = await readRaw(LIBRARY_KEY);
+	let saved: unknown;
+	let valid = true;
+	if (raw !== undefined) {
+		try {
+			saved = JSON.parse(raw) as unknown;
+			valid = isStore(saved);
+		} catch {
+			valid = false;
+		}
+	}
+
 	if (isStore(saved)) {
 		await mutate(async () => {
 			core.load(saved);
@@ -121,7 +131,7 @@ async function loadSaved(): Promise<void> {
 
 	await refreshStatus();
 	if (!__DEV__) {
-		return;
+		return valid;
 	}
 
 	const seed = await readJson(SEED_KEY);
@@ -131,10 +141,12 @@ async function loadSaved(): Promise<void> {
 		// eslint-disable-next-line n/prefer-global/process -- Expo inlines the literal `process.env.EXPO_PUBLIC_*` at bundle time
 		process.env.EXPO_PUBLIC_SEED_DATA !== '0' &&
 		!syncStatus.connected &&
-		!isStore(saved)
+		raw === undefined
 	) {
 		await loadSampleData();
 	}
+
+	return valid;
 }
 
 export const whenLibraryLoaded = async (): Promise<boolean> => libraryLoaded;
