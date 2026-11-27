@@ -47,7 +47,10 @@ const scheduleSweep = () => {
 
 export async function startSavedImages(): Promise<void> {
 	await refreshImageThumbs();
-	await whenLibraryLoaded();
+	if (!(await whenLibraryLoaded())) {
+		return;
+	}
+
 	subscribeLibrary(scheduleSweep);
 	onTrashChange(scheduleSweep);
 	await sweep().catch(() => undefined);

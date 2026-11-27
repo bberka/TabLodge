@@ -5,6 +5,17 @@ import {isRecoveryStorageKey} from '../src/app/recovery-keys';
 import type {ShowStatus} from '../src/app/common';
 import {WEBP, picture} from './image-fixtures';
 
+vi.mock('../src/app/common', async () => {
+	const {send} = await import('../src/app/message-client');
+	return {
+		send,
+		plural: (count: number, word: string, many = `${word}s`) =>
+			`${count} ${count === 1 ? word : many}`,
+		messageOf: (reason: unknown) =>
+			reason instanceof Error ? reason.message : String(reason),
+	};
+});
+
 type MessageRequest = {
 	type: string;
 	url?: string;
@@ -294,4 +305,77 @@ test('restoreBackupImages counts failed image restores and keeps earlier ones', 
 		failed: 1,
 		error: 'Image storage is full.',
 	});
+});
+
+test('reportBackupImport keeps library Undo available after partial image restoration in merge and replace modes', async () => {
+	const calls: MessageRequest[] = [];
+	stubChrome(async (message) => {
+		calls.push(message);
+		return message.type === 'UNDO' ? {ok: true, label: 'import'} : {ok: true};
+	});
+
+	const {reportBackupImport} = await import('../src/app/recovery-core');
+	const seen: Array<{
+		message: string | null | undefined;
+		error?: unknown;
+		undo?: () => Promise<void> | void;
+	}> = [];
+	const showStatus: ShowStatus = (message, error, options) => {
+		seen.push({message, error, undo: options?.action?.onClick});
+	};
+
+	let reloads = 0;
+	reportBackupImport(
+		'merge',
+		'Added 2 sessions.',
+		'undo-merge',
+		{failed: 2, error: 'Image storage is full.'},
+		showStatus,
+		() => {
+			reloads += 1;
+		},
+	);
+	assert.equal(
+		seen[0]?.message,
+		'Backup added, but 2 images could not be restored. Image storage is full.',
+	);
+	assert.equal(seen[0]?.error, true);
+	assert.ok(seen[0]?.undo);
+	await seen[0].undo();
+	assert.equal(calls.at(-1)?.type, 'UNDO');
+	assert.equal(reloads, 1);
+
+	reportBackupImport(
+		'replace',
+		'Imported the full backup.',
+		'undo-replace',
+		{failed: 1},
+		showStatus,
+		() => {
+			reloads += 1;
+		},
+	);
+	assert.equal(
+		seen[2]?.message,
+		'Backup imported, but 1 image could not be restored.',
+	);
+	assert.equal(seen[2]?.error, true);
+	assert.ok(seen[2]?.undo);
+	await seen[2].undo();
+	assert.equal(calls.at(-1)?.type, 'UNDO');
+	assert.equal(reloads, 2);
+
+	reportBackupImport(
+		'replace',
+		'Imported the full backup.',
+		'undo-ok',
+		{failed: 0},
+		showStatus,
+		() => {
+			reloads += 1;
+		},
+	);
+	assert.equal(seen[4]?.message, 'Imported the full backup.');
+	assert.equal(seen[4]?.error, false);
+	assert.ok(seen[4]?.undo);
 });

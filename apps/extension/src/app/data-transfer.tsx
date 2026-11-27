@@ -114,7 +114,7 @@ import {
 import {validateCredential, weakPasswordHint} from '../shared/passcode';
 import {siteName} from '../shared/web-url';
 import {backupImageParts, restoreBackupImages} from './saved-images';
-import {offerUndo} from './recovery-core';
+import {offerUndo, reportBackupImport} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
@@ -1693,16 +1693,13 @@ export function ImportDialog({
 
 				onOpenChange(false);
 				await onImported?.();
-				if (restoredImages.failed > 0) {
-					showStatus(
-						`Backup added, but ${plural(restoredImages.failed, 'image')} could not be restored.${restoredImages.error ? ` ${restoredImages.error}` : ''}`,
-						true,
-					);
-					return;
-				}
-
-				offerUndo(mergeSummary(merged), merged.undoId, showStatus, async () =>
-					onImported?.(),
+				reportBackupImport(
+					'merge',
+					mergeSummary(merged),
+					merged.undoId,
+					restoredImages,
+					showStatus,
+					async () => onImported?.(),
 				);
 				return;
 			}
@@ -1724,17 +1721,11 @@ export function ImportDialog({
 
 			onOpenChange(false);
 			await onImported?.();
-			if (restoredImages.failed > 0) {
-				showStatus(
-					`Backup imported, but ${plural(restoredImages.failed, 'image')} could not be restored.${restoredImages.error ? ` ${restoredImages.error}` : ''}`,
-					true,
-				);
-				return;
-			}
-
-			offerUndo(
+			reportBackupImport(
+				'replace',
 				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.`,
 				result.undoId,
+				restoredImages,
 				showStatus,
 				async () => onImported?.(),
 			);

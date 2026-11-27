@@ -16,6 +16,7 @@ import {
 } from '../../extension/src/shared/full-backup';
 import {normalizeStore} from '../../extension/src/shared/library-normalize';
 import {addBookmark} from '../src/library/board-edits';
+import {createLibraryCore} from '../src/library/library-core';
 import {addSession} from '../src/library/session-edits';
 import {emptyStore} from '../src/library/store-shape';
 import {buildBackup, readBackup} from '../src/transfer/backup';
@@ -45,11 +46,14 @@ vi.mock(
 	async () => import('./support/fake-preferences'),
 );
 
-const {memory} = await import('./support/memory-storage');
+const {failWrite, holds, memory} = await import('./support/memory-storage');
 const NOW = 1_700_000_000_000;
 
 beforeEach(() => {
 	memory.clear();
+	failWrite.clear();
+	holds.read.clear();
+	holds.write.clear();
 });
 
 function phoneLibrary(sessions = 3, perSession = 4, bookmarks = 5) {
@@ -517,5 +521,51 @@ describe('restoring replaces the library, with a safety copy first', () => {
 			afterReplace: async () => undefined,
 		});
 		assert.deepEqual(ok, {status: 'ok'});
+	});
+
+	test('createLibraryCore.write restores the previous library in memory when storage write fails', async () => {
+		const core = createLibraryCore('tablodge.library');
+		const original = phoneLibrary(2, 1, 1);
+		const backup = phoneLibrary(1, 1, 0);
+		core.load(original);
+		const seen: Array<ReturnType<typeof phoneLibrary>> = [];
+		const stop = core.subscribe(() => {
+			seen.push(core.store);
+		});
+
+		failWrite.add('tablodge.library');
+		const outcome = await runBackupRestore({
+			keepSafety: async () => undefined,
+			replace: async () =>
+				core.mutate(async () =>
+					core.write(replaceLibrary(core.store, backup, NOW + 1)),
+				),
+			afterReplace: async () => undefined,
+		});
+		stop();
+
+		assert.deepEqual(outcome, {status: 'failed'});
+		assert.equal(core.store, original);
+		assert.equal(seen.at(-1), original);
+	});
+
+	test('loadLibrary resolves whenLibraryLoaded to false on read failure and true for an empty library', async () => {
+		vi.stubGlobal('__DEV__', false);
+		try {
+			vi.resetModules();
+			const failedRead = Promise.reject(new Error('read failed'));
+			failedRead.catch(() => undefined);
+			holds.read.set('tablodge.library', failedRead);
+			const failingStore = await import('../src/library/library-store');
+			await assert.rejects(failingStore.loadLibrary(), /read failed/);
+			assert.equal(await failingStore.whenLibraryLoaded(), false);
+
+			vi.resetModules();
+			const emptyLibraryStore = await import('../src/library/library-store');
+			await emptyLibraryStore.loadLibrary();
+			assert.equal(await emptyLibraryStore.whenLibraryLoaded(), true);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 });

@@ -9,6 +9,7 @@ import {emptyStore} from '../src/library/store-shape';
 const events: string[] = [];
 const snacks: Array<{message: string; run?: () => void | Promise<void>}> = [];
 let storedThumbs: SavedThumb[] = [];
+let libraryLoadedOk = true;
 
 const sampleThumb: SavedThumb = {
 	url: 'https://cdn.example/cat.png',
@@ -63,7 +64,7 @@ vi.mock('../src/library/library-store', () => ({
 		events.push('nudge');
 	},
 	subscribeLibrary: () => () => undefined,
-	whenLibraryLoaded: async () => undefined,
+	whenLibraryLoaded: async () => libraryLoadedOk,
 }));
 
 vi.mock('../src/library/trash-storage', () => ({
@@ -78,6 +79,14 @@ beforeEach(() => {
 	events.length = 0;
 	snacks.length = 0;
 	storedThumbs = [sampleThumb];
+	libraryLoadedOk = true;
+});
+
+test('startSavedImages skips sweeping when loading the library failed', async () => {
+	libraryLoadedOk = false;
+	await startSavedImages();
+	assert.deepEqual(storedThumbs, [sampleThumb]);
+	assert.deepEqual(events, ['refresh']);
 });
 
 test('startSavedImages sweeps orphan thumbnails inside mutateRegular even when the library is empty', async () => {

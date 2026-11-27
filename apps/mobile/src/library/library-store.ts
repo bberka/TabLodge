@@ -41,7 +41,7 @@ export const mutateRegular = mutate;
 const regularRetention = () => core.store.settings.trashRetentionDays;
 let loaded = false;
 const {promise: libraryLoaded, resolve: finishLoading} =
-	Promise.withResolvers<void>();
+	Promise.withResolvers<boolean>();
 let sampleOn = false;
 
 let syncStatus: SyncStatus = SYNC_OFF;
@@ -97,14 +97,17 @@ export async function archiveIdleSessions(): Promise<void> {
 
 export async function loadLibrary(): Promise<void> {
 	if (loaded) {
-		return libraryLoaded;
+		await libraryLoaded;
+		return;
 	}
 
 	loaded = true;
+	let ok = false;
 	try {
 		await loadSaved();
+		ok = true;
 	} finally {
-		finishLoading();
+		finishLoading(ok);
 	}
 }
 
@@ -134,7 +137,7 @@ async function loadSaved(): Promise<void> {
 	}
 }
 
-export const whenLibraryLoaded = async (): Promise<void> => libraryLoaded;
+export const whenLibraryLoaded = async (): Promise<boolean> => libraryLoaded;
 
 export const isSampleData = (): boolean => __DEV__ && sampleOn;
 
