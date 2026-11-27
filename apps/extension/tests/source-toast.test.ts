@@ -22,6 +22,8 @@ beforeEach(() => {
 	};
 
 	vi.stubGlobal('document', document);
+	vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
+	vi.stubGlobal('Node', dom.window.Node);
 	vi.stubGlobal('requestAnimationFrame', (run: () => void) => {
 		run();
 		return 0;
@@ -214,4 +216,58 @@ test('a toast held under the pointer past the Undo time loses the button', async
 	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS + 1000);
 	assert.deepEqual(texts(), ['Saved A.']);
 	assert.deepEqual(buttonLabels(), []);
+});
+
+test('when the sole focused Undo button expires, focus returns to the page control and the toast closes', async () => {
+	const pageButton = document.createElement('button');
+	let focused = false;
+	pageButton.focus = () => {
+		focused = true;
+	};
+
+	document.body.append(pageButton);
+	await showUndo('default');
+	const undoButton = root.querySelector('button')!;
+	Object.defineProperty(root, 'activeElement', {
+		configurable: true,
+		get: () => (undoButton.isConnected ? undoButton : null),
+	});
+	const focusIn = new document.defaultView!.Event('focusin', {bubbles: true});
+	Object.defineProperty(focusIn, 'relatedTarget', {value: pageButton});
+	undoButton.dispatchEvent(focusIn);
+
+	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS + 1000);
+	assert.equal(focused, true);
+	assert.deepEqual(buttonLabels(), []);
+	assert.deepEqual(texts(), ['Saved A.']);
+
+	await vi.advanceTimersByTimeAsync(8000);
+	assert.equal(hosts(), 0);
+});
+
+test('when the sole focused Undo button expires after its previous target detached, focus falls back to a page control', async () => {
+	const detached = document.createElement('button');
+	const fallback = document.createElement('button');
+	let fallbackFocused = false;
+	fallback.focus = () => {
+		fallbackFocused = true;
+	};
+
+	document.body.append(fallback);
+	await showUndo('default');
+	const undoButton = root.querySelector('button')!;
+	Object.defineProperty(root, 'activeElement', {
+		configurable: true,
+		get: () => (undoButton.isConnected ? undoButton : null),
+	});
+	const focusIn = new document.defaultView!.Event('focusin', {bubbles: true});
+	Object.defineProperty(focusIn, 'relatedTarget', {value: detached});
+	undoButton.dispatchEvent(focusIn);
+
+	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS + 1000);
+	assert.equal(fallbackFocused, true);
+	assert.deepEqual(buttonLabels(), []);
+
+	await vi.advanceTimersByTimeAsync(8000);
+	assert.equal(hosts(), 0);
 });

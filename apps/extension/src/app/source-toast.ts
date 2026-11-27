@@ -399,9 +399,31 @@ function render(
 	});
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
-	let held = false;
+	let hovered = false;
+	let focused = false;
 	let previous: HTMLElement | undefined;
 	let closed = false;
+	const returnFocus = (except?: HTMLButtonElement) => {
+		if (previous?.isConnected) {
+			previous.focus();
+			return;
+		}
+
+		const sibling = [...list.querySelectorAll('button')].find(
+			(button) => button !== except,
+		);
+		if (sibling) {
+			sibling.focus();
+			return;
+		}
+
+		document
+			.querySelector<HTMLElement>(
+				'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			)
+			?.focus();
+	};
+
 	const close = () => {
 		if (closed) {
 			return;
@@ -424,8 +446,8 @@ function render(
 			}
 		}
 
-		if (hadFocus && previous?.isConnected) {
-			previous.focus();
+		if (hadFocus) {
+			returnFocus();
 		}
 	};
 
@@ -433,18 +455,19 @@ function render(
 	const schedule = () => {
 		clearTimeout(timer);
 		const ms = toastMs(asking ? ASKING_VISIBLE_MS : VISIBLE_MS, prefs.duration);
-		if (!held && !closed && ms !== undefined) {
+		if (!hovered && !focused && !closed && ms !== undefined) {
 			timer = setTimeout(close, ms);
 		}
 	};
 
-	const hold = (value: boolean) => {
-		held = value;
+	box.addEventListener('pointerenter', () => {
+		hovered = true;
 		schedule();
-	};
-
-	box.addEventListener('pointerenter', () => hold(true));
-	box.addEventListener('pointerleave', () => hold(false));
+	});
+	box.addEventListener('pointerleave', () => {
+		hovered = false;
+		schedule();
+	});
 	box.addEventListener('focusin', (event) => {
 		if (
 			event.relatedTarget instanceof HTMLElement &&
@@ -454,9 +477,20 @@ function render(
 			previous = event.relatedTarget;
 		}
 
-		hold(true);
+		focused = true;
+		schedule();
 	});
-	box.addEventListener('focusout', () => hold(false));
+	box.addEventListener('focusout', (event) => {
+		if (
+			event.relatedTarget instanceof Node &&
+			box.contains(event.relatedTarget)
+		) {
+			return;
+		}
+
+		focused = false;
+		schedule();
+	});
 	box.addEventListener('keydown', (event) => {
 		if (event.key === 'Escape') {
 			close();
@@ -472,11 +506,20 @@ function render(
 			return;
 		}
 
-		if (root.activeElement === entry.button) {
-			others[0]?.button.focus();
+		const hadFocus = root.activeElement === entry.button;
+		if (hadFocus) {
+			if (others.length > 0) {
+				others[0].button.focus();
+			} else {
+				focused = false;
+				returnFocus(entry.button);
+			}
 		}
 
 		entry.button.remove();
+		if (hadFocus && others.length === 0) {
+			schedule();
+		}
 	};
 
 	const arm = (entry: ToastButton) => {
