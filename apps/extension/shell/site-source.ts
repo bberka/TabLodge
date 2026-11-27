@@ -42,6 +42,7 @@ import {
 	readRedditSavedPage,
 } from '../src/app/source-reddit';
 import {showSourceToast} from '../src/app/source-toast';
+import {UNDO_OFFER_MS} from '../src/shared/undo-policy';
 import type {ActionResult, SiteSourceOutcome} from '../src/shared/types';
 
 const LOADED = 'tablodgeSiteSource';
@@ -99,6 +100,12 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			: (result?.error ?? `${appName} could not undo that.`);
 	};
 
+	const undoButton = (id: string) => ({
+		label: 'Undo',
+		expiresMs: UNDO_OFFER_MS,
+		run: async () => undo(id),
+	});
+
 	const showSaved = ({
 		outcome,
 		column,
@@ -117,7 +124,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		const text = messages[outcome];
 		if (text) {
 			showSourceToast(text, {
-				actions: undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : [],
+				actions: undoId ? [undoButton(undoId)] : [],
 			});
 		}
 	};
@@ -149,7 +156,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		showSourceToast(text, {
 			error,
 			actions: [
-				...(undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : []),
+				...(undoId ? [undoButton(undoId)] : []),
 				...(alsoSave ? [alsoSaveAction(kept)] : []),
 			],
 		});

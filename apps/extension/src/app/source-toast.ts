@@ -26,6 +26,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 type Theme = 'light' | 'dark';
 export type ToastAction = {
 	label: string;
+	expiresMs?: number;
 	run: () => Promise<string | ToastStep | undefined>;
 };
 type ToastStep = {text: string; action?: ToastAction};
@@ -336,7 +337,11 @@ function render(
 	});
 	box.append(message);
 
-	type ToastButton = {action?: ToastAction; button: HTMLButtonElement};
+	type ToastButton = {
+		action?: ToastAction;
+		button: HTMLButtonElement;
+		expiry?: ReturnType<typeof setTimeout>;
+	};
 	const buttons = actions.map((action): ToastButton => {
 		const button = document.createElement('button');
 		button.type = 'button';
@@ -405,6 +410,10 @@ function render(
 		closed = true;
 		current.closers = current.closers.filter((closer) => closer !== close);
 		clearTimeout(timer);
+		for (const {expiry} of buttons) {
+			clearTimeout(expiry);
+		}
+
 		const hadFocus =
 			root.activeElement !== null && box.contains(root.activeElement);
 		box.remove();
@@ -453,6 +462,31 @@ function render(
 			close();
 		}
 	});
+	const expire = (entry: ToastButton) => {
+		const others = buttons.filter(
+			({button}) => button !== entry.button && box.contains(button),
+		);
+		if (prefs.duration === 'dismiss' && others.length === 0) {
+			entry.action = undefined;
+			entry.button.textContent = 'Close';
+			return;
+		}
+
+		if (root.activeElement === entry.button) {
+			others[0]?.button.focus();
+		}
+
+		entry.button.remove();
+	};
+
+	const arm = (entry: ToastButton) => {
+		clearTimeout(entry.expiry);
+		const ms = entry.action?.expiresMs;
+		if (ms !== undefined) {
+			entry.expiry = setTimeout(expire, ms, entry);
+		}
+	};
+
 	const run = async (entry: ToastButton) => {
 		const {action, button} = entry;
 		if (button.getAttribute('aria-disabled') === 'true') {
@@ -471,6 +505,7 @@ function render(
 		}
 
 		button.setAttribute('aria-disabled', 'true');
+		clearTimeout(entry.expiry);
 		const next = await action.run();
 		if (next === undefined) {
 			close();
@@ -482,11 +517,13 @@ function render(
 		entry.action = step.action;
 		button.textContent = step.action?.label ?? 'Close';
 		button.removeAttribute('aria-disabled');
+		arm(entry);
 		schedule();
 	};
 
 	for (const entry of buttons) {
 		entry.button.addEventListener('click', () => void run(entry));
+		arm(entry);
 	}
 
 	schedule();

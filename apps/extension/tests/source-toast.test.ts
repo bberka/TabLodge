@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {parseHTML} from 'linkedom';
 import {afterEach, beforeEach, test, vi} from 'vite-plus/test';
 import {showSourceToast, type ToastAction} from '../src/app/source-toast';
+import {UNDO_OFFER_MS} from '../src/shared/undo-policy';
 
 let root: ParentNode & {querySelectorAll: ParentNode['querySelectorAll']};
 let document: Document;
@@ -174,4 +175,43 @@ test('Until dismissed gives a notice with no button of its own a Close button th
 	assert.deepEqual(texts(), ['Saved A.']);
 	await click('Close');
 	assert.deepEqual(texts(), []);
+});
+
+const buttonLabels = () =>
+	[...root.querySelectorAll('button')].map((button) => button.textContent);
+const showUndo = async (duration: string) => {
+	vi.stubGlobal('chrome', {
+		extension: {inIncognitoContext: false},
+		storage: {local: {get: async () => ({})}},
+		runtime: {
+			sendMessage: async () => ({ok: true, position: 'default', duration}),
+		},
+	});
+	showSourceToast('Saved A.', {
+		actions: [{...undoOf([], 'A'), expiresMs: UNDO_OFFER_MS}],
+	});
+	await vi.advanceTimersByTimeAsync(0);
+};
+
+test('until dismissed, Undo turns into Close once the worker would refuse it', async () => {
+	await showUndo('dismiss');
+	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS - 1000);
+	assert.deepEqual(buttonLabels(), ['Undo']);
+	await vi.advanceTimersByTimeAsync(2000);
+	assert.deepEqual(texts(), ['Saved A.']);
+	assert.deepEqual(buttonLabels(), ['Close']);
+	await click('Close');
+	assert.equal(hosts(), 0);
+});
+
+test('a toast held under the pointer past the Undo time loses the button', async () => {
+	await showUndo('default');
+	root
+		.querySelector('[role="status"]')!
+		.parentElement!.dispatchEvent(
+			new document.defaultView!.Event('pointerenter'),
+		);
+	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS + 1000);
+	assert.deepEqual(texts(), ['Saved A.']);
+	assert.deepEqual(buttonLabels(), []);
 });
