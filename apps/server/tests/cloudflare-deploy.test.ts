@@ -9,6 +9,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from 'node:fs';
+import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
@@ -16,16 +17,15 @@ import {test} from 'vite-plus/test';
 import {PROTOCOL_VERSION} from '../../extension/src/shared/sync/change-log';
 import {
 	normalizeDomain,
-	parseJsonc,
 	prepareWranglerDeploy,
 	readCustomDomain,
+	readWranglerConfig,
 } from '../cloudflare-deploy/deploy.js';
 import {runSetup, setCustomDomainInWrangler} from '../scripts/setup-cloudflare';
 
 const serverDirectory = join(import.meta.dirname, '..');
 const deployDirectory = join(serverDirectory, 'cloudflare-deploy');
-
-const readJsonc = (path: string) => parseJsonc(readFileSync(path, 'utf8'));
+const realWrangler = createRequire(import.meta.url).resolve('wrangler');
 
 function withTempDeployCopy(
 	work: (context: {
@@ -52,6 +52,10 @@ function withTempDeployCopy(
 
 		mkdirSync(join(wranglerDirectory, 'bin'), {recursive: true});
 		writeFileSync(join(wranglerDirectory, 'package.json'), '{}');
+		writeFileSync(
+			join(wranglerDirectory, 'index.js'),
+			`module.exports = require(${JSON.stringify(realWrangler)});\n`,
+		);
 		writeFileSync(
 			join(wranglerDirectory, 'bin', 'wrangler.js'),
 			`const fs = require('node:fs');
@@ -90,8 +94,8 @@ test('the Deploy to Cloudflare Worker states its sync protocol where the update 
 });
 
 test('the Deploy to Cloudflare config keeps the same Durable Object and limits as cf:setup', () => {
-	const button = readJsonc(join(deployDirectory, 'wrangler.jsonc'));
-	const setup = readJsonc(join(serverDirectory, 'wrangler.jsonc'));
+	const button = readWranglerConfig(join(deployDirectory, 'wrangler.jsonc'));
+	const setup = readWranglerConfig(join(serverDirectory, 'wrangler.jsonc'));
 	for (const key of [
 		'name',
 		'compatibility_date',
@@ -104,7 +108,7 @@ test('the Deploy to Cloudflare config keeps the same Durable Object and limits a
 });
 
 test('the Deploy to Cloudflare package and config keep CUSTOM_DOMAIN inside vars only', () => {
-	const config = readJsonc(join(deployDirectory, 'wrangler.jsonc'));
+	const config = readWranglerConfig(join(deployDirectory, 'wrangler.jsonc'));
 	assert.equal(config.vars?.CUSTOM_DOMAIN, '');
 	assert.equal('routes' in config, false);
 	assert.equal('workers_dev' in config, false);
@@ -149,7 +153,7 @@ test('deploy.js runs plain wrangler deploy when CUSTOM_DOMAIN is empty', () => {
 		assert.deepEqual(args, ['deploy', '--dry-run']);
 		assert.equal(existsSync(capturedConfigPath), false);
 	});
-});
+}, 60_000);
 
 test('deploy.js passes --domain and keeps workers_dev enabled when CUSTOM_DOMAIN is set', () => {
 	withTempDeployCopy(({directory, logPath, capturedConfigPath, env}) => {
@@ -181,7 +185,7 @@ test('deploy.js passes --domain and keeps workers_dev enabled when CUSTOM_DOMAIN
 			'sync.example.com',
 		);
 	});
-});
+}, 60_000);
 
 test('deploy.js reads CUSTOM_DOMAIN from process.env and rejects invalid domains', () => {
 	withTempDeployCopy(({directory, logPath, env}) => {
@@ -204,7 +208,7 @@ test('deploy.js reads CUSTOM_DOMAIN from process.env and rejects invalid domains
 		assert.match(bad.stderr, /Invalid custom domain/);
 		assert.equal(existsSync(logPath), false);
 	});
-});
+}, 60_000);
 
 test('setCustomDomainInWrangler updates and clears CUSTOM_DOMAIN while keeping comments', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'tablodge-wrangler-edit-'));
@@ -224,11 +228,80 @@ test('setCustomDomainInWrangler updates and clears CUSTOM_DOMAIN while keeping c
 	}
 });
 
+test('deploy.js reads a config with trailing and block comments', () => {
+	withTempDeployCopy(({directory, logPath, capturedConfigPath, env}) => {
+		writeFileSync(
+			join(directory, 'wrangler.jsonc'),
+			`/* Worker config */
+{
+	"name": "tablodge-sync", // Worker name
+	"main": "worker.js", /* entry */
+	"vars": {
+		"NOTE": "https://x.example/*a*/,}", // keeps comment markers
+		"CUSTOM_DOMAIN": "", /* none */
+	},
+}
+`,
+		);
+		const run = (domain: string) =>
+			spawnSync('node', ['deploy.js'], {
+				cwd: directory,
+				env: {...env, CUSTOM_DOMAIN: domain},
+				encoding: 'utf8',
+			});
+
+		const plain = run('');
+		assert.equal(plain.status, 0, plain.stderr);
+		assert.deepEqual(JSON.parse(readFileSync(logPath, 'utf8')), ['deploy']);
+
+		const custom = run('sync.example.com');
+		assert.equal(custom.status, 0, custom.stderr);
+		const captured = JSON.parse(readFileSync(capturedConfigPath, 'utf8')) as {
+			vars: Record<string, string>;
+		};
+		assert.equal(captured.vars.NOTE, 'https://x.example/*a*/,}');
+	});
+}, 60_000);
+
+test('setCustomDomainInWrangler edits vars.CUSTOM_DOMAIN, not a comment that names it', () => {
+	const directory = mkdtempSync(join(tmpdir(), 'tablodge-wrangler-comment-'));
+	try {
+		const configPath = join(directory, 'wrangler.jsonc');
+		const comments = [
+			'// "CUSTOM_DOMAIN": ""',
+			'/* "CUSTOM_DOMAIN": "block.example.com" */',
+		];
+		for (const active of ['"CUSTOM_DOMAIN": "old.example.com",', '']) {
+			writeFileSync(
+				configPath,
+				`{
+	"vars": {
+		${comments.join('\n\t\t')}
+		${active}
+		"MAX_RECORDS": "1", // limit
+	},
+}
+`,
+			);
+
+			setCustomDomainInWrangler(configPath, 'new.example.com');
+
+			assert.equal(readCustomDomain(configPath, {}), 'new.example.com');
+			const text = readFileSync(configPath, 'utf8');
+			for (const comment of [...comments, '// limit']) {
+				assert.ok(text.includes(comment), comment);
+			}
+		}
+	} finally {
+		rmSync(directory, {recursive: true, force: true});
+	}
+});
+
 test('prepareWranglerDeploy honors explicit workers_dev: false and cleans up temp config', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'tablodge-prepare-'));
 	try {
 		const configPath = join(directory, 'wrangler.jsonc');
-		const config = readJsonc(join(serverDirectory, 'wrangler.jsonc'));
+		const config = readWranglerConfig(join(serverDirectory, 'wrangler.jsonc'));
 		writeFileSync(
 			configPath,
 			JSON.stringify({...config, workers_dev: false}, null, 2),

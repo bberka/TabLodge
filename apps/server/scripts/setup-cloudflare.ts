@@ -6,6 +6,7 @@ import process from 'node:process';
 import {createInterface} from 'node:readline/promises';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
+import {applyEdits, modify} from 'jsonc-parser';
 import {
 	normalizeDomain,
 	prepareWranglerDeploy,
@@ -50,33 +51,14 @@ export function setCustomDomainInWrangler(
 	configPath: string,
 	domain: string,
 ): void {
-	const serialized = JSON.stringify(normalizeDomain(domain));
 	const text = readFileSync(configPath, 'utf8');
-	const pattern = /("CUSTOM_DOMAIN"\s*:\s*)"(?:[^"\\]|\\.)*"/;
-	if (pattern.test(text)) {
-		writeFileSync(
-			configPath,
-			text.replace(
-				pattern,
-				(_match, prefix: string) => `${prefix}${serialized}`,
-			),
-		);
-		return;
-	}
-
-	const varsPattern = /("vars"\s*:\s*\{)/;
-	if (!varsPattern.test(text)) {
-		throw new Error(`Could not find "vars" in ${configPath}`);
-	}
-
-	writeFileSync(
-		configPath,
-		text.replace(
-			varsPattern,
-			(_match, prefix: string) =>
-				`${prefix}\n\t\t"CUSTOM_DOMAIN": ${serialized},`,
-		),
+	const edits = modify(
+		text,
+		['vars', 'CUSTOM_DOMAIN'],
+		normalizeDomain(domain),
+		{formattingOptions: {insertSpaces: false, tabSize: 1}},
 	);
+	writeFileSync(configPath, applyEdits(text, edits));
 }
 
 async function promptForDomain(

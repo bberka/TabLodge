@@ -25,6 +25,7 @@
 	"devDependencies": {
 		"@cloudflare/workers-types": "^5.20261110.1",
 		"@types/node": "^24.19.2",
+		"jsonc-parser": "^3.3.1",
 		"vite-plus": "catalog:",
 		"wrangler": "^4.160.0"
 	}

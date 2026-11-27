@@ -1,25 +1,18 @@
 import {spawnSync} from 'node:child_process';
-import {
-	mkdtempSync,
-	readFileSync,
-	realpathSync,
-	rmSync,
-	writeFileSync,
-} from 'node:fs';
+import {mkdtempSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {experimental_readRawConfig as readRawConfig} from 'wrangler';
 
 const WORKERS_DEV_KEY = 'workers_dev';
 const HOSTNAME =
 	/^[0-9a-z](?:[-0-9a-z]{0,61}[0-9a-z])?(?:\.[0-9a-z](?:[-0-9a-z]{0,61}[0-9a-z])?)+$/;
 
-export function parseJsonc(text) {
-	return JSON.parse(
-		text.replaceAll(/^\s*\/\/.*$/gm, '').replaceAll(/,(?=\s*[\]}])/g, ''),
-	);
+export function readWranglerConfig(configPath) {
+	return readRawConfig({config: configPath}).rawConfig;
 }
 
 export function normalizeDomain(raw) {
@@ -42,7 +35,7 @@ export function normalizeDomain(raw) {
 }
 
 export function readCustomDomain(configPath, env = process.env) {
-	const config = parseJsonc(readFileSync(configPath, 'utf8'));
+	const config = readWranglerConfig(configPath);
 	const raw = env.CUSTOM_DOMAIN?.trim() || config.vars?.CUSTOM_DOMAIN || '';
 	return normalizeDomain(raw);
 }
@@ -62,7 +55,7 @@ export function prepareWranglerDeploy({
 		return {args: ['deploy', ...extraArgs], cleanup() {}};
 	}
 
-	const config = parseJsonc(readFileSync(configPath, 'utf8'));
+	const config = readWranglerConfig(configPath);
 	const resolvedConfig = {
 		...config,
 		main: path.resolve(directory, config.main),

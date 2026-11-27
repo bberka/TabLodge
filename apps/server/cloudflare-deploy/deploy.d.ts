@@ -2,7 +2,7 @@ export type WranglerConfig = Record<string, unknown> & {
 	vars?: Record<string, string>;
 };
 
-export function parseJsonc(text: string): WranglerConfig;
+export function readWranglerConfig(configPath: string): WranglerConfig;
 
 export function normalizeDomain(raw: string): string;
 
