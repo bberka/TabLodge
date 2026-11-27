@@ -981,6 +981,7 @@ export async function beginPrivateChange(): Promise<void> {
 }
 
 export function nudgePrivate(shouldSync = true): void {
+	editSeq += 1;
 	privateChangesInFlight = Math.max(0, privateChangesInFlight - 1);
 	if (shouldSync) {
 		client?.localChanged();

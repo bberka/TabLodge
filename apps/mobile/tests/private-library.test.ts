@@ -1580,6 +1580,51 @@ describe('disconnecting and locking by itself', () => {
 			);
 		});
 
+		test('a private change completing after the sync snapshot keeps push evidence dirty', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await phone.syncPrivate();
+			await addLink(phone, 'https://snapshot.example/');
+
+			const responseGate = Promise.withResolvers<void>();
+			const started = Promise.withResolvers<void>();
+			const baseFetch = globalThis.fetch;
+			vi.stubGlobal(
+				'fetch',
+				async (input: string | URL | Request, init?: RequestInit) => {
+					const url =
+						typeof input === 'string'
+							? input
+							: input instanceof URL
+								? input.href
+								: input.url;
+					if (url.endsWith('/private/v1/changes') && init?.method === 'POST') {
+						started.resolve();
+						await responseGate.promise;
+					}
+
+					return baseFetch(input, init);
+				},
+			);
+			try {
+				await phone.beginPrivateChange();
+				const syncing = phone.syncPrivate();
+				await started.promise;
+				phone.nudgePrivate(false);
+				responseGate.resolve();
+				await syncing;
+			} finally {
+				vi.stubGlobal('fetch', baseFetch);
+			}
+
+			await phone.lockPrivate();
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
 		test('an edit is not saved when its dirty marker cannot be persisted', async () => {
 			const phone = await startPhone();
 			await phone.setupPrivate(PIN);
