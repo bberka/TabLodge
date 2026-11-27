@@ -151,6 +151,7 @@ const serial = async <T>(step: () => Promise<T>): Promise<T> => {
 
 let epoch = 0;
 let editSeq = 0;
+let privateChangesInFlight = 0;
 
 const markUnpushed = async () => {
 	editSeq += 1;
@@ -355,11 +356,15 @@ function createClient() {
 			live();
 			await core.mutate(async () => {
 				live();
-				if (roundReadSeq !== editSeq) {
+				if (
+					roundReadSeq !== editSeq ||
+					privateChangesInFlight > 0 ||
+					status.refused > 0
+				) {
 					return;
 				}
 
-				await removeKeys([UNPUSHED_KEY]);
+				await writeJson(UNPUSHED_KEY, false);
 				if (roundReadSeq !== editSeq) {
 					await writeJson(UNPUSHED_KEY, true);
 				}
@@ -475,8 +480,8 @@ export async function setupPrivate(credential?: Credential): Promise<void> {
 	await serial(async () => {
 		await settleErase();
 		core.load(emptyStore(Date.now()));
-		await core.write(core.store);
 		await markUnpushed();
+		await core.write(core.store);
 		exists = true;
 		await writeJson(ON_KEY, true);
 		await (credential ? protect(credential) : setLock(undefined));
@@ -504,8 +509,8 @@ async function protect(credential: Credential): Promise<void> {
 
 export async function protectPrivate(credential: Credential): Promise<void> {
 	await serial(async () => {
-		await protect(credential);
 		await markUnpushed();
+		await protect(credential);
 	});
 	stopClient();
 	refreshState();
@@ -806,7 +811,7 @@ async function lastPushCompleted(url: string): Promise<boolean> {
 		readPending(),
 	]);
 	if (
-		unpushed === true ||
+		unpushed !== false ||
 		pendingSent.length > 0 ||
 		!isRecord(savedStatus) ||
 		savedStatus.url !== url ||
@@ -814,6 +819,7 @@ async function lastPushCompleted(url: string): Promise<boolean> {
 		typeof savedStatus.lastSyncAt !== 'number' ||
 		savedStatus.pending !== 0 ||
 		savedStatus.error !== null ||
+		(typeof savedStatus.refused === 'number' && savedStatus.refused > 0) ||
 		savedStatus.needsKey === true
 	) {
 		return false;
@@ -961,17 +967,25 @@ export async function editPrivate(
 			return;
 		}
 
-		await core.write(next);
 		await markUnpushed();
+		await core.write(next);
 	});
 	client?.localChanged();
 }
 
-export const nudgePrivate = (): void => {
-	editSeq += 1;
-	void writeJson(UNPUSHED_KEY, true).catch(() => undefined);
-	client?.localChanged();
-};
+export async function beginPrivateChange(): Promise<void> {
+	await core.mutate(async () => {
+		await markUnpushed();
+		privateChangesInFlight += 1;
+	});
+}
+
+export function nudgePrivate(shouldSync = true): void {
+	privateChangesInFlight = Math.max(0, privateChangesInFlight - 1);
+	if (shouldSync) {
+		client?.localChanged();
+	}
+}
 
 export async function syncPrivate(): Promise<void> {
 	await client?.syncNow().catch(() => undefined);
@@ -1107,8 +1121,8 @@ export async function takeInSent(): Promise<void> {
 				received.sessions.push(...entry.sessions);
 			}
 
-			await core.write(addSent(core.store, received).store);
 			await markUnpushed();
+			await core.write(addSent(core.store, received).store);
 		});
 		client?.localChanged();
 		const imported = new Set(ready.map((entry) => entry.id));

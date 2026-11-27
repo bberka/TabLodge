@@ -1548,6 +1548,68 @@ describe('disconnecting and locking by itself', () => {
 			);
 		});
 
+		test('missing push evidence after an older version hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await phone.syncPrivate();
+			memory.delete('tablodge.private.unpushed');
+			await addLink(phone, 'https://legacy-unsynced.example/');
+			memory.delete('tablodge.private.unpushed');
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('a successful sync response with a clock refusal hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await addLink(phone, 'https://clock-refused.example/');
+			server.setNow(0);
+			await phone.syncPrivate();
+			assert.ok(phone.getPrivateStatus().refused > 0);
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('an edit is not saved when its dirty marker cannot be persisted', async () => {
+			const phone = await startPhone();
+			await phone.setupPrivate(PIN);
+			const before = phone.getPrivateStore();
+			failWrite.add('tablodge.private.unpushed');
+
+			await assert.rejects(
+				addLink(phone, 'https://marker-failed.example/'),
+				/storage failed/,
+			);
+			assert.equal(phone.getPrivateStore(), before);
+		});
+
+		test('private trash is not changed when its dirty marker cannot be persisted', async () => {
+			const phone = await startPhone();
+			await phone.setupPrivate(PIN);
+			await connectPhone(phone);
+			await phone.syncPrivate();
+			const trashKey = 'tablodge.private.trash';
+			memory.set(trashKey, JSON.stringify([{id: 'kept-until-marked'}]));
+			failWrite.add('tablodge.private.unpushed');
+
+			const {emptyTrash} = await import('../src/library/trash-store');
+			await assert.rejects(emptyTrash('private'), /storage failed/);
+			assert.equal(
+				memory.get(trashKey),
+				JSON.stringify([{id: 'kept-until-marked'}]),
+			);
+		});
+
 		test('server connected with private sync on and a push pending hedges', async () => {
 			const phone = await startPhone();
 			await connectPhone(phone);
