@@ -17126,3 +17126,35 @@ test('newBookmarkPosition defaults to bottom, normalizes invalid values, resets,
 	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.newBookmarkPosition, 'bottom');
 });
+
+test('imported bookmarks follow newBookmarkPosition as well', async () => {
+	const col = 'bookmark-default';
+	const harness = createWorkerHarness(
+		stateWithSession({newBookmarkPosition: 'top'}),
+	);
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://kept.example/', title: 'Kept', columnId: col},
+	});
+	const before = harness.state.bookmarks
+		.filter((entry) => entry.columnId === col)
+		.map((entry) => entry.url);
+
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: {
+			bookmarks: [
+				{url: 'https://imported-a.example/', title: 'A', columnId: col},
+				{url: 'https://imported-b.example/', title: 'B', columnId: col},
+			],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	assert.equal(imported.bookmarks, 2);
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((entry) => entry.columnId === col)
+			.map((entry) => entry.url),
+		['https://imported-a.example/', 'https://imported-b.example/', ...before],
+	);
+});
