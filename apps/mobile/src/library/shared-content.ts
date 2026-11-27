@@ -136,3 +136,19 @@ export function shouldCloseAfterShare(
 ): boolean {
 	return quick && afterShare === 'close';
 }
+
+export async function decideCloseAfterShare(
+	quick: boolean,
+	load: () => Promise<void>,
+	readAfterShare: () => AfterShare,
+): Promise<boolean> {
+	if (!quick) {
+		return false;
+	}
+
+	try {
+		await load();
+	} catch {}
+
+	return shouldCloseAfterShare(quick, readAfterShare());
+}

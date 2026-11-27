@@ -32,33 +32,40 @@ const CHANGED_AT_KEY = 'tablodge.prefs.changed-at';
 let current = defaults;
 let legacySiteIcons: 'browser' | undefined;
 let changedAt: ChangedAt = {};
+let loaded: Promise<void> | undefined;
 const listeners = new Set<() => void>();
 
 const isChangedAt = (value: unknown): value is ChangedAt =>
 	typeof value === 'object' && value !== null;
 
-export async function loadPreferences(): Promise<void> {
-	const savedAt = await readJson(CHANGED_AT_KEY);
-	changedAt = isChangedAt(savedAt)
-		? Object.fromEntries(
-				Object.entries(savedAt).filter(
-					([, time]) => typeof time === 'number' && time > 0,
-				),
-			)
-		: {};
-	const saved = await readJson(KEY);
-	if (typeof saved !== 'object' || saved === null) {
-		return;
-	}
+export function loadPreferences(): Promise<void> {
+	loaded ??= (async () => {
+		const savedAt = await readJson(CHANGED_AT_KEY);
+		changedAt = isChangedAt(savedAt)
+			? Object.fromEntries(
+					Object.entries(savedAt).filter(
+						([, time]) => typeof time === 'number' && time > 0,
+					),
+				)
+			: {};
+		const saved = await readJson(KEY);
+		if (typeof saved !== 'object' || saved === null) {
+			return;
+		}
 
-	legacySiteIcons = legacySiteIconsOf(
-		(saved as Record<string, unknown>).siteIcons,
-	);
-	current = parsePreferences(saved);
-	applyTheme(current.theme);
-	for (const listener of listeners) {
-		listener();
-	}
+		legacySiteIcons = legacySiteIconsOf(
+			(saved as Record<string, unknown>).siteIcons,
+		);
+		current = parsePreferences(saved);
+		applyTheme(current.theme);
+		for (const listener of listeners) {
+			listener();
+		}
+	})().catch((error: unknown) => {
+		loaded = undefined;
+		throw error;
+	});
+	return loaded;
 }
 
 export const getLegacySiteIcons = (): 'browser' | undefined => legacySiteIcons;
