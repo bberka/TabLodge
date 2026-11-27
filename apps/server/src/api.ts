@@ -89,6 +89,7 @@ const FEATURES = [
 	'page-source',
 	'sources',
 	'settings',
+	'thumbs',
 ];
 const PREVIEWS_PER_MINUTE = 600;
 const PREVIEW_CACHE_SIZE = 500;

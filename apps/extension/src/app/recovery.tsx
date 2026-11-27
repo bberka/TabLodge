@@ -17,6 +17,7 @@ import {
 	Trash2,
 	Undo2,
 } from 'lucide-react';
+import {imageUsageText} from '../shared/image-store';
 import {
 	Badge,
 	Button,
@@ -789,7 +790,12 @@ function BackupRow({
 	);
 }
 
-type UsageText = {snapshots: string; backups: string; trash: string};
+type UsageText = {
+	snapshots: string;
+	backups: string;
+	trash: string;
+	images: string;
+};
 
 const RECOVERY_KEY = /\.(?:trash|backups|snapshots)$/;
 
@@ -932,6 +938,10 @@ export function RecoveryTools({
 				snapshots: bytesText(usageResult.usage.snapshots),
 				backups: bytesText(usageResult.usage.backups),
 				trash: bytesText(usageResult.usage.trash),
+				images: imageUsageText(
+					usageResult.usage.images,
+					usageResult.usage.imageBudget,
+				),
 			});
 		}
 
@@ -1085,7 +1095,8 @@ export function RecoveryTools({
 		<div className="space-y-3 border-t border-border/70 pt-4">
 			<p className="text-xs text-muted-foreground tabular-nums">
 				Backups {usage?.backups ?? '…'} · Trash {usage?.trash ?? '…'} ·
-				Snapshots {usage?.snapshots ?? '…'}
+				Snapshots {usage?.snapshots ?? '…'} · Saved images{' '}
+				{usage?.images ?? '…'}
 			</p>
 			{backups?.downloadError && (
 				<p role="status" className="text-xs font-medium text-destructive">

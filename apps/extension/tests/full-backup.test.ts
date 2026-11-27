@@ -10,9 +10,19 @@ import {
 	protectedFullBackupFilename,
 	readFullBackup,
 	readProtectedFullBackup,
+	backupImageFile,
+	backupImages,
+	importFileLimit,
 	type FullBackupParts,
 } from '../src/shared/full-backup';
+import {
+	IMAGE_MAX_BYTES,
+	base64ToBytes,
+	imageId,
+	parseSavedImage,
+} from '../src/shared/image-store';
 import {looksEncrypted} from '../src/shared/crypto-envelope';
+import {PNG, picture} from './image-fixtures';
 
 const parts: FullBackupParts = {
 	state: {
@@ -51,6 +61,7 @@ test('a full backup round-trips through the ZIP', () => {
 		snapshots: 2,
 		trash: 1,
 		copies: 1,
+		images: 0,
 	});
 	const read = readFullBackup(bytes);
 	assert.ok(read);
@@ -62,12 +73,13 @@ test('a full backup round-trips through the ZIP', () => {
 	assert.deepEqual(read.copies, parts.copies);
 });
 
-test('the ZIP holds exactly the six files and the file name is dated', () => {
+test('the ZIP holds exactly the seven files and the file name is dated', () => {
 	const {bytes} = buildFullBackup(parts, {appVersion: '1'});
 	const names = Object.keys(unzipSync(bytes)).toSorted();
 	assert.deepEqual(names, [
 		'copies.json',
 		'data.json',
+		'images.json',
 		'manifest.json',
 		'preferences.json',
 		'snapshots.json',
@@ -126,6 +138,9 @@ test('optional files may be missing', () => {
 	assert.equal(read.preferences, undefined);
 	assert.equal(read.counts.snapshots, 0);
 	assert.deepEqual(read.copies, [], 'a backup from before copies has none');
+	assert.deepEqual(read.images, [], 'a backup from before images has none');
+	assert.deepEqual(read.imageFiles, {});
+	assert.equal(read.counts.images, 0);
 });
 
 test('a protected full backup is not a ZIP and reads back with the credential', async () => {
@@ -186,4 +201,80 @@ test('a backup made while the locked area existed restores without it, even when
 		assert.equal('locked' in read, false);
 		assert.deepEqual(read.state, parts.state);
 	}
+});
+
+const pictured = () => {
+	const {data, ...thumb} = picture();
+	const {data: _other, ...elsewhere} = picture('https://cdn.example/far.png');
+	return {
+		images: [thumb, elsewhere],
+		imageFiles: {
+			[backupImageFile({url: thumb.url, type: 'image/png'})]:
+				base64ToBytes(data),
+		},
+	};
+};
+
+test('each original is a real picture file in the ZIP, and comes back joined to its thumbnail', () => {
+	const {bytes, manifest} = buildFullBackup(
+		{...parts, ...pictured()},
+		{appVersion: '1'},
+	);
+	assert.equal(manifest.counts.images, 2);
+	const name = `images/${imageId('https://cdn.example/cat.png')}.png`;
+	const files = unzipSync(bytes);
+	assert.deepEqual(
+		Object.keys(files).filter((file) => file.startsWith('images/')),
+		[name],
+	);
+	assert.deepEqual(files[name], base64ToBytes(PNG), 'the file opens as it is');
+
+	const read = readFullBackup(bytes);
+	assert.ok(read);
+	assert.equal(read.counts.images, 2);
+	const [held, elsewhere] = backupImages(read);
+	const image = parseSavedImage(held);
+	assert.equal(typeof image === 'object' && image.data, PNG);
+	assert.equal(
+		(elsewhere as {data?: string}).data,
+		undefined,
+		'a thumbnail whose original is on another device stays a thumbnail',
+	);
+});
+
+test('a reader that keeps no originals skips the picture files', () => {
+	const {bytes} = buildFullBackup({...parts, ...pictured()}, {appVersion: '1'});
+	const read = readFullBackup(bytes, {imageFiles: false});
+	assert.ok(read);
+	assert.deepEqual(read.imageFiles, {});
+	assert.equal(read.counts.images, 2);
+	assert.equal((backupImages(read)[0] as {data?: string}).data, undefined);
+});
+
+test('files under images/ that are not pictures by name, or are over the image cap, are left out', () => {
+	const base = {
+		'manifest.json': strToU8(
+			JSON.stringify({format: 'tablodge-full-backup', version: 1}),
+		),
+		'data.json': strToU8('{"groups":[]}'),
+	};
+	const read = readFullBackup(
+		zipSync({
+			...base,
+			'images/evil.html': strToU8('<script>'),
+			'images/../escape.png': base64ToBytes(PNG),
+			'images/huge.png': [new Uint8Array(IMAGE_MAX_BYTES + 1), {level: 0}],
+			'images/ok.png': base64ToBytes(PNG),
+		}),
+	);
+	assert.deepEqual(Object.keys(read?.imageFiles ?? {}), ['images/ok.png']);
+});
+
+test('a backup file may be larger than a text import by the image budget', () => {
+	const text = 45 * 1024 * 1024;
+	assert.equal(importFileLimit('links.json', text), text);
+	assert.ok(
+		importFileLimit('tablodge-full-2026-03-04.zip', text) > 145_000_000,
+	);
+	assert.ok(importFileLimit('tablodge-full-2026-03-04.zip.enc', text) > text);
 });

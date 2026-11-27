@@ -10,6 +10,7 @@ export const PAGES = [
 	'sidepanel',
 	'palette',
 	'reader',
+	'image',
 ] as const;
 
 export const THEMES = ['light', 'dark'] as const;

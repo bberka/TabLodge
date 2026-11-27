@@ -7,6 +7,15 @@ import {
 	fileNamePrefix,
 } from './backup-format';
 import {dateStamp} from './export-formats';
+import {
+	IMAGE_BUDGET,
+	IMAGE_EXTENSIONS,
+	IMAGE_MAX_BYTES,
+	IMAGE_TYPES,
+	bytesToBase64,
+	imageId,
+	type ImageType,
+} from './image-store';
 
 export type FullBackupParts = {
 	state: unknown;
@@ -14,6 +23,8 @@ export type FullBackupParts = {
 	snapshots: unknown;
 	trash: unknown;
 	copies?: unknown;
+	images?: unknown;
+	imageFiles?: Readonly<Record<string, Uint8Array>>;
 };
 
 export type FullBackupCounts = {
@@ -25,6 +36,7 @@ export type FullBackupCounts = {
 	snapshots: number;
 	trash: number;
 	copies: number;
+	images: number;
 };
 
 export type FullBackupManifest = {
@@ -49,8 +61,14 @@ const FILES = {
 	snapshots: 'snapshots.json',
 	trash: 'trash.json',
 	copies: 'copies.json',
+	images: 'images.json',
 } as const;
+const IMAGE_FILE = /^images\/[\w-]+\.(?:jpg|png|gif|webp|avif)$/;
 const MAX_UNPACKED_BYTES = 60 * 1024 * 1024;
+const BACKUP_NAME = /\.zip(?:\.enc)?$/i;
+
+export const importFileLimit = (name: string, textLimit: number) =>
+	BACKUP_NAME.test(name) ? textLimit + IMAGE_BUDGET + 1024 * 1024 : textLimit;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -83,6 +101,7 @@ export function countFullBackup(parts: FullBackupParts): FullBackupCounts {
 			: 0,
 		trash: isRecord(parts.trash) ? lengthOf(parts.trash.items) : 0,
 		copies: lengthOf(parts.copies),
+		images: lengthOf(parts.images),
 	};
 }
 
@@ -142,6 +161,12 @@ export function buildFullBackup(
 			[FILES.snapshots]: json(parts.snapshots),
 			[FILES.trash]: json(parts.trash),
 			[FILES.copies]: json(parts.copies ?? []),
+			[FILES.images]: json(parts.images ?? []),
+			...Object.fromEntries(
+				Object.entries(parts.imageFiles ?? {})
+					.filter(([name]) => IMAGE_FILE.test(name))
+					.map(([name, file]) => [name, [file, {level: 0}] as const]),
+			),
 		},
 		{level: 6, mtime: now},
 	);
@@ -161,17 +186,34 @@ function parseEntry(files: Record<string, Uint8Array>, name: string): unknown {
 	}
 }
 
-export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
+export function readFullBackup(
+	bytes: Uint8Array,
+	{imageFiles: wantsImageFiles = true}: {imageFiles?: boolean} = {},
+): FullBackupContents | null {
 	if (!looksLikeZip(bytes)) {
 		return null;
 	}
 
 	const wanted = new Set<string>(Object.values(FILES));
 	let unpacked = 0;
+	let pictures = 0;
 	let files: Record<string, Uint8Array>;
 	try {
 		files = unzipSync(bytes, {
 			filter(file) {
+				if (IMAGE_FILE.test(file.name)) {
+					if (!wantsImageFiles || file.originalSize > IMAGE_MAX_BYTES) {
+						return false;
+					}
+
+					pictures += file.originalSize;
+					if (pictures > IMAGE_BUDGET) {
+						throw new FullBackupError('This backup is too large to import.');
+					}
+
+					return true;
+				}
+
 				if (!wanted.has(file.name)) {
 					return false;
 				}
@@ -221,6 +263,10 @@ export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 		snapshots: parseEntry(files, FILES.snapshots),
 		trash: parseEntry(files, FILES.trash),
 		copies: parseEntry(files, FILES.copies) ?? [],
+		images: parseEntry(files, FILES.images) ?? [],
+		imageFiles: Object.fromEntries(
+			Object.entries(files).filter(([name]) => IMAGE_FILE.test(name)),
+		),
 	};
 	const counts = countFullBackup(parts);
 	return {
@@ -238,4 +284,27 @@ export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 		},
 		counts,
 	};
+}
+
+export function backupImageFile(image: {url: string; type: ImageType}) {
+	return `images/${imageId(image.url)}.${IMAGE_EXTENSIONS[image.type]}`;
+}
+
+export function backupImages(
+	parts: Pick<FullBackupParts, 'images' | 'imageFiles'>,
+): unknown[] {
+	const entries = Array.isArray(parts.images)
+		? (parts.images as unknown[])
+		: [];
+	return entries.map((entry) => {
+		if (!isRecord(entry) || typeof entry.url !== 'string') {
+			return entry;
+		}
+
+		const type = IMAGE_TYPES.find((known) => known === entry.type);
+		const file =
+			type && parts.imageFiles?.[backupImageFile({url: entry.url, type})];
+		const {data: _data, ...thumb} = entry;
+		return file ? {...thumb, data: bytesToBase64(file)} : thumb;
+	});
 }
