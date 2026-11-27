@@ -33,10 +33,12 @@ export async function openSavedImage(url: string, windowId?: number) {
 let images: ReadonlyMap<string, BoardImage> = new Map();
 const listeners = new Set<() => void>();
 let watching = false;
+let latestLoad = 0;
 
 async function loadImages() {
+	const run = ++latestLoad;
 	const listed = await send('GET_SAVED_IMAGES');
-	if (!listed.ok) {
+	if (!listed.ok || run !== latestLoad) {
 		return;
 	}
 
@@ -53,6 +55,10 @@ async function loadImages() {
 
 	if (missing.length > 0) {
 		const fetched = await send('GET_IMAGE_THUMBS', {urls: missing});
+		if (run !== latestLoad) {
+			return;
+		}
+
 		for (const thumb of fetched.ok ? fetched.thumbs : []) {
 			next.set(thumb.url, {
 				thumb: thumbDataUrl(thumb.thumb),
@@ -70,7 +76,11 @@ async function loadImages() {
 	}
 }
 
-function watchImages(listener: () => void) {
+export function getSavedImages(): ReadonlyMap<string, BoardImage> {
+	return images;
+}
+
+export function watchSavedImages(listener: () => void) {
 	listeners.add(listener);
 	if (!watching && !chrome.extension.inIncognitoContext) {
 		watching = true;
@@ -88,7 +98,33 @@ function watchImages(listener: () => void) {
 }
 
 export function useSavedImages(): ReadonlyMap<string, BoardImage> {
-	return useSyncExternalStore(watchImages, () => images);
+	return useSyncExternalStore(watchSavedImages, getSavedImages);
+}
+
+export type LoadedSavedImage = {
+	image: SavedImage | null;
+	thumb: SavedThumb | null;
+	error: string;
+};
+
+export async function loadSavedImage(
+	url: string,
+	showStatus: ShowStatus,
+	isLive: () => boolean = () => true,
+): Promise<LoadedSavedImage | undefined> {
+	const result = url
+		? await send('GET_SAVED_IMAGE', {url})
+		: {ok: true as const, image: null, thumb: null};
+	if (!isLive()) {
+		return undefined;
+	}
+
+	if (!result.ok) {
+		showStatus(result.error, true);
+		return {image: null, thumb: null, error: result.error};
+	}
+
+	return {image: result.image, thumb: result.thumb, error: ''};
 }
 
 export async function deleteSavedImage(
@@ -97,9 +133,12 @@ export async function deleteSavedImage(
 	after: () => unknown = () => undefined,
 ) {
 	const before = await send('GET_SAVED_IMAGE', {url});
-	const kept: SavedImage | SavedThumb | null = before.ok
-		? (before.image ?? before.thumb)
-		: null;
+	if (!before.ok) {
+		showStatus(before.error, true);
+		return;
+	}
+
+	const kept: SavedImage | SavedThumb | null = before.image ?? before.thumb;
 	const result = await send('DELETE_SAVED_IMAGE', {url});
 	if (!result.ok) {
 		showStatus(result.error, true);
@@ -139,22 +178,41 @@ export async function backupImageParts(
 		}
 
 		const read = await send('GET_SAVED_IMAGE', {url: thumb.url});
-		if (read.ok && read.image) {
-			imageFiles[backupImageFile(read.image)] = base64ToBytes(read.image.data);
+		if (!read.ok) {
+			throw new Error(read.error || 'Could not read a saved image.');
 		}
+
+		if (!read.image) {
+			throw new Error('Could not read a saved image.');
+		}
+
+		imageFiles[backupImageFile(read.image)] = base64ToBytes(read.image.data);
 	}
 
 	return {images: thumbs.map(({held: _held, ...thumb}) => thumb), imageFiles};
 }
 
+export type RestoreImagesResult = {
+	restored: number;
+	failed: number;
+	error?: string;
+};
+
 export async function restoreBackupImages(
 	parts: Pick<FullBackupParts, 'images' | 'imageFiles'>,
-): Promise<number> {
+): Promise<RestoreImagesResult> {
 	let restored = 0;
+	let failed = 0;
+	let error: string | undefined;
 	for (const image of backupImages(parts)) {
 		const added = await send('ADD_SAVED_IMAGES', {images: [image]});
-		restored += added.ok ? added.images : 0;
+		if (added.ok) {
+			restored += added.images;
+		} else {
+			failed += 1;
+			error ??= added.error;
+		}
 	}
 
-	return restored;
+	return {restored, failed, error};
 }

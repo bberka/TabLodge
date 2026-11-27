@@ -34,9 +34,16 @@ export function createLibraryCore(libraryKey: string) {
 			return run;
 		},
 		async write(next: Store): Promise<void> {
+			const previous = store;
 			store = next;
 			notify();
-			await writeJson(libraryKey, next);
+			try {
+				await writeJson(libraryKey, next);
+			} catch (error) {
+				store = previous;
+				notify();
+				throw error;
+			}
 		},
 	};
 }

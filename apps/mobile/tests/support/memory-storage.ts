@@ -15,15 +15,27 @@ export const memory = globals.__phoneStorage;
 
 export const PRIVATE_KEY_KEY = 'tablodge.private.syncKey';
 
-export async function readJson(key: string): Promise<unknown> {
+export async function readRaw(key: string): Promise<string | undefined> {
 	const hold = holds.read.get(key);
 	if (hold) {
 		holds.read.delete(key);
 		await hold;
 	}
 
-	const text = memory.get(key);
-	return text === undefined ? undefined : (JSON.parse(text) as unknown);
+	return memory.get(key);
+}
+
+export async function readJson(key: string): Promise<unknown> {
+	const text = await readRaw(key);
+	if (!text) {
+		return undefined;
+	}
+
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return undefined;
+	}
 }
 
 export async function writeJson(key: string, value: unknown): Promise<void> {

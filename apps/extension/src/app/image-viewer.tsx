@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Download, ExternalLink, ImageOff, Trash2} from 'lucide-react';
 import {Button, TooltipProvider} from '../shared/ui';
@@ -17,14 +17,13 @@ import {ThemeProvider} from '../shared/theme';
 import {webUrl} from '../shared/web-url';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {bytesText} from './recovery-core';
-import {deleteSavedImage} from './saved-images';
+import {deleteSavedImage, loadSavedImage} from './saved-images';
 import {
 	Brand,
 	EmptyState,
 	LoadingLine,
 	PageShell,
 	StatusLine,
-	send,
 	useStatus,
 } from './common';
 
@@ -43,21 +42,17 @@ function ImageViewer() {
 	const [shown, setShown] = useState<Shown | undefined>();
 	const [loadError, setLoadError] = useState('');
 	const [status, showStatus] = useStatus();
+	const showStatusRef = useRef(showStatus);
+	showStatusRef.current = showStatus;
 
 	const load = useCallback(async (isLive: () => boolean = () => true) => {
-		const result = url
-			? await send('GET_SAVED_IMAGE', {url})
-			: {ok: true as const, image: null, thumb: null};
-		if (!isLive()) {
+		const loaded = await loadSavedImage(url, showStatusRef.current, isLive);
+		if (!loaded) {
 			return;
 		}
 
-		setLoadError(result.ok ? '' : result.error);
-		setShown(
-			result.ok
-				? {image: result.image, thumb: result.thumb}
-				: {image: null, thumb: null},
-		);
+		setLoadError(loaded.error);
+		setShown({image: loaded.image, thumb: loaded.thumb});
 	}, []);
 
 	useEffect(() => {
