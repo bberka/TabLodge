@@ -3,7 +3,12 @@
 export function showQuoteToast(toast: {
 	message: string;
 	failed: boolean;
-	undo?: {type: 'QUOTE_UNDO' | 'TRASH_UNDO'; id: string; done: string};
+	undo?: {
+		type: 'QUOTE_UNDO' | 'TRASH_UNDO';
+		id: string;
+		done: string;
+		expiresMs?: number;
+	};
 	theme: 'system' | 'light' | 'dark';
 	edges: {
 		top?: string;
@@ -79,8 +84,10 @@ export function showQuoteToast(toast: {
 	box.append(text);
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let expiry: ReturnType<typeof setTimeout> | undefined;
 	const close = () => {
 		clearTimeout(timer);
+		clearTimeout(expiry);
 		host.remove();
 	};
 
@@ -120,6 +127,7 @@ export function showQuoteToast(toast: {
 		const {undo} = toast;
 		const undoButton = button('Undo');
 		undoButton.addEventListener('click', () => {
+			clearTimeout(expiry);
 			undoButton.remove();
 			void chrome.runtime
 				.sendMessage({type: undo.type, id: undo.id})
@@ -145,6 +153,17 @@ export function showQuoteToast(toast: {
 		const closeButton = button('Close');
 		closeButton.addEventListener('click', close);
 		box.append(closeButton);
+	}
+
+	if (toast.undo?.expiresMs !== undefined) {
+		expiry = setTimeout(() => {
+			const [undoButton, closeButton] = box.querySelectorAll('button');
+			if (root.activeElement === undoButton) {
+				closeButton?.focus();
+			}
+
+			undoButton?.remove();
+		}, toast.undo.expiresMs);
 	}
 
 	box.addEventListener('keydown', (event) => {

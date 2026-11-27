@@ -250,7 +250,7 @@ export const settingsFieldGroups = ({
 			{
 				name: 'toastDuration',
 				label: 'Messages stay',
-				help: 'How long a toast stays before it closes. Longer is twice the usual time. Until dismissed keeps it until you close it. It always stays while the pointer or focus is on it.',
+				help: 'How long a toast stays before it closes. Longer is twice the usual time. Until dismissed keeps it until you close it. It always stays while the pointer or focus is on it. Undo for a library change is offered for just under two minutes; after that the message can stay without the button.',
 				type: 'select',
 				options: [
 					['default', 'Default'],

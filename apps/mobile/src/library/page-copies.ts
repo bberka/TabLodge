@@ -155,7 +155,27 @@ export async function keepCopy(url: string): Promise<KeepOutcome> {
 
 let sweepTimer: ReturnType<typeof setTimeout> | undefined;
 
+let sweepHolds = 0;
+
+export function holdCopySweep(): () => void {
+	sweepHolds += 1;
+	let released = false;
+	return () => {
+		if (released) {
+			return;
+		}
+
+		released = true;
+		sweepHolds -= 1;
+		scheduleSweep();
+	};
+}
+
 async function sweep() {
+	if (sweepHolds > 0) {
+		return;
+	}
+
 	const library = getLibrary();
 	const trash = await readTrash('regular', library.settings.trashRetentionDays);
 	const live = copyLinkUrls(library, trash);

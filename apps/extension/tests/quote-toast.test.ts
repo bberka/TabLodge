@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {parseHTML} from 'linkedom';
 import {afterEach, beforeEach, test, vi} from 'vite-plus/test';
 import {showQuoteToast} from '../src/app/quote-toast';
+import {UNDO_OFFER_MS} from '../src/shared/undo-policy';
 
 let root: ParentNode;
 let document: Document;
@@ -30,7 +31,7 @@ afterEach(() => {
 
 const toast = (
 	closeMs?: number,
-	undo?: {type: 'QUOTE_UNDO' | 'TRASH_UNDO'; id: string; done: string},
+	undo?: Parameters<typeof showQuoteToast>[0]['undo'],
 ) =>
 	showQuoteToast({
 		message: 'Quote saved to Reading.',
@@ -102,4 +103,20 @@ test('a quote toast falls back to its own wording when the answer carries no mes
 		root.querySelector('[role="status"]')?.textContent,
 		'Quote removed.',
 	);
+});
+
+test('until dismissed, the quote Undo leaves when it expires and Close stays', async () => {
+	toast(undefined, {
+		type: 'QUOTE_UNDO',
+		id: 'undo-1',
+		done: 'Quote removed.',
+		expiresMs: UNDO_OFFER_MS,
+	});
+	const labels = () =>
+		[...root.querySelectorAll('button')].map((button) => button.textContent);
+	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS - 1000);
+	assert.deepEqual(labels(), ['Undo', 'Close']);
+	await vi.advanceTimersByTimeAsync(2000);
+	assert.deepEqual(labels(), ['Close']);
+	assert.equal(hostGone(), false);
 });

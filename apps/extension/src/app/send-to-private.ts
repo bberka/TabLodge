@@ -3,6 +3,7 @@ import {INBOX_PUBLIC_KEY} from '../shared/private-inbox';
 import {LOCK_RECORD_KEY} from '../shared/private-lock';
 import {sentMessage, type SendTarget} from '../shared/send-to-private';
 import type {SendToPrivateState} from '../shared/types';
+import {undoExpiry} from '../shared/undo-policy';
 import type {ShowStatus} from './common';
 import {send} from './message-client';
 import {inPrivateWindow, PRIVATE_CONFIG_KEY} from './private-config';
@@ -80,6 +81,7 @@ export async function sendLinksToPrivate(
 	showStatus(message, false, {
 		action: {
 			label: 'Undo',
+			expiresAt: undoExpiry(),
 			async onClick() {
 				undone = true;
 				const undo = await send('UNDO', {id: undoId});

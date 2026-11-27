@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from 'react';
 import type {ActionSuccess, RestoreResult} from '../shared/types';
+import {undoExpiry} from '../shared/undo-policy';
 import {messageOf, plural, send, type ShowStatus} from './common';
 import {sessionRestoreMessage} from './session-restore-message';
 import {claimUndo} from './message-client';
@@ -122,6 +123,7 @@ export function offerUndo(
 			? {
 					action: {
 						label: 'Undo',
+						expiresAt: undoExpiry(),
 						async onClick() {
 							const result = await send('UNDO', {id: undoId});
 							if (result?.ok) {
