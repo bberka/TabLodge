@@ -110,6 +110,10 @@ export const ROWS = {
 		label: 'Preview links when saving',
 		hint: 'Fetches the title and icon of the page you save',
 	},
+	afterShare: {
+		label: 'After sharing to TabLodge',
+		hint: 'When a share starts TabLodge, close it to return or stay open',
+	},
 	cleanTitles: {
 		label: 'Clean page titles',
 		hint: 'Remove counters such as (3) from titles',
@@ -269,6 +273,7 @@ export const SECTIONS = {
 			'delete',
 			'favicon',
 			'icon',
+			'share',
 		],
 		rows: [
 			ROWS.bookmarkView,
@@ -281,6 +286,7 @@ export const SECTIONS = {
 			ROWS.sortBookmarks,
 			ROWS.siteIcons,
 			ROWS.savePreview,
+			ROWS.afterShare,
 		],
 	},
 	extension: {
