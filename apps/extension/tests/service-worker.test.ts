@@ -15483,6 +15483,32 @@ test('Undo of a background catch-up removes the column it made, but refuses once
 	}
 });
 
+test('Undo of a background catch-up refuses once its column was deleted and the bookmarks moved', async () => {
+	const harness = sourcesHarness();
+	await switchOnReddit(harness);
+	const undoId = await addUnseen(harness, [savedPost('aaa111')]);
+	const {columnId} = harness.state.bookmarks[0];
+	await harness.sendMessage({type: 'CREATE_BOOKMARK_COLUMN', name: 'Keep'});
+	const keep = harness.state.bookmarkColumns.find(
+		(column) => column.name === 'Keep',
+	)!;
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: columnId!,
+		targetColumnId: keep.id,
+	});
+	assert.equal(deleted.ok, true, deleted.ok ? '' : deleted.error);
+
+	const refused = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: undoId},
+		redditSaved,
+	);
+
+	assert.equal(refused.ok, false);
+	assert.deepEqual(redditAddresses(harness), ['aaa111']);
+	assert.equal(harness.state.bookmarks[0].columnId, keep.id);
+});
+
 test('Ask first is kept from the setting and adds only when Add them is answered', async () => {
 	const harness = sourcesHarness();
 	await switchOnReddit(harness);

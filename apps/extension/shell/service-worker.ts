@@ -8591,6 +8591,7 @@ type UndoRecord = {
 
 type CatchUpUndo = {
 	bookmarkIds: string[];
+	columnId: string;
 	addedAt: number;
 	newColumn?: {id: string; hash: string};
 	unseen: boolean;
@@ -8603,7 +8604,9 @@ const isUndoRecord = (value: unknown): value is UndoRecord =>
 	isRecord(value.before) &&
 	isRecord(value.after) &&
 	(value.catchUp === undefined ||
-		(isRecord(value.catchUp) && Array.isArray(value.catchUp.bookmarkIds)));
+		(isRecord(value.catchUp) &&
+			Array.isArray(value.catchUp.bookmarkIds) &&
+			typeof value.catchUp.columnId === 'string'));
 
 const undoHash = (value: unknown) =>
 	value === undefined ? 'none' : hashText(JSON.stringify(value));
@@ -9012,12 +9015,15 @@ async function purgeUndo(): Promise<void> {
 
 async function removeCatchUp(
 	record: UndoRecord,
-	{bookmarkIds, addedAt, newColumn}: CatchUpUndo,
+	{bookmarkIds, columnId, addedAt, newColumn}: CatchUpUndo,
 ): Promise<ActionResult<'UNDO'>> {
 	const store = await getStore();
 	const added = new Set(bookmarkIds);
 	const unchanged = store.bookmarks.filter(
-		(bookmark) => added.has(bookmark.id) && bookmark.updatedAt === addedAt,
+		(bookmark) =>
+			added.has(bookmark.id) &&
+			bookmark.columnId === columnId &&
+			bookmark.updatedAt === addedAt,
 	);
 	if (unchanged.length !== added.size) {
 		return {ok: false, error: "Can't undo: your data changed since."};
@@ -10178,6 +10184,7 @@ async function addSourceCatchUp(
 
 	const label = siteSourceUndoLabel(source);
 	const bookmarkIds: string[] = [];
+	let columnId = '';
 	let newColumnId: string | undefined;
 	const now = Date.now();
 	const add = async (): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> => {
@@ -10195,6 +10202,7 @@ async function addSourceCatchUp(
 
 		const columnCount = store.bookmarkColumns.length;
 		const column = sourceSaveColumn(store, source, state, now);
+		columnId = column.id;
 		if (store.bookmarkColumns.length > columnCount) {
 			newColumnId = column.id;
 		}
@@ -10247,6 +10255,7 @@ async function addSourceCatchUp(
 				after: {},
 				catchUp: {
 					bookmarkIds,
+					columnId,
 					addedAt: now,
 					...(column && {
 						newColumn: {id: column.id, hash: undoHash(column)},
