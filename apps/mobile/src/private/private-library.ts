@@ -571,8 +571,36 @@ export async function lockPrivate(): Promise<void> {
 	await refreshPrivateStatus();
 }
 
+type OpenSend = {erased: boolean; done: Promise<void>};
+
+const openSends = new Set<OpenSend>();
+let removals = 0;
+
+export async function duringSend<T>(
+	send: (erased: () => boolean) => Promise<T>,
+): Promise<T> {
+	const finished = Promise.withResolvers<void>();
+	const open: OpenSend = {erased: removals > 0, done: finished.promise};
+	openSends.add(open);
+	try {
+		return await send(() => open.erased);
+	} finally {
+		openSends.delete(open);
+		finished.resolve();
+	}
+}
+
 export async function removePrivate(): Promise<void> {
-	await serial(eraseNow);
+	removals += 1;
+	for (const open of openSends) {
+		open.erased = true;
+	}
+
+	try {
+		await serial(eraseNow);
+	} finally {
+		removals -= 1;
+	}
 }
 
 async function eraseNow(): Promise<void> {
@@ -607,6 +635,10 @@ async function eraseSteps(): Promise<void> {
 		PRIVATE_KEY_KEY,
 		KEPT_KEY,
 	]);
+	while (openSends.size > 0) {
+		await Promise.all([...openSends].map(async (open) => open.done));
+	}
+
 	await serialSend(async () => removeKeys([SENT_PENDING_KEY]));
 	await dropSafetyCopy('private');
 	await removeKeys([LIBRARY_KEY]);

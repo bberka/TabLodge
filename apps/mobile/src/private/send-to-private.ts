@@ -10,6 +10,7 @@ import {restoreSession} from '../library/session-edits';
 import {showSnack} from '../ui/snackbar';
 import {
 	canReceiveSent,
+	duringSend,
 	queueSent,
 	releaseSent,
 	takeInSent,
@@ -165,37 +166,72 @@ export async function sendToPrivate(targets: SendTarget[]): Promise<boolean> {
 		return false;
 	}
 
-	let id: string;
-	try {
-		id = await queueSent(taken.sent);
-	} catch {
-		showSnack('Could not send that. Try again');
+	const outcome = await duringSend(async (erased) => {
+		if (erased()) {
+			return {
+				ok: false as const,
+				message: 'The private library was being erased. Nothing was sent',
+			};
+		}
+
+		let id: string;
+		try {
+			id = await queueSent(taken.sent);
+		} catch {
+			return {
+				ok: false as const,
+				message: erased()
+					? 'The private library was being erased. Nothing was sent'
+					: 'Could not send that. Try again',
+			};
+		}
+
+		let removed = false;
+		if (!erased()) {
+			try {
+				await editRegular((current) => {
+					const again = takeOutForPrivate(current, targets);
+					removed =
+						!erased() &&
+						again.ok &&
+						JSON.stringify(again.sent) === JSON.stringify(taken.sent);
+					return again.ok && removed ? again.store : current;
+				});
+				if (removed && erased()) {
+					await editRegular((current) =>
+						putBack(current, before, targets, Date.now()),
+					);
+				}
+			} catch {
+				await withdrawSent(id);
+				await editRegular((current) =>
+					putBack(current, before, targets, Date.now()),
+				).catch(() => undefined);
+				return {
+					ok: false as const,
+					message: 'Could not save that. Nothing was sent',
+				};
+			}
+		}
+
+		if (erased() || !removed) {
+			await withdrawSent(id);
+			return {
+				ok: false as const,
+				message: erased()
+					? 'The private library was being erased. Nothing was sent'
+					: 'Those links changed. Nothing was sent',
+			};
+		}
+
+		return {ok: true as const, id};
+	});
+	if (!outcome.ok) {
+		showSnack(outcome.message);
 		return false;
 	}
 
-	let removed = false;
-	try {
-		await editRegular((current) => {
-			const again = takeOutForPrivate(current, targets);
-			removed =
-				again.ok && JSON.stringify(again.sent) === JSON.stringify(taken.sent);
-			return again.ok && removed ? again.store : current;
-		});
-	} catch {
-		await withdrawSent(id);
-		await editRegular((current) =>
-			putBack(current, before, targets, Date.now()),
-		).catch(() => undefined);
-		showSnack('Could not save that. Nothing was sent');
-		return false;
-	}
-
-	if (!removed) {
-		await withdrawSent(id);
-		showSnack('Those links changed. Nothing was sent');
-		return false;
-	}
-
+	const {id} = outcome;
 	let undone = false;
 	showSnack(sentMessage(taken.count, taken.keptColumn, ''), {
 		label: 'Undo',
