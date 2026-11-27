@@ -402,6 +402,8 @@ export function SaveLinkForm({
 						/>
 					</>
 				)}
+			</ScrollView>
+			<View style={[styles.footer, {borderColor: colors.border}]}>
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
 						{problem}
@@ -419,14 +421,20 @@ export function SaveLinkForm({
 					loading={saving}
 					onPress={() => void save()}
 				/>
-			</ScrollView>
+			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
-	scroll: {flexGrow: 0},
+	scroll: {flexGrow: 0, flexShrink: 1},
+	footer: {
+		gap: 8,
+		paddingHorizontal: 20,
+		paddingVertical: 12,
+		borderTopWidth: StyleSheet.hairlineWidth,
+	},
 	sessionChoice: {gap: 8},
 	preview: {flexDirection: 'row', alignItems: 'center', gap: 12},
 	previewText: {flex: 1, gap: 2},

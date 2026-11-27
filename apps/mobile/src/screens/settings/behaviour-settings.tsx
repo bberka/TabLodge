@@ -15,10 +15,10 @@ import {
 	rowActionLook,
 	sessionActionLook,
 } from '../../library/row-actions';
-import {useColors} from '../../ui/theme';
+import {useColors, TARGET} from '../../ui/theme';
 import {BOOKMARK_SORT_CHOICES} from '../../library/bookmark-sort';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {Field, type IconName, Switch} from '../../ui/widgets';
+import {Field, type IconName, SwitchFace} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
 import {SettingsCard, SettingsQuery, useRowVisible} from './settings-card';
 import {RowLabel, SelectRow} from './select-row';
@@ -73,6 +73,7 @@ export function Toggle({
 	onChange: (value: boolean) => void;
 }) {
 	const {label, hint} = row;
+	const colors = useColors();
 	const isVisible = useRowVisible(row);
 	const reset = useRowReset(row);
 	if (!isVisible) {
@@ -80,24 +81,28 @@ export function Toggle({
 	}
 
 	return (
-		<View accessible={false} style={styles.switchRow}>
-			<Pressable
-				accessible={false}
-				style={styles.switchText}
-				onLongPress={reset.onLongPress}
-			>
-				<RowLabel label={label} changed={reset.changed} hint={hint} />
-			</Pressable>
+		<Pressable
+			accessibilityRole="switch"
+			accessibilityLabel={label}
+			accessibilityHint={hint}
+			accessibilityState={{checked: value}}
+			accessibilityActions={reset.accessibilityActions}
+			style={({pressed}) => [
+				styles.switchRow,
+				pressed && {backgroundColor: colors.pressed},
+			]}
+			onAccessibilityAction={reset.onAccessibilityAction}
+			onPress={() => {
+				onChange(!value);
+			}}
+			onLongPress={reset.onLongPress}
+		>
+			<RowLabel label={label} changed={reset.changed} hint={hint} />
 			{reset.sheet}
-			<Switch
-				label={label}
-				hint={hint}
-				value={value}
-				accessibilityActions={reset.accessibilityActions}
-				onAccessibilityAction={reset.onAccessibilityAction}
-				onValueChange={onChange}
-			/>
-		</View>
+			<View pointerEvents="none">
+				<SwitchFace on={value} />
+			</View>
+		</Pressable>
 	);
 }
 
@@ -517,6 +522,9 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'space-between',
 		gap: 12,
+		minHeight: TARGET,
+		borderRadius: 12,
+		paddingHorizontal: 12,
+		marginHorizontal: -12,
 	},
-	switchText: {flex: 1},
 });

@@ -18,6 +18,7 @@ import {
 	TextInput,
 	type TextInputProps,
 	useColorScheme,
+	useWindowDimensions,
 	View,
 } from 'react-native';
 import {chipScrollX} from './chip-scroll';
@@ -35,7 +36,17 @@ export function Icon({
 	color?: string;
 }) {
 	const colors = useColors();
-	return <Ionicons name={name} size={size} color={color ?? colors.text} />;
+	return (
+		<Ionicons
+			accessibilityElementsHidden
+			name={name}
+			size={size}
+			color={color ?? colors.text}
+			allowFontScaling={false}
+			accessible={false}
+			importantForAccessibility="no"
+		/>
+	);
 }
 
 export function Button({
@@ -145,6 +156,7 @@ export function Field({
 	icon,
 	error,
 	onClear,
+	secureTextEntry,
 	...props
 }: TextInputProps & {
 	label: string;
@@ -155,6 +167,7 @@ export function Field({
 	const colors = useColors();
 	const shape = useShape();
 	const [focused, setFocused] = useState(false);
+	const [revealed, setRevealed] = useState(false);
 	const border = error
 		? colors.danger
 		: focused
@@ -206,7 +219,17 @@ export function Field({
 						setFocused(false);
 					}}
 					{...props}
+					secureTextEntry={secureTextEntry && !revealed}
 				/>
+				{secureTextEntry && (
+					<IconButton
+						icon={revealed ? 'eye-off-outline' : 'eye-outline'}
+						label={revealed ? 'Hide password' : 'Show password'}
+						onPress={() => {
+							setRevealed(!revealed);
+						}}
+					/>
+				)}
 				{onClear && Boolean(props.value) && (
 					<IconButton
 						icon="close-circle"
@@ -394,15 +417,16 @@ export function Header({
 }) {
 	const colors = useColors();
 	const shape = useShape();
+	const {width} = useWindowDimensions();
+	const titleSize = width < 360 ? shape.titleSize * 0.8 : shape.titleSize;
 	return (
 		<View style={styles.header}>
 			<View style={styles.headerText}>
 				<Text
 					accessibilityRole="header"
-					style={[
-						styles.title,
-						{color: colors.text, fontSize: shape.titleSize},
-					]}
+					numberOfLines={1}
+					maxFontSizeMultiplier={1.5}
+					style={[styles.title, {color: colors.text, fontSize: titleSize}]}
 				>
 					{title}
 				</Text>
@@ -442,6 +466,24 @@ export function Card({
 			]}
 		>
 			{children}
+		</View>
+	);
+}
+
+export function SwitchFace({on}: {on: boolean}) {
+	const colors = useColors();
+	return (
+		<View
+			accessible={false}
+			importantForAccessibility="no-hide-descendants"
+			style={[
+				styles.track,
+				{backgroundColor: on ? colors.accent : colors.border},
+			]}
+		>
+			<View
+				style={[styles.knob, {alignSelf: on ? 'flex-end' : 'flex-start'}]}
+			/>
 		</View>
 	);
 }
@@ -568,10 +610,13 @@ export function Segmented<T extends string>({
 							/>
 						)}
 						<Text
-							style={{
-								color: on && !shape.ios ? colors.accent : colors.text,
-								fontWeight: on ? '600' : '400',
-							}}
+							style={[
+								styles.segmentLabel,
+								{
+									color: on && !shape.ios ? colors.accent : colors.text,
+									fontWeight: on ? '600' : '400',
+								},
+							]}
 						>
 							{item.name}
 						</Text>
@@ -652,7 +697,7 @@ const styles = StyleSheet.create({
 	chips: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
 	chipRow: {flexWrap: 'nowrap'},
 	chip: {
-		minHeight: 40,
+		minHeight: TARGET,
 		paddingHorizontal: 14,
 		borderRadius: 20,
 		borderWidth: 1,
@@ -681,6 +726,20 @@ const styles = StyleSheet.create({
 		padding: 2,
 		justifyContent: 'center',
 	},
+	track: {
+		width: 52,
+		height: 32,
+		borderRadius: 16,
+		padding: 4,
+		justifyContent: 'center',
+	},
+	knob: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		backgroundColor: '#ffffff',
+		elevation: 2,
+	},
 	iosKnob: {
 		width: 27,
 		height: 27,
@@ -691,12 +750,15 @@ const styles = StyleSheet.create({
 	segmented: {flexDirection: 'row'},
 	segment: {
 		flex: 1,
-		minHeight: 36,
+		minHeight: TARGET,
 		flexDirection: 'row',
 		gap: 6,
+		paddingHorizontal: 10,
 		alignItems: 'center',
 		justifyContent: 'center',
+		overflow: 'hidden',
 	},
+	segmentLabel: {flexShrink: 1, textAlign: 'center'},
 	empty: {padding: 32, alignItems: 'center', gap: 12},
 	emptyIcon: {
 		width: 72,

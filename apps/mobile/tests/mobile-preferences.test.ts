@@ -136,6 +136,10 @@ describe('preference schema', () => {
 		assert.equal(bar.barLabels, 'never');
 	});
 
+	test('the bottom bar names every tab until the setting says otherwise', () => {
+		assert.equal(defaults.barLabels, 'always');
+	});
+
 	test('an old site icon choice that asked nobody carries over as the shared Letter tiles only', () => {
 		assert.equal(legacySiteIconsOf('off'), 'browser');
 		assert.equal(legacySiteIconsOf('direct'), 'browser');

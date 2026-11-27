@@ -130,12 +130,14 @@ export function FloatingActions({
 	onAdd,
 	onUp,
 	buttonLabel = 'Add link',
+	searchLabel = 'Search',
 }: {
 	bottom: number;
 	onSearch?: () => void;
 	onAdd?: () => void;
 	onUp?: () => void;
 	buttonLabel?: string;
+	searchLabel?: string;
 }) {
 	const {floatingBar} = usePreferences();
 	const insets = useSafeAreaInsets();
@@ -152,7 +154,12 @@ export function FloatingActions({
 	}, [barHeight, size]);
 	const each = floatingBar ? size : SIZE;
 	const search = onSearch && floatingBar && (
-		<RoundButton icon="search" label="Search" size={each} onPress={onSearch} />
+		<RoundButton
+			icon="search"
+			label={searchLabel}
+			size={each}
+			onPress={onSearch}
+		/>
 	);
 	const add = onAdd && (
 		<View style={styles.pair}>
