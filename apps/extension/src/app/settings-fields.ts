@@ -1,4 +1,7 @@
-import {BOOKMARK_SORT_OPTIONS} from '../shared/bookmark-rules';
+import {
+	BOOKMARK_SORT_OPTIONS,
+	NEW_BOOKMARK_POSITION_OPTIONS,
+} from '../shared/bookmark-rules';
 import type {
 	BookmarkQuickAction,
 	SessionQuickAction,
@@ -640,6 +643,16 @@ export const settingsFieldGroups = ({
 				options: BOOKMARK_SORT_OPTIONS.map(([value, label]) => [value, label]),
 			},
 			{
+				name: 'newBookmarkPosition',
+				label: 'Add new bookmarks to',
+				help: 'Where newly saved bookmarks appear in a column under Manual order. Bottom is the default. The Android app follows this too.',
+				type: 'select',
+				options: NEW_BOOKMARK_POSITION_OPTIONS.map(([value, label]) => [
+					value,
+					label,
+				]),
+			},
+			{
 				name: 'showAllBookmarks',
 				label: 'Show All in the bookmark list',
 				help: 'The first item of the Focus view, and of the Android app, that lists every bookmark of every column. Turn it off to start in a column. The Android app follows this too.',
@@ -951,6 +964,14 @@ export const SETTING_WORDS: Partial<Record<keyof Settings, string[]>> = {
 	groupTitleAction: ['click a session title', 'session title'],
 	bookmarkBoardView: ['board view', 'focus view', 'columns view', 'layout'],
 	bookmarkSort: ['sort', 'order', 'newest', 'oldest', 'title', 'site'],
+	newBookmarkPosition: [
+		'new bookmark',
+		'top',
+		'bottom',
+		'prepend',
+		'append',
+		'column order',
+	],
 	showAllBookmarks: ['show all', 'all bookmarks', 'all view'],
 	bookmarkClickAction: ['click a bookmark', 'open bookmark', 'bookmark click'],
 	bookmarkQuickActions: ['quick actions', 'bookmark buttons', 'card buttons'],

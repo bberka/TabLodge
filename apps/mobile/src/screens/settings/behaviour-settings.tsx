@@ -193,6 +193,17 @@ export function BookmarkBehaviourCard() {
 					void setSyncedSetting('bookmarkSort', value);
 				}}
 			/>
+			<SelectRow
+				row={ROWS.newBookmarkPosition}
+				value={settings.newBookmarkPosition}
+				choices={[
+					{id: 'bottom', name: 'Bottom', icon: 'arrow-down-outline'},
+					{id: 'top', name: 'Top', icon: 'arrow-up-outline'},
+				]}
+				onChange={(value) => {
+					void setSyncedSetting('newBookmarkPosition', value);
+				}}
+			/>
 			<Toggle
 				row={ROWS.spacing}
 				value={settings.bookmarkDensity === 'compact'}

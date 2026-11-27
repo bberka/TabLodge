@@ -56,6 +56,7 @@ export const LIBRARY_SETTINGS = {
 	bookmarkColumnWidth: ['platform', BOARD],
 	bookmarkColumnsPerRow: ['platform', BOARD],
 	bookmarkSort: ['all', BOTH],
+	newBookmarkPosition: ['all', BOTH],
 	bookmarkDensity: ['all', BOTH],
 	limitBookmarksPerColumn: [
 		'platform',

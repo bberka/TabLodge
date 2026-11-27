@@ -136,6 +136,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	paletteLocation: 'page',
 	sessionSort: 'newest',
 	bookmarkSort: 'manual',
+	newBookmarkPosition: 'bottom',
 	expandSessionsByDefault: false,
 	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
@@ -916,6 +917,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.bookmarkSort
 			: 'manual',
+		newBookmarkPosition: raw.newBookmarkPosition === 'top' ? 'top' : 'bottom',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
 		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),

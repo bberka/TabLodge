@@ -16875,3 +16875,168 @@ test('Undo restores the library after scoped edits', async () => {
 		);
 	}
 });
+
+test('newBookmarkPosition defaults to bottom, normalizes invalid values, resets, and controls every save path', async () => {
+	const readPosition = async (stored: unknown) =>
+		(
+			await createWorkerHarness(
+				stateWithSession({newBookmarkPosition: stored}),
+			).sendMessage({type: 'GET_STATE'})
+		).settings.newBookmarkPosition;
+
+	assert.equal(await readPosition(undefined), 'bottom');
+	assert.equal(await readPosition('middle'), 'bottom');
+	assert.equal(await readPosition('top'), 'top');
+
+	const harness = sourcesHarness();
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_STATE'})).settings
+			.newBookmarkPosition,
+		'bottom',
+	);
+	const col = 'bookmark-default';
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://one.example/', title: 'One', columnId: col},
+	});
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://two.example/', title: 'Two', columnId: col},
+	});
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((entry) => entry.columnId === col)
+			.map((entry) => entry.url),
+		['https://one.example/', 'https://two.example/'],
+	);
+
+	const updated = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {newBookmarkPosition: 'top'},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(harness.state.settings.newBookmarkPosition, 'top');
+
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://three.example/', title: 'Three', columnId: col},
+	});
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((entry) => entry.columnId === col)
+			.map((entry) => entry.url),
+		['https://three.example/', 'https://one.example/', 'https://two.example/'],
+	);
+
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		columnId: col,
+		bookmarks: [
+			{url: 'https://four.example/', title: 'Four'},
+			{url: 'https://five.example/', title: 'Five'},
+		],
+	});
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((entry) => entry.columnId === col)
+			.map((entry) => entry.url),
+		[
+			'https://four.example/',
+			'https://five.example/',
+			'https://three.example/',
+			'https://one.example/',
+			'https://two.example/',
+		],
+	);
+
+	const targetId = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://one.example/',
+	)!.id;
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		columnId: col,
+		targetBookmarkId: targetId,
+		position: 'after',
+		bookmarks: [{url: 'https://after-one.example/', title: 'After One'}],
+	});
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((entry) => entry.columnId === col)
+			.map((entry) => entry.url),
+		[
+			'https://four.example/',
+			'https://five.example/',
+			'https://three.example/',
+			'https://one.example/',
+			'https://after-one.example/',
+			'https://two.example/',
+		],
+	);
+
+	const quoted = await harness.sendMessage({
+		type: 'SAVE_QUOTE',
+		url: 'https://quote.example/',
+		title: 'Quoted',
+		quote: 'A line to remember',
+	});
+	assert.equal(quoted.ok, true, quoted.error);
+	assert.equal(
+		harness.state.bookmarks.find((entry) => entry.columnId === col)?.url,
+		'https://quote.example/',
+	);
+
+	await switchOnYoutube(harness);
+	const ytOrigin = {tab: youtubeTab, url: youtubeTab.url};
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'youtube',
+			url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+			title: 'First video',
+		},
+		ytOrigin,
+	);
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'youtube',
+			url: 'https://www.youtube.com/watch?v=bbbbbbbbbbb',
+			title: 'Second video',
+		},
+		ytOrigin,
+	);
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_CATCH_UP_ADD',
+			source: 'youtube',
+			links: [
+				{
+					url: 'https://www.youtube.com/watch?v=ccccccccccc',
+					title: 'Third video',
+				},
+				{
+					url: 'https://www.youtube.com/watch?v=ddddddddddd',
+					title: 'Fourth video',
+				},
+			],
+		},
+		ytOrigin,
+	);
+	const ytCol = harness.state.bookmarkColumns.find(
+		(column) => column.name === 'YouTube',
+	)!.id;
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((entry) => entry.columnId === ytCol)
+			.map((entry) => entry.url),
+		[
+			'https://www.youtube.com/watch?v=ccccccccccc',
+			'https://www.youtube.com/watch?v=ddddddddddd',
+			'https://www.youtube.com/watch?v=bbbbbbbbbbb',
+			'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+		],
+	);
+
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.newBookmarkPosition, 'bottom');
+});

@@ -149,6 +149,7 @@ import {
 	columnNameTaken,
 	columnNameProblem,
 	DEFAULT_BOOKMARK_COLUMN_ID,
+	insertNewBookmarks,
 	landingColumnId,
 } from '../src/shared/bookmark-rules';
 import {
@@ -4621,7 +4622,11 @@ async function addBookmark(
 			createdAt: now,
 			updatedAt: now,
 		};
-		store.bookmarks.push(bookmark);
+		store.bookmarks = insertNewBookmarks(
+			store.bookmarks,
+			[bookmark],
+			store.settings.newBookmarkPosition,
+		);
 		await save();
 		return {ok: true, bookmark};
 	});
@@ -4704,7 +4709,11 @@ async function saveQuote(
 					createdAt: now,
 					updatedAt: now,
 				};
-				store.bookmarks.push(bookmark);
+				store.bookmarks = insertNewBookmarks(
+					store.bookmarks,
+					[bookmark],
+					store.settings.newBookmarkPosition,
+				);
 			}
 
 			await writeStore(store);
@@ -4790,7 +4799,11 @@ async function addBookmarks(
 				...added,
 			);
 		} else {
-			store.bookmarks.push(...added);
+			store.bookmarks = insertNewBookmarks(
+				store.bookmarks,
+				added,
+				store.settings.newBookmarkPosition,
+			);
 		}
 
 		await writeStore(store);
@@ -10006,7 +10019,7 @@ async function saveFromSource(
 				const now = Date.now();
 				const column = sourceSaveColumn(store, source, state, now);
 				const notes = sourceNote(source, discussion, url);
-				store.bookmarks.push({
+				const bookmark: Bookmark = {
 					id: makeId(),
 					title: await bestBookmarkTitle(
 						typeof title === 'string' ? title : '',
@@ -10019,7 +10032,12 @@ async function saveFromSource(
 					...(await savedHere()),
 					createdAt: now,
 					updatedAt: now,
-				});
+				};
+				store.bookmarks = insertNewBookmarks(
+					store.bookmarks,
+					[bookmark],
+					store.settings.newBookmarkPosition,
+				);
 				await writeStore(store);
 				return {ok: true, outcome: 'saved', column: column.name};
 			},
@@ -10109,9 +10127,10 @@ async function addSourceCatchUp(
 				const now = Date.now();
 				const column = sourceSaveColumn(store, source, state, now);
 				const device = await savedHere();
+				const inserted: Bookmark[] = [];
 				for (const link of added) {
 					const notes = sourceNote(source, link.discussion, link.url);
-					store.bookmarks.push({
+					inserted.push({
 						id: makeId(),
 						title: await bestBookmarkTitle(
 							link.title,
@@ -10126,6 +10145,12 @@ async function addSourceCatchUp(
 						updatedAt: now,
 					});
 				}
+
+				store.bookmarks = insertNewBookmarks(
+					store.bookmarks,
+					inserted,
+					store.settings.newBookmarkPosition,
+				);
 
 				await writeStore(store);
 				return {ok: true, added: added.length, column: column.name};

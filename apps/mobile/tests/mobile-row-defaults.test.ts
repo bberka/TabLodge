@@ -46,6 +46,21 @@ describe('row defaults', () => {
 			isChanged(ROWS.barLabels, change({}, synced), defaults),
 			false,
 		);
+		assert.equal(
+			isChanged(
+				ROWS.newBookmarkPosition,
+				change({}, {...DEFAULTS, newBookmarkPosition: 'top'}),
+				defaults,
+			),
+			true,
+		);
+		assert.equal(
+			resetLabel(ROWS.newBookmarkPosition, defaults, [
+				{id: 'bottom', name: 'Bottom'},
+				{id: 'top', name: 'Top'},
+			]),
+			'Reset to Bottom',
+		);
 	});
 
 	test('a row that cannot be reset is never changed', () => {
