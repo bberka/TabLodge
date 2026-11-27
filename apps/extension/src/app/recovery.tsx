@@ -289,7 +289,7 @@ export function SnapshotsDialog({
 						</p>
 					)}
 					{data && !data.enabled && (
-						<p className="rounded-md bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
+						<p className="rounded-md bg-muted px-3 py-2 text-xs leading-[1.6667] text-muted-foreground">
 							Snapshots are turned off in Settings › Recovery &amp; backups.
 							Existing ones are kept until you clear them.
 						</p>
@@ -817,7 +817,7 @@ function BackupsHelpButton() {
 			<PopoverContent
 				align="start"
 				aria-label="About backups"
-				className="w-80 space-y-2 p-3 text-xs leading-5"
+				className="w-80 space-y-2 p-3 text-xs leading-[1.6667]"
 				onEscapeKeyDown={(event) => {
 					event.stopPropagation();
 				}}
@@ -1167,7 +1167,7 @@ export function RecoveryTools({
 										ref={noticeRef}
 										tabIndex={-1}
 										className={cn(
-											'min-w-0 flex-1 rounded-sm leading-5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+											'min-w-0 flex-1 rounded-sm leading-[1.4286] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
 											notice.error && 'font-medium text-destructive',
 										)}
 									>

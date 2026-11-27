@@ -1275,7 +1275,7 @@ function Help() {
 											>
 												{section.title}
 											</h2>
-											<p className="mt-1 max-w-2xl leading-6 text-muted-foreground">
+											<p className="mt-1 max-w-2xl leading-[1.7143] text-muted-foreground">
 												{section.intro}
 											</p>
 										</div>
@@ -1292,7 +1292,7 @@ function Help() {
 													</h3>
 													{entry.gesture && <GestureBadge {...entry.gesture} />}
 												</div>
-												<div className="max-w-3xl text-sm leading-6 text-muted-foreground">
+												<div className="max-w-3xl text-sm leading-[1.7143] text-muted-foreground">
 													{entry.body}
 												</div>
 											</div>

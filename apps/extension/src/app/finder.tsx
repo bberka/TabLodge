@@ -717,7 +717,7 @@ function ResultList({
 				>
 					{sections.map((section) => (
 						<div key={section.kind} role="group" aria-label={section.label}>
-							<div className="px-2 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+							<div className="px-2 pb-1 pt-2.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
 								{section.label}
 							</div>
 							{section.items.map((item) => {
@@ -759,7 +759,7 @@ function ResultList({
 											}
 										/>
 										<span className="min-w-0 flex-1">
-											<span className="block truncate text-[13px] font-medium">
+											<span className="block truncate text-[0.8125rem] font-medium">
 												{item.kind === 'web' || item.kind === 'url' ? (
 													item.title
 												) : (
@@ -770,7 +770,7 @@ function ResultList({
 												)}
 											</span>
 											{item.detail && (
-												<span className="block truncate text-[11px] text-muted-foreground">
+												<span className="block truncate text-[0.6875rem] text-muted-foreground">
 													{item.kind === 'web' || item.kind === 'url' ? (
 														item.detail
 													) : (
@@ -874,7 +874,7 @@ function ActionMenu({
 								onMouseDown={(event) => event.preventDefault()}
 								onClick={() => void runAction(menu.item, action.id)}
 							>
-								<span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+								<span className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium">
 									{action.label}
 								</span>
 								{active && (
@@ -1109,8 +1109,8 @@ function PaletteBody(props: {
 					viewportClassName={viewportClassName}
 				/>
 			)}
-			<div className="@container shrink-0 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
-				<div className="flex flex-nowrap items-center gap-x-3 whitespace-nowrap">
+			<div className="@container shrink-0 border-t border-border bg-muted/40 px-4 py-2 text-[0.6875rem] text-muted-foreground">
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 					<span className="hidden items-center gap-1 @[20rem]:flex">
 						<Kbd>↑</Kbd>
 						<Kbd>↓</Kbd> Navigate

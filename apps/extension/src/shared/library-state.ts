@@ -21,7 +21,10 @@ import {
 	parseSessionEntry,
 	type Plan,
 	type PlannedPart,
+	type PlannedSession,
+	planPart,
 	planParts,
+	planSession,
 	planState,
 	PREMIGRATION_KEY,
 	PREUPGRADE_KEY,
@@ -129,6 +132,24 @@ type Collector = {
 };
 
 export type Checkpoint = {readonly collector: Collector};
+
+export type LibraryScope = {
+	sessions?: readonly string[];
+	bookmarks?: readonly string[] | 'all';
+};
+
+export type ScopedCommit = {from: string; to: string};
+
+export type OpenScope = {
+	raw: Raw;
+	commit(next: Raw, announce?: (commit: ScopedCommit) => void): Promise<void>;
+};
+
+export const stampOf = (entry: Raw) =>
+	`${Number(entry.rev)}:${Number(entry.updatedAt) || 0}`;
+
+const idOf = (item: unknown) =>
+	isRecord(item) && typeof item.id === 'string' ? item.id : '';
 
 export type LibraryState = ReturnType<typeof createLibraryState>;
 
@@ -355,14 +376,18 @@ export function createLibraryState(
 	}
 
 	async function read(): Promise<Raw | null> {
+		return (await readStamped()).raw;
+	}
+
+	async function readStamped(): Promise<{raw: Raw | null; stamp?: string}> {
 		for (let attempt = 0; ; attempt += 1) {
 			const entry = await getOne(STATE_KEY);
 			if (!isRecord(entry)) {
-				return null;
+				return {raw: null};
 			}
 
 			if (!known(entry)) {
-				return entry;
+				return {raw: entry};
 			}
 
 			let problem: string;
@@ -370,7 +395,10 @@ export function createLibraryState(
 				const index = await loadIndex(entry);
 				const loaded = await loadRecords(index);
 				if (loaded.problems.length === 0) {
-					return assemble(index, loaded.groups, loaded.bookmarks);
+					return {
+						raw: assemble(index, loaded.groups, loaded.bookmarks),
+						stamp: stampOf(entry),
+					};
 				}
 
 				const [first] = loaded.problems;
@@ -456,6 +484,17 @@ export function createLibraryState(
 			);
 		}
 
+		await commitPlan(raw, plan, rev, previous, format);
+	}
+
+	async function commitPlan(
+		raw: Raw,
+		plan: Plan,
+		rev: number,
+		previous: LibraryIndex | null,
+		format: 10 | 11,
+		announce?: (stored: Raw) => void,
+	): Promise<void> {
 		await writeAll([
 			...plan.sessions.filter((session) => !session.unchanged),
 			...writtenParts(plan.sessionPages),
@@ -476,13 +515,222 @@ export function createLibraryState(
 			}
 		}
 
-		await backend.set({
-			[STATE_KEY]: storedIndex(
-				index,
-				[...new Set([...replaced, ...leftover])].filter(
-					(key) => !next.has(key),
-				),
-			),
+		const stored = storedIndex(
+			index,
+			[...new Set([...replaced, ...leftover])].filter((key) => !next.has(key)),
+		);
+		announce?.(stored);
+		await backend.set({[STATE_KEY]: stored});
+	}
+
+	const chunkIds = new Map<string, {hash: string; ids: Set<string>}>();
+
+	async function findChunks(
+		parts: readonly PageRef[],
+		ids: readonly string[],
+	): Promise<Map<number, unknown[]> | undefined> {
+		const live = new Set(parts.map((part) => part.key));
+		for (const key of chunkIds.keys()) {
+			if (!live.has(key)) {
+				chunkIds.delete(key);
+			}
+		}
+
+		const found = new Map<number, unknown[]>();
+		const missing = new Set(ids);
+		const cachedIds = (part: PageRef) => {
+			const cached = chunkIds.get(part.key);
+			return cached?.hash === part.hash ? cached.ids : undefined;
+		};
+
+		const listed: number[] = [];
+		const unknown: number[] = [];
+		for (const [at, part] of parts.entries()) {
+			const cached = cachedIds(part);
+			if (!cached) {
+				unknown.push(at);
+			} else if (ids.some((id) => cached.has(id))) {
+				listed.push(at);
+			}
+		}
+
+		for (const run of batches([...listed, ...unknown], () => 1, 20, 20)) {
+			if (missing.size === 0) {
+				break;
+			}
+
+			const saved = await backend.get(run.map((at) => parts[at].key));
+			for (const at of run) {
+				const part = parts[at];
+				const value = saved[part.key];
+				const items = isRecord(value) ? value.items : undefined;
+				if (!Array.isArray(items) || items.length !== part.count) {
+					return undefined;
+				}
+
+				const held = idsOf(items);
+				chunkIds.set(part.key, {hash: part.hash, ids: held});
+				const wanted = ids.filter((id) => held.has(id));
+				if (wanted.length === 0) {
+					continue;
+				}
+
+				found.set(at, items);
+				for (const id of wanted) {
+					missing.delete(id);
+				}
+			}
+		}
+
+		return found;
+	}
+
+	async function openScope(scope: LibraryScope): Promise<OpenScope | null> {
+		const entry = await getOne(STATE_KEY);
+		if (!known(entry)) {
+			return null;
+		}
+
+		let index: LibraryIndex;
+		try {
+			index = await loadIndex(entry);
+		} catch (error) {
+			if (error instanceof LibraryDamagedError) {
+				return null;
+			}
+
+			throw error;
+		}
+
+		if (index.format !== 11) {
+			return null;
+		}
+
+		const wanted = new Set(scope.sessions);
+		const loaded = await loadRecords({
+			...index,
+			sessions: index.sessions.filter((session) => wanted.has(session.id)),
+			bookmarkParts: scope.bookmarks === 'all' ? index.bookmarkParts : [],
+		});
+		if (loaded.problems.length > 0) {
+			return null;
+		}
+
+		let chunks = new Map<number, unknown[]>();
+		let {bookmarks} = loaded;
+		if (Array.isArray(scope.bookmarks)) {
+			const found = await findChunks(index.bookmarkParts, scope.bookmarks);
+			if (!found) {
+				return null;
+			}
+
+			chunks = found;
+			const ids = new Set<string>(scope.bookmarks);
+			bookmarks = index.bookmarkParts.flatMap((_part, at) =>
+				(chunks.get(at) ?? []).filter((item) => ids.has(idOf(item))),
+			);
+		}
+
+		const from = stampOf(entry);
+		const opened = loaded.groups.map((group) => String(group.id));
+		const openedBookmarks = bookmarks.map((item) => idOf(item));
+		return {
+			raw: assemble(index, loaded.groups, bookmarks),
+			async commit(next, announce) {
+				const current = await getOne(STATE_KEY);
+				if (!known(current) || stampOf(current) !== from) {
+					throw new Error(
+						'The library changed while it was being edited. Try again.',
+					);
+				}
+
+				const previous = await loadIndex(current);
+				const rev = previous.rev + 1;
+				const plan: Plan = {
+					sessions: scopedSessions(previous, rev, opened, next),
+					sessionPages: [],
+					bookmarks: [],
+				};
+				const items = Array.isArray(next.bookmarks) ? next.bookmarks : [];
+				if (scope.bookmarks === 'all') {
+					plan.bookmarks = planParts(
+						items,
+						BOOKMARK_CHUNK_KEY_PREFIX,
+						rev,
+						previous.bookmarkParts,
+					);
+				} else {
+					if (
+						items.length !== openedBookmarks.length ||
+						items.some((item, at) => idOf(item) !== openedBookmarks[at])
+					) {
+						throw new Error(
+							'An edit of single bookmarks cannot add, remove, or move any.',
+						);
+					}
+
+					const edited = new Map(
+						items.map((item: unknown) => [idOf(item), item]),
+					);
+					plan.bookmarks = previous.bookmarkParts.map((part, at) => {
+						const stored = chunks.get(at);
+						return stored
+							? planPart(
+									stored.map((item) => edited.get(idOf(item)) ?? item),
+									`${BOOKMARK_CHUNK_KEY_PREFIX}${at}.${rev}`,
+									part,
+								)
+							: {ref: part, value: {items: []}, json: '', unchanged: true};
+					});
+				}
+
+				await carrySidecars(plan, previous);
+				plan.sessionPages = planParts(
+					plan.sessions.map((session) => session.entry),
+					SESSION_PAGE_KEY_PREFIX,
+					rev,
+					previous.sessionPages,
+					previous.sessions,
+				);
+				await commitPlan(next, plan, rev, previous, 11, (stored) => {
+					announce?.({from, to: stampOf(stored)});
+				});
+			},
+		};
+	}
+
+	function scopedSessions(
+		previous: LibraryIndex,
+		rev: number,
+		opened: readonly string[],
+		next: Raw,
+	): PlannedSession[] {
+		const edited = new Map(
+			(Array.isArray(next.groups) ? next.groups : []).map((group: unknown) => [
+				idOf(group),
+				group,
+			]),
+		);
+		const scoped = new Set(opened);
+		if ([...edited.keys()].some((id) => !scoped.has(id))) {
+			throw new Error('An edit of single sessions cannot add any.');
+		}
+
+		return previous.sessions.flatMap((entry): PlannedSession[] => {
+			if (!scoped.has(entry.id)) {
+				return [
+					{
+						entry,
+						key: sessionKey(entry.id, entry.rev),
+						value: {},
+						json: '',
+						unchanged: true,
+					},
+				];
+			}
+
+			const group = edited.get(entry.id);
+			return group === undefined ? [] : [planSession(group, rev, entry)];
 		});
 	}
 
@@ -523,7 +771,10 @@ export function createLibraryState(
 		}
 
 		const changed = plan.bookmarks.filter((part) => !part.unchanged);
-		const sidecars = previous.bookmarkParts.filter((part) => part.sync);
+		const kept = new Set(plan.bookmarks.map((part) => part.ref.key));
+		const sidecars = previous.bookmarkParts.filter(
+			(part) => part.sync && !kept.has(part.key),
+		);
 		if (changed.length === 0 || sidecars.length === 0) {
 			return;
 		}
@@ -971,6 +1222,11 @@ export function createLibraryState(
 		}
 	}
 
+	async function stamp(): Promise<string | undefined> {
+		const entry = await getOne(STATE_KEY);
+		return known(entry) ? stampOf(entry) : undefined;
+	}
+
 	async function fingerprint(): Promise<string | undefined> {
 		const entry = await getOne(STATE_KEY);
 		return known(entry) ? `rev:${Number(entry.rev)}` : undefined;
@@ -1234,6 +1490,9 @@ export function createLibraryState(
 
 	return {
 		read,
+		readStamped,
+		openScope,
+		stamp,
 		readMeta,
 		write,
 		remove,

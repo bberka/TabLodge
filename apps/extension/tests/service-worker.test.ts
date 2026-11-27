@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
 import {test, vi} from 'vite-plus/test';
+import {applyStateChanges} from '../src/shared/state-changes';
 import type {
 	ActionFailure,
 	ActionSuccess,
@@ -16710,4 +16711,169 @@ test('a failed take-in stops password removal and keeps the inbox key and the en
 	assert.ok(
 		isSealedValue(owner.extraStorage['tablodge.private.sendprivate.key']),
 	);
+});
+
+const scopedEditState = (): StoredState => {
+	const state = stateWithSession();
+	const [first] = state.groups;
+	return {
+		...state,
+		groups: [first, {...structuredClone(first), id: 'session-2'}],
+		bookmarks: Array.from({length: 150}, (_, index) => ({
+			id: `bookmark-${index}`,
+			title: `Bookmark ${index}`,
+			url: `https://bookmark.example/${index}`,
+			columnId: 'bookmark-default',
+			createdAt: 1_700_000_000_000,
+			updatedAt: 1_700_000_000_000,
+		})),
+	};
+};
+
+const scopedEdits: TabLodgeMessage[] = [
+	{type: 'UPDATE_GROUP', groupId: 'session-1', fields: {name: 'Renamed'}},
+	{type: 'ARCHIVE_GROUP', groupId: 'session-1'},
+	{
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: 'bookmark-120',
+		fields: {title: 'Renamed'},
+	},
+	{type: 'ADD_BOOKMARK', bookmark: {url: 'https://added.example/'}},
+	{type: 'DELETE_BOOKMARK', bookmarkId: 'bookmark-3'},
+	{
+		type: 'REORDER_BOOKMARK',
+		bookmarkId: 'bookmark-140',
+		bookmarkIds: ['bookmark-140'],
+		targetColumnId: 'bookmark-default',
+		targetBookmarkId: 'bookmark-1',
+	},
+	{type: 'CREATE_BOOKMARK_COLUMN', name: 'Later'},
+	{type: 'CREATE_FOLDER', name: 'Work'},
+];
+
+test('an open page follows each scoped edit from its change and matches a fresh load', async () => {
+	const harness = createWorkerHarness(scopedEditState());
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-2',
+		fields: {name: 'Warm'},
+	});
+	let held = await harness.sendMessage({type: 'GET_STATE'});
+	for (const edit of scopedEdits) {
+		const result = await harness.sendMessage(edit);
+		assert.equal(result.ok, true, `${edit.type} ${result.error}`);
+		const {changes} = await harness.sendMessage({
+			type: 'GET_STATE_CHANGES',
+			since: held.revision!,
+		});
+		assert.ok(changes, `${edit.type} sends its change`);
+		held = applyStateChanges(held, changes)!;
+		assert.deepEqual(
+			structuredClone(held),
+			structuredClone(await harness.sendMessage({type: 'GET_STATE'})),
+			edit.type,
+		);
+	}
+});
+
+test('a page reloads when the change is unknown or came from a whole write', async () => {
+	const harness = createWorkerHarness(scopedEditState());
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-2',
+		fields: {name: 'Warm'},
+	});
+	const {revision} = await harness.sendMessage({type: 'GET_STATE'});
+	const unknown = await harness.sendMessage({
+		type: 'GET_STATE_CHANGES',
+		since: '1:1',
+	});
+	assert.equal(unknown.changes, undefined);
+	await harness.sendMessage({
+		type: 'UPDATE_TAB',
+		groupId: 'session-1',
+		tabId: 'saved-tab-1',
+		fields: {title: 'Whole write'},
+	});
+	const after = await harness.sendMessage({
+		type: 'GET_STATE_CHANGES',
+		since: revision!,
+	});
+	assert.equal(after.ok, true);
+	assert.equal(after.changes, undefined);
+});
+
+test('a session rename and a bookmark edit never read the other records', async () => {
+	const harness = createWorkerHarness(scopedEditState());
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-2',
+		fields: {name: 'Warm'},
+	});
+	await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: 'bookmark-120',
+		fields: {notes: 'Warm'},
+	});
+	const unreadable = Object.keys(harness.extraStorage).filter(
+		(key) =>
+			key.startsWith('tablodge.session.session-2.') ||
+			key.startsWith('tablodge.bmchunk.0.'),
+	);
+	assert.ok(unreadable.length >= 2);
+	for (const key of unreadable) {
+		harness.extraStorage[key] = {items: []};
+	}
+
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {name: 'Renamed'},
+	});
+	assert.equal(renamed.ok, true, renamed.error);
+	const edited = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: 'bookmark-120',
+		fields: {notes: 'Kept'},
+	});
+	assert.equal(edited.ok, true, edited.error);
+	const full = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(full.ok, false, 'a whole read does trip over those records');
+});
+
+test('Undo restores the library after scoped edits', async () => {
+	const harness = createWorkerHarness(scopedEditState());
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-2',
+		fields: {name: 'Warm'},
+	});
+	for (const edit of scopedEdits) {
+		if (edit.type === 'DELETE_BOOKMARK') {
+			continue;
+		}
+
+		const {
+			updatedAt: _before,
+			revision: _from,
+			...before
+		} = await harness.sendMessage({type: 'GET_STATE'});
+		const result = await harness.sendMessage(edit);
+		const {undoId} = result as {undoId?: string};
+		assert.equal(
+			(await harness.sendMessage({type: 'UNDO', id: undoId!})).ok,
+			true,
+			edit.type,
+		);
+		const {
+			updatedAt: _after,
+			revision: _to,
+			...after
+		} = await harness.sendMessage({type: 'GET_STATE'});
+		assert.deepEqual(
+			structuredClone(after),
+			structuredClone(before),
+			edit.type,
+		);
+	}
 });

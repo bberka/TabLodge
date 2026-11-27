@@ -481,7 +481,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					<Label htmlFor={settingsSwitchId}>Sync settings</Label>
 					<p
 						id={settingsHelpId}
-						className="text-xs leading-5 text-muted-foreground"
+						className="text-xs leading-[1.6667] text-muted-foreground"
 					>
 						Link settings such as removing tracking parameters reach every
 						browser and phone you connect. The theme, the accent, and the

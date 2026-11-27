@@ -114,7 +114,7 @@ function KeepOffHelpButton({site}: {site: string}) {
 			<PopoverContent
 				align="start"
 				aria-label={label}
-				className="w-80 space-y-2 p-3 text-xs leading-5"
+				className="w-80 space-y-2 p-3 text-xs leading-[1.6667]"
 			>
 				<p>
 					With Save to {PROJECT.name} only, hold Shift as you click to save on{' '}
@@ -389,7 +389,7 @@ export function AddSiteSource({
 									</span>
 									<span
 										className={cn(
-											'block text-xs leading-5',
+											'block text-xs leading-[1.6667]',
 											isSelected
 												? 'text-accent-foreground/80'
 												: 'text-muted-foreground',
@@ -506,11 +506,11 @@ function SiteOptions({
 		: (siteColumn?.id ?? SITE_COLUMN);
 	return (
 		<div className="space-y-3">
-			<p className="max-w-xl text-xs leading-5 text-muted-foreground">
+			<p className="max-w-xl text-xs leading-[1.6667] text-muted-foreground">
 				{source.description}
 			</p>
 			{!entry?.enabled && !entry?.notice && (
-				<p className="max-w-xl text-xs leading-5 text-muted-foreground">
+				<p className="max-w-xl text-xs leading-[1.6667] text-muted-foreground">
 					On in another browser. Turn it on to save here too; the browser asks
 					for access to {source.hosts[0]}.
 				</p>
@@ -518,7 +518,7 @@ function SiteOptions({
 			{notice && (
 				<p
 					role="status"
-					className="flex max-w-xl items-start gap-1.5 text-xs leading-5 text-destructive"
+					className="flex max-w-xl items-start gap-1.5 text-xs leading-[1.6667] text-destructive"
 				>
 					<CircleAlert
 						className="mt-0.5 h-3.5 w-3.5 shrink-0"

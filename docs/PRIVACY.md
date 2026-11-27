@@ -181,6 +181,7 @@ The Android app (its own preferences, separate from the extension's):
 | When the private library locks | `privateLockMode`, `privateLockMinutes` | They protect this phone's private library, which a change on another phone must not weaken |
 | Where links open | `openWith`, `openApp`, `privateOpenWith`, `privateOpenApp` | They name browsers installed on this phone |
 | The column offered first when saving | `lastColumnId` | What this phone saved to last, not a choice |
+| Glass effect | `glassEffect` | Whether this phone frosts its floating bar and buttons depends on its graphics |
 | Which column each home screen widget shows | The widget's Android preferences | Each placed widget is on this phone |
 
 Settings that a newer version of either app syncs and this one does not know yet are kept as they arrived, in `heldSettings` in the library's settings, so they go back unchanged.
