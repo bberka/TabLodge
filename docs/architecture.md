@@ -115,13 +115,13 @@ The index is written by every commit, so pages and the context menu code that wa
 
 ### Scoped edits
 
-Some edits read and write only what they touch. `openStore` in the worker asks `openScope` for the root, the index pages, and the records the edit names, normalizes that partial library, and commits it against the same root (a commit is refused when the root changed in between). The page and chunk hashes and the stamps of untouched records are carried as they are.
+Some edits read and write only what they touch. `openStore` in the worker asks `openScope` for the root, the index pages and records the edit names, normalizes that partial library, and commits it against the same root (a commit is refused when the root changed in between). The page and chunk hashes and the stamps of untouched records are carried as they are.
 
-| Edit | Records read besides the root and index pages |
+| Edit | Records read besides the root |
 | --- | --- |
-| Rename, recolor, describe, move to a folder, or archive one session | That session |
+| Rename, recolor, describe, move to a folder, or archive one session | That session and the session index pages scanned until it is found (cached by page hash within a worker run) |
 | Edit one bookmark | The chunk that holds it. The first such edit after a worker start also reads the chunks before it, to find it |
-| Add, delete, or reorder bookmarks | All bookmark chunks, no session |
+| Add, delete, or reorder bookmarks | All bookmark chunks, no session or session index page |
 | Create or edit a folder or a bookmark column, or move a column | None |
 
 Every other edit reads the whole library through `getStore`, as do Undo, sync, exports, and a page's first load. A scoped edit also falls back to the whole read when the library is not in layout 11, when a record it needs is damaged, or when the stored folders are not in normalized form.
