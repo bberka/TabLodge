@@ -231,6 +231,27 @@ export function BookmarkBehaviourCard() {
 					setPreferences({savePreview});
 				}}
 			/>
+			<SelectRow
+				row={ROWS.afterShare}
+				value={prefs.afterShare}
+				choices={[
+					{
+						id: 'close',
+						name: 'Close',
+						hint: 'Return to the app you came from when the share started TabLodge',
+						icon: 'return-up-back-outline',
+					},
+					{
+						id: 'stay',
+						name: 'Stay in TabLodge',
+						hint: 'Keep TabLodge open after saving',
+						icon: 'layers-outline',
+					},
+				]}
+				onChange={(afterShare) => {
+					setPreferences({afterShare});
+				}}
+			/>
 		</SettingsCard>
 	);
 }

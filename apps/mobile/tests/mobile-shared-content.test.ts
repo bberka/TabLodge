@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {cacheCopies, readShare} from '../src/library/shared-content';
+import {
+	cacheCopies,
+	readShare,
+	shouldCloseAfterShare,
+} from '../src/library/shared-content';
 
 const cache = 'file:///data/user/0/com.bberka.tablodge/cache/';
 
@@ -178,5 +182,14 @@ describe('cacheCopies', () => {
 			[`${cache}IMG_1.jpg`],
 		);
 		assert.deepEqual(cacheCopies({text: 'x'}, cache), []);
+	});
+});
+
+describe('shouldCloseAfterShare', () => {
+	test('closes only when the share started the app and afterShare is close', () => {
+		assert.equal(shouldCloseAfterShare(true, 'close'), true);
+		assert.equal(shouldCloseAfterShare(true, 'stay'), false);
+		assert.equal(shouldCloseAfterShare(false, 'close'), false);
+		assert.equal(shouldCloseAfterShare(false, 'stay'), false);
 	});
 });
