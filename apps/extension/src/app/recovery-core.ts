@@ -114,11 +114,12 @@ export function offerUndo(
 	undoId: string | undefined,
 	showStatus: ShowStatus,
 	reload: () => unknown,
+	isError = false,
 ) {
 	claimUndo(undoId);
 	showStatus(
 		message,
-		false,
+		isError,
 		undoId
 			? {
 					action: {
@@ -137,6 +138,22 @@ export function offerUndo(
 				}
 			: {toast: true},
 	);
+}
+
+export function reportBackupImport(
+	mode: 'merge' | 'replace',
+	summary: string,
+	undoId: string | undefined,
+	restoredImages: {failed: number; error?: string},
+	showStatus: ShowStatus,
+	reload: () => unknown,
+) {
+	const failed = restoredImages.failed > 0;
+	const action = mode === 'merge' ? 'added' : 'imported';
+	const message = failed
+		? `Backup ${action}, but ${plural(restoredImages.failed, 'image')} could not be restored.${restoredImages.error ? ` ${restoredImages.error}` : ''}`
+		: summary;
+	offerUndo(message, undoId, showStatus, reload, failed);
 }
 
 export function offerCloseTabsUndo(

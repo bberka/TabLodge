@@ -15,11 +15,11 @@ import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/ui/bottom-sheet';
 import {
 	cacheCopies,
+	decideCloseAfterShare,
 	FILE_REFUSED,
 	type IncomingShare,
 	readShare,
 	type ShareOutcome,
-	shouldCloseAfterShare,
 } from './src/library/shared-content';
 import {
 	FileTooLargeError,
@@ -211,7 +211,16 @@ function Main() {
 			setSharedFile(undefined);
 			openImport(undefined);
 			if (outcome.kind === 'refused') {
-				if (shouldCloseAfterShare(quick, getPreferences().afterShare)) {
+				const closeAfter = await decideCloseAfterShare(
+					quick,
+					loadPreferences,
+					() => getPreferences().afterShare,
+				);
+				if (opening !== openingRef.current) {
+					return;
+				}
+
+				if (closeAfter) {
 					ToastAndroid.show(FILE_REFUSED, ToastAndroid.LONG);
 					BackHandler.exitApp();
 				} else {
@@ -313,6 +322,7 @@ function Main() {
 	}, [hasShareIntent, shareIntent, resetShareIntent, openShare]);
 
 	const openTile = useCallback(async (route: TileRoute) => {
+		const opening = ++openingRef.current;
 		setView('regular');
 		setTab('bookmarks');
 		if (route === 'search') {
@@ -323,6 +333,10 @@ function Main() {
 
 		const quick = Date.now() - BOOT < COLD_MS;
 		const parts = splitShared(await readClipboard());
+		if (opening !== openingRef.current) {
+			return;
+		}
+
 		setDraft((current) => ({
 			key: current.key + 1,
 			text: parts.url ?? '',
@@ -356,6 +370,7 @@ function Main() {
 				return;
 			}
 
+			openingRef.current += 1;
 			setView('regular');
 			setOpen(false);
 			requestJump({screen: 'bookmarks', columnId});
@@ -371,6 +386,7 @@ function Main() {
 	}, [openTile]);
 
 	const openBlank = useCallback(() => {
+		openingRef.current += 1;
 		setDraft((current) => ({
 			key: current.key + 1,
 			text: '',
@@ -383,62 +399,76 @@ function Main() {
 	}, []);
 
 	const finishQuote = (saved?: SavedQuote) => {
+		const {quick} = draft;
+		const opening = openingRef.current;
 		setOpen(false);
-		const closeAfter = shouldCloseAfterShare(
-			draft.quick,
-			getPreferences().afterShare,
-		);
-		if (saved) {
-			const message = `Quote saved to ${saved.placed}`;
-			if (Platform.OS === 'android' && closeAfter) {
-				ToastAndroid.show(message, ToastAndroid.SHORT);
-			} else {
-				showSnack(message, {
-					label: 'Undo',
-					run() {
-						let removed = false;
-						void editIn(saved.library, (current) => {
-							const next = undoQuote(current, saved.undo, Date.now());
-							removed = next !== current;
-							return next;
-						}).then(() => {
-							showSnack(
-								removed
-									? 'Quote removed'
-									: 'The note changed since, so the quote stays',
-							);
-						});
-					},
-				});
+		void decideCloseAfterShare(
+			quick,
+			loadPreferences,
+			() => getPreferences().afterShare,
+		).then((closeAfter) => {
+			const shouldExit = closeAfter && opening === openingRef.current;
+			if (saved) {
+				const message = `Quote saved to ${saved.placed}`;
+				if (Platform.OS === 'android' && shouldExit) {
+					ToastAndroid.show(message, ToastAndroid.SHORT);
+				} else {
+					showSnack(message, {
+						label: 'Undo',
+						run() {
+							let removed = false;
+							void editIn(saved.library, (current) => {
+								const next = undoQuote(current, saved.undo, Date.now());
+								removed = next !== current;
+								return next;
+							}).then(() => {
+								showSnack(
+									removed
+										? 'Quote removed'
+										: 'The note changed since, so the quote stays',
+								);
+							});
+						},
+					});
+				}
 			}
-		}
 
-		if (closeAfter) {
-			setTimeout(() => {
-				BackHandler.exitApp();
-			}, 250);
-		}
+			if (shouldExit) {
+				setTimeout(() => {
+					if (opening === openingRef.current) {
+						BackHandler.exitApp();
+					}
+				}, 250);
+			}
+		});
 	};
 
 	const finish = (saved?: string) => {
+		const {quick} = draft;
+		const opening = openingRef.current;
 		setOpen(false);
-		const closeAfter = shouldCloseAfterShare(
-			draft.quick,
-			getPreferences().afterShare,
-		);
-		if (saved) {
-			if (Platform.OS === 'android' && closeAfter) {
-				ToastAndroid.show(saved, ToastAndroid.SHORT);
-			} else {
-				showSnack(saved);
+		void decideCloseAfterShare(
+			quick,
+			loadPreferences,
+			() => getPreferences().afterShare,
+		).then((closeAfter) => {
+			const shouldExit = closeAfter && opening === openingRef.current;
+			if (saved) {
+				if (Platform.OS === 'android' && shouldExit) {
+					ToastAndroid.show(saved, ToastAndroid.SHORT);
+				} else {
+					showSnack(saved);
+				}
 			}
-		}
 
-		if (closeAfter) {
-			setTimeout(() => {
-				BackHandler.exitApp();
-			}, 250);
-		}
+			if (shouldExit) {
+				setTimeout(() => {
+					if (opening === openingRef.current) {
+						BackHandler.exitApp();
+					}
+				}, 250);
+			}
+		});
 	};
 
 	return (

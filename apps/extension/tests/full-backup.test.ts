@@ -278,3 +278,17 @@ test('a backup file may be larger than a text import by the image budget', () =>
 	);
 	assert.ok(importFileLimit('tablodge-full-2026-03-04.zip.enc', text) > text);
 });
+
+test('backupImages encodes each distinct original file once across repeated metadata records', () => {
+	const saved = picture();
+	const {data: _data, ...thumb} = saved;
+	const fileName = backupImageFile({url: saved.url, type: 'image/png'});
+	const restored = backupImages({
+		images: [thumb, {...thumb}, {...thumb}],
+		imageFiles: {[fileName]: base64ToBytes(PNG)},
+	}) as Array<{data?: string}>;
+	assert.equal(restored.length, 3);
+	assert.equal(restored[0].data, PNG);
+	assert.equal(Object.is(restored[0].data, restored[1].data), true);
+	assert.equal(Object.is(restored[1].data, restored[2].data), true);
+});

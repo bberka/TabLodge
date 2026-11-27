@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	cacheCopies,
+	decideCloseAfterShare,
 	readShare,
 	shouldCloseAfterShare,
 } from '../src/library/shared-content';
+import type {AfterShare} from '../src/settings/preference-schema';
 
 const cache = 'file:///data/user/0/com.bberka.tablodge/cache/';
 
@@ -191,5 +193,69 @@ describe('shouldCloseAfterShare', () => {
 		assert.equal(shouldCloseAfterShare(true, 'stay'), false);
 		assert.equal(shouldCloseAfterShare(false, 'close'), false);
 		assert.equal(shouldCloseAfterShare(false, 'stay'), false);
+	});
+});
+
+describe('decideCloseAfterShare', () => {
+	test('waits for stored preferences on cold start before deciding', async () => {
+		let afterShare: AfterShare = 'close';
+		const pending = Promise.withResolvers<void>();
+		let settled = false;
+		const decision = decideCloseAfterShare(
+			true,
+			async () => {
+				await pending.promise;
+				afterShare = 'stay';
+			},
+			() => afterShare,
+		).then((result) => {
+			settled = true;
+			return result;
+		});
+
+		await Promise.resolve();
+		assert.equal(settled, false);
+
+		pending.resolve();
+		assert.equal(await decision, false);
+	});
+
+	test('closes on cold start when stored preferences resolve to close', async () => {
+		assert.equal(
+			await decideCloseAfterShare(
+				true,
+				async () => {},
+				() => 'close',
+			),
+			true,
+		);
+	});
+
+	test('stays open without waiting for preferences when the app was already open', async () => {
+		let loaded = false;
+		assert.equal(
+			await decideCloseAfterShare(
+				false,
+				async () => {
+					loaded = true;
+				},
+				() => 'close',
+			),
+			false,
+		);
+		assert.equal(loaded, false);
+	});
+
+	test('falls back to the current preference if loading fails', async () => {
+		assert.equal(
+			await decideCloseAfterShare(
+				true,
+				async () => {
+					throw new Error('storage failed');
+				},
+				() => 'close',
+			),
+			true,
+		);
 	});
 });

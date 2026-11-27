@@ -114,7 +114,7 @@ import {
 import {validateCredential, weakPasswordHint} from '../shared/passcode';
 import {siteName} from '../shared/web-url';
 import {backupImageParts, restoreBackupImages} from './saved-images';
-import {offerUndo} from './recovery-core';
+import {offerUndo, reportBackupImport} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
@@ -1689,12 +1689,17 @@ export function ImportDialog({
 				}
 
 				await send('ADD_PAGE_COPIES', {copies: full.copies});
-				await restoreBackupImages(full);
+				const restoredImages = await restoreBackupImages(full);
 
 				onOpenChange(false);
 				await onImported?.();
-				offerUndo(mergeSummary(merged), merged.undoId, showStatus, async () =>
-					onImported?.(),
+				reportBackupImport(
+					'merge',
+					mergeSummary(merged),
+					merged.undoId,
+					restoredImages,
+					showStatus,
+					async () => onImported?.(),
 				);
 				return;
 			}
@@ -1712,13 +1717,15 @@ export function ImportDialog({
 				throw new Error(result?.error || 'Could not import this backup.');
 			}
 
-			await restoreBackupImages(full);
+			const restoredImages = await restoreBackupImages(full);
 
 			onOpenChange(false);
 			await onImported?.();
-			offerUndo(
+			reportBackupImport(
+				'replace',
 				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.`,
 				result.undoId,
+				restoredImages,
 				showStatus,
 				async () => onImported?.(),
 			);
