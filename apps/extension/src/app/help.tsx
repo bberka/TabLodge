@@ -1012,13 +1012,17 @@ function Help() {
 							› Dashboard has Toast position, which moves these messages (and
 							the notice Sources shows on a site, and the one after Save quote)
 							to a corner or the top, and Messages stay, which makes them last
-							twice as long or until you close them. Settings › Recovery &amp;
-							backups has a Trash bin button too, and Empty trash bin at the
-							bottom of the bin deletes everything in it for good.
+							twice as long or until you close them. Undo for a library change,
+							such as a move, an import, or a save, is offered for just under
+							two minutes; after that a message you keep open loses the button.
+							Undo that restores from the trash bin has no such limit. Settings
+							› Recovery &amp; backups has a Trash bin button too, and Empty
+							trash bin at the bottom of the bin deletes everything in it for
+							good.
 						</>
 					),
 					searchText:
-						'toast position messages stay notification corner top bottom longer until dismissed undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
+						'toast position messages stay notification corner top bottom longer until dismissed undo two minutes deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
 				},
 				{
 					title: 'Automatic backups',

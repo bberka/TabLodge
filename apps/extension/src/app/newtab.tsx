@@ -1605,7 +1605,7 @@ function NewTab() {
 		);
 	}
 
-	const cachedSessionTargets = useMemo(() => {
+	const sessionTargetsList = useMemo(() => {
 		const archivedId = archivedFolderId(state?.folders ?? []);
 		return (state?.groups ?? [])
 			.filter((group) => group.folderId !== archivedId)
@@ -1613,13 +1613,9 @@ function NewTab() {
 				id: group.id,
 				name: group.name.trim() || 'Untitled session',
 			}));
-	}, [state?.groups, state?.folders]);
+	}, [state?.folders, state?.groups]);
 
-	function sessionTargets() {
-		return cachedSessionTargets;
-	}
-
-	const pasteSessions = sessionTargets();
+	const pasteSessions = sessionTargetsList;
 	const pasteSessionId = pasteSessions.some(
 		(session) => session.id === saveSessionId,
 	)
@@ -2312,7 +2308,7 @@ function NewTab() {
 			)}
 		</>
 	);
-	const sessionTargetsForBookmarks = sessionTargets();
+	const sessionTargetsForBookmarks = sessionTargetsList;
 
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
@@ -2322,7 +2318,7 @@ function NewTab() {
 		edit: openColumnEditor,
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
-		sessionTargets,
+		sessionTargets: () => sessionTargetsList,
 		pickTarget: setTargetPicker,
 		remove(column) {
 			void requestDeleteColumn(column);

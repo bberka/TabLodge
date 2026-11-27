@@ -16771,28 +16771,33 @@ test('an open page follows each scoped edit from its change and matches a fresh 
 
 test('a page reloads when the change is unknown or came from a whole write', async () => {
 	const harness = createWorkerHarness(scopedEditState());
-	await harness.sendMessage({
+	const warmed = await harness.sendMessage({
 		type: 'UPDATE_GROUP',
 		groupId: 'session-2',
 		fields: {name: 'Warm'},
 	});
-	const {revision} = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(warmed.ok, true, warmed.error);
+	const initial = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(initial.ok, true, initial.error);
+	assert.ok(initial.revision, 'initial GET_STATE returns a revision');
 	const unknown = await harness.sendMessage({
 		type: 'GET_STATE_CHANGES',
 		since: '1:1',
 	});
+	assert.equal(unknown.ok, true, unknown.error);
 	assert.equal(unknown.changes, undefined);
-	await harness.sendMessage({
+	const updated = await harness.sendMessage({
 		type: 'UPDATE_TAB',
 		groupId: 'session-1',
 		tabId: 'saved-tab-1',
 		fields: {title: 'Whole write'},
 	});
+	assert.equal(updated.ok, true, updated.error);
 	const after = await harness.sendMessage({
 		type: 'GET_STATE_CHANGES',
-		since: revision!,
+		since: initial.revision,
 	});
-	assert.equal(after.ok, true);
+	assert.equal(after.ok, true, after.error);
 	assert.equal(after.changes, undefined);
 });
 

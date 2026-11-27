@@ -35,7 +35,12 @@ import {
 } from '../src/shared/trash';
 import {createChangeLog} from '../src/shared/state-changes';
 import {diffList} from '../src/shared/library-patch';
-import {undoableEdit, type UndoableEdit} from '../src/shared/undo-policy';
+import {
+	UNDO_OFFER_MS,
+	UNDO_WINDOW_MS,
+	undoableEdit,
+	type UndoableEdit,
+} from '../src/shared/undo-policy';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {hostIsExcluded} from '../src/shared/excluded-sites';
 import {
@@ -8549,7 +8554,6 @@ function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
 const UNDO_KEY = 'tablodge.undo';
 const ALARM_UNDO = 'tablodge-undo';
 
-const UNDO_WINDOW_MS = 120_000;
 const UNDO_KEEP = 3;
 const undoMutate = serialQueue();
 
@@ -12072,6 +12076,7 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 						type: 'QUOTE_UNDO' as const,
 						id: result.undoId,
 						done: 'Quote removed.',
+						expiresMs: UNDO_OFFER_MS,
 					},
 				}),
 			}

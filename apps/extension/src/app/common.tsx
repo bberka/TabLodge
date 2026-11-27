@@ -39,6 +39,7 @@ import {
 	type ToastDuration,
 	type ToastPosition,
 } from '../shared/toast-prefs';
+import {undoExpiry} from '../shared/undo-policy';
 import {PrivateWindowMark} from './private-window-appearance';
 import {
 	PRIVATE_CONFIG_KEY,
@@ -487,6 +488,7 @@ export type Status = {
 };
 export type StatusAction = {
 	label: string;
+	expiresAt?: number;
 	onClick: () => void | Promise<void>;
 	onClose?: () => void;
 };
@@ -630,6 +632,7 @@ export function useStatus(): [Status | null, ShowStatus] {
 					showStatusRef.current(done, false, {
 						action: {
 							label: 'Undo',
+							expiresAt: undoExpiry(),
 							async onClick() {
 								const result = await send('UNDO', {id: undoId});
 								if (result?.ok) {
@@ -725,7 +728,32 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 			setPaused(false);
 		}
 	}, [shown]);
-	const undoAction = shown ? visible?.action : undefined;
+	const expiresAt = shown ? visible?.action?.expiresAt : undefined;
+	const [expired, setExpired] = useState<string | null>(null);
+	const undoButtonRef = useRef<HTMLButtonElement>(null);
+	const closeButtonRef = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (expiresAt === undefined) {
+			return undefined;
+		}
+
+		const timer = setTimeout(
+			() => {
+				if (
+					undoButtonRef.current &&
+					document.activeElement === undoButtonRef.current
+				) {
+					closeButtonRef.current?.focus();
+				}
+
+				setExpired(key);
+			},
+			Math.max(0, expiresAt - Date.now()),
+		);
+		return () => clearTimeout(timer);
+	}, [key, expiresAt]);
+	const offered = expired === key ? undefined : visible?.action;
+	const undoAction = shown ? offered : undefined;
 	useEffect(() => {
 		const onClose = undoAction?.onClose;
 		return onClose ? () => onClose() : undefined;
@@ -799,20 +827,22 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					<span className="min-w-0 flex-1 wrap-break-word leading-[1.4286]">
 						{visible.message}
 					</span>
-					{visible.action && (
+					{offered && (
 						<button
+							ref={undoButtonRef}
 							type="button"
 							aria-keyshortcuts="Control+Z Meta+Z"
 							className="shrink-0 rounded-sm px-1.5 text-sm font-semibold leading-[1.4286] text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							onClick={() => {
 								setDismissed(key);
-								void visible.action!.onClick();
+								void offered.onClick();
 							}}
 						>
-							{visible.action.label}
+							{offered.label}
 						</button>
 					)}
 					<button
+						ref={closeButtonRef}
 						type="button"
 						aria-label="Dismiss message"
 						className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"

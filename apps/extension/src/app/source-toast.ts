@@ -26,6 +26,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 type Theme = 'light' | 'dark';
 export type ToastAction = {
 	label: string;
+	expiresMs?: number;
 	run: () => Promise<string | ToastStep | undefined>;
 };
 type ToastStep = {text: string; action?: ToastAction};
@@ -336,7 +337,11 @@ function render(
 	});
 	box.append(message);
 
-	type ToastButton = {action?: ToastAction; button: HTMLButtonElement};
+	type ToastButton = {
+		action?: ToastAction;
+		button: HTMLButtonElement;
+		expiry?: ReturnType<typeof setTimeout>;
+	};
 	const buttons = actions.map((action): ToastButton => {
 		const button = document.createElement('button');
 		button.type = 'button';
@@ -394,9 +399,31 @@ function render(
 	});
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
-	let held = false;
+	let hovered = false;
+	let focused = false;
 	let previous: HTMLElement | undefined;
 	let closed = false;
+	const returnFocus = (except?: HTMLButtonElement) => {
+		if (previous?.isConnected) {
+			previous.focus();
+			return;
+		}
+
+		const sibling = [...list.querySelectorAll('button')].find(
+			(button) => button !== except,
+		);
+		if (sibling) {
+			sibling.focus();
+			return;
+		}
+
+		document
+			.querySelector<HTMLElement>(
+				'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			)
+			?.focus();
+	};
+
 	const close = () => {
 		if (closed) {
 			return;
@@ -405,6 +432,10 @@ function render(
 		closed = true;
 		current.closers = current.closers.filter((closer) => closer !== close);
 		clearTimeout(timer);
+		for (const {expiry} of buttons) {
+			clearTimeout(expiry);
+		}
+
 		const hadFocus =
 			root.activeElement !== null && box.contains(root.activeElement);
 		box.remove();
@@ -415,8 +446,8 @@ function render(
 			}
 		}
 
-		if (hadFocus && previous?.isConnected) {
-			previous.focus();
+		if (hadFocus) {
+			returnFocus();
 		}
 	};
 
@@ -424,18 +455,19 @@ function render(
 	const schedule = () => {
 		clearTimeout(timer);
 		const ms = toastMs(asking ? ASKING_VISIBLE_MS : VISIBLE_MS, prefs.duration);
-		if (!held && !closed && ms !== undefined) {
+		if (!hovered && !focused && !closed && ms !== undefined) {
 			timer = setTimeout(close, ms);
 		}
 	};
 
-	const hold = (value: boolean) => {
-		held = value;
+	box.addEventListener('pointerenter', () => {
+		hovered = true;
 		schedule();
-	};
-
-	box.addEventListener('pointerenter', () => hold(true));
-	box.addEventListener('pointerleave', () => hold(false));
+	});
+	box.addEventListener('pointerleave', () => {
+		hovered = false;
+		schedule();
+	});
 	box.addEventListener('focusin', (event) => {
 		if (
 			event.relatedTarget instanceof HTMLElement &&
@@ -445,14 +477,59 @@ function render(
 			previous = event.relatedTarget;
 		}
 
-		hold(true);
+		focused = true;
+		schedule();
 	});
-	box.addEventListener('focusout', () => hold(false));
+	box.addEventListener('focusout', (event) => {
+		if (
+			event.relatedTarget instanceof Node &&
+			box.contains(event.relatedTarget)
+		) {
+			return;
+		}
+
+		focused = false;
+		schedule();
+	});
 	box.addEventListener('keydown', (event) => {
 		if (event.key === 'Escape') {
 			close();
 		}
 	});
+	const expire = (entry: ToastButton) => {
+		const others = buttons.filter(
+			({button}) => button !== entry.button && box.contains(button),
+		);
+		if (prefs.duration === 'dismiss' && others.length === 0) {
+			entry.action = undefined;
+			entry.button.textContent = 'Close';
+			return;
+		}
+
+		const hadFocus = root.activeElement === entry.button;
+		if (hadFocus) {
+			if (others.length > 0) {
+				others[0].button.focus();
+			} else {
+				focused = false;
+				returnFocus(entry.button);
+			}
+		}
+
+		entry.button.remove();
+		if (hadFocus && others.length === 0) {
+			schedule();
+		}
+	};
+
+	const arm = (entry: ToastButton) => {
+		clearTimeout(entry.expiry);
+		const ms = entry.action?.expiresMs;
+		if (ms !== undefined) {
+			entry.expiry = setTimeout(expire, ms, entry);
+		}
+	};
+
 	const run = async (entry: ToastButton) => {
 		const {action, button} = entry;
 		if (button.getAttribute('aria-disabled') === 'true') {
@@ -471,6 +548,7 @@ function render(
 		}
 
 		button.setAttribute('aria-disabled', 'true');
+		clearTimeout(entry.expiry);
 		const next = await action.run();
 		if (next === undefined) {
 			close();
@@ -482,11 +560,13 @@ function render(
 		entry.action = step.action;
 		button.textContent = step.action?.label ?? 'Close';
 		button.removeAttribute('aria-disabled');
+		arm(entry);
 		schedule();
 	};
 
 	for (const entry of buttons) {
 		entry.button.addEventListener('click', () => void run(entry));
+		arm(entry);
 	}
 
 	schedule();

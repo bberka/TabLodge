@@ -1341,6 +1341,8 @@ export function SessionManager({
 		bookmark: openBookmarkPicker,
 		select: changeSelection,
 		selectGroup: changeGroupSelection,
+		hasMoveTargets: (excludeId) =>
+			groups.some((group) => group.id !== excludeId),
 		moveTargets: (excludeId) =>
 			groups
 				.filter((group) => group.id !== excludeId)
@@ -2819,6 +2821,7 @@ type CardActions = {
 	bookmark: (tab: SavedTabRecord) => void;
 	select: (key: string, checked: boolean, event: ClickModifiers) => void;
 	selectGroup: (groupId: string, checked: boolean) => void;
+	hasMoveTargets: (excludeId: string) => boolean;
 	moveTargets: (excludeId: string) => Array<{id: string; name: string}>;
 	pickTarget: (request: TargetPickerRequest) => void;
 	dragBegin: (item: DragItem) => void;
@@ -3185,7 +3188,7 @@ const GroupCard = memo(
 				id: 'merge',
 				label: 'Merge into…',
 				icon: Merge,
-				hidden: handlers.moveTargets(group.id).length === 0,
+				hidden: !handlers.hasMoveTargets(group.id),
 				onSelect: () =>
 					handlers.pickTarget({
 						title: 'Merge into session',

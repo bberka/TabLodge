@@ -7,6 +7,7 @@ import {
 	useColorScheme,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {holdCopySweep} from '../library/page-copies';
 import {useLinkSettings} from '../library/use-link-settings';
 import {usePreferences} from '../settings/preferences';
 import {
@@ -53,12 +54,16 @@ export function showSnack(
 ): void {
 	counter += 1;
 	close();
+	const release = action && holdCopySweep();
 	current = {
 		id: counter,
 		message,
 		actionLabel: action?.label,
 		onAction: action?.run,
-		onClose: action?.closed,
+		onClose() {
+			release?.();
+			action?.closed?.();
+		},
 	};
 	clearTimeout(timer);
 	const ms = toastMs(5000, duration);
