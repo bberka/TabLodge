@@ -253,3 +253,103 @@ test('removing the only stamped tab of a session leaves an index page that still
 		await store.read(),
 	);
 });
+
+test('first scoped session edit after a cold start reads only the index pages it needs', async () => {
+	const {backend, base, reads, recordReads} = await stored(1000, 100);
+	const restarted = createLibraryState(backend);
+	reads.length = 0;
+
+	const checkpoint = (await restarted.beginCheckpoint())!;
+	const opened = (await restarted.openScope({sessions: ['s0']}))!;
+	const renamed = {...items(opened.raw, 'groups')[0], name: 'Cold rename'};
+	await opened.commit({...opened.raw, groups: [renamed], updatedAt: 9100});
+	const delta = (await restarted.endCheckpoint(checkpoint))!;
+
+	assert.deepEqual(
+		[...new Set(recordReads(SESSION_PAGE_KEY_PREFIX))],
+		[`${SESSION_PAGE_KEY_PREFIX}0.1`],
+	);
+	assert.deepEqual(
+		[...new Set(recordReads(SESSION_KEY_PREFIX))],
+		[`${SESSION_KEY_PREFIX}s0.1`],
+	);
+	assert.deepEqual(recordReads(BOOKMARK_CHUNK_KEY_PREFIX), []);
+
+	const expected = structuredClone(base);
+	items(expected, 'groups')[0] = renamed;
+	expected.updatedAt = 9100;
+	assert.deepEqual(await restarted.read(), expected);
+	assert.deepEqual(await restarted.verify(), []);
+
+	await restarted.restoreCheckpoint(delta);
+	assert.deepEqual(await restarted.read(), base);
+	assert.deepEqual(await restarted.verify(), []);
+});
+
+test('cold-start scoped edit of a later session stops scanning once found, and non-session edits read no session pages', async () => {
+	const {backend, base, reads, recordReads} = await stored(1000, 150);
+
+	const forFolder = createLibraryState(backend);
+	reads.length = 0;
+	const folderCheckpoint = (await forFolder.beginCheckpoint())!;
+	const folderScope = (await forFolder.openScope({}))!;
+	await folderScope.commit({...folderScope.raw, updatedAt: 9200});
+	await forFolder.endCheckpoint(folderCheckpoint);
+	assert.deepEqual(recordReads(SESSION_PAGE_KEY_PREFIX), []);
+
+	const forBookmark = createLibraryState(backend);
+	reads.length = 0;
+	const bookmarkScope = (await forBookmark.openScope({bookmarks: ['b5']}))!;
+	await bookmarkScope.commit({
+		...bookmarkScope.raw,
+		bookmarks: [{...items(bookmarkScope.raw, 'bookmarks')[0], title: 'Cold'}],
+	});
+	assert.deepEqual(recordReads(SESSION_PAGE_KEY_PREFIX), []);
+
+	const forLaterSession = createLibraryState(backend);
+	reads.length = 0;
+	const sessionCheckpoint = (await forLaterSession.beginCheckpoint())!;
+	const sessionScope = (await forLaterSession.openScope({sessions: ['s321']}))!;
+	await sessionScope.commit({
+		...sessionScope.raw,
+		groups: [{...items(sessionScope.raw, 'groups')[0], name: 'Page 3'}],
+	});
+	const delta = (await forLaterSession.endCheckpoint(sessionCheckpoint))!;
+	const pagesRead = new Set(recordReads(SESSION_PAGE_KEY_PREFIX));
+	assert.ok(pagesRead.size < 10, `read ${pagesRead.size} of 10 pages`);
+	assert.ok(pagesRead.has(`${SESSION_PAGE_KEY_PREFIX}3.1`));
+
+	await forLaterSession.restoreCheckpoint(delta);
+	const restored = (await forLaterSession.read())!;
+	assert.equal(
+		items(restored, 'groups')[321].name,
+		items(base, 'groups')[321].name,
+	);
+	assert.deepEqual(await forLaterSession.verify(), []);
+});
+
+test('a cold-start layout 11 checkpoint across multiple commits keeps only starting records', async () => {
+	const {backend, base} = await stored(250, 0);
+	const restarted = createLibraryState(backend);
+	const checkpoint = (await restarted.beginCheckpoint())!;
+
+	const first = (await restarted.openScope({sessions: ['s1']}))!;
+	await first.commit({
+		...first.raw,
+		groups: [{...items(first.raw, 'groups')[0], name: 'First'}],
+	});
+	const second = (await restarted.openScope({sessions: ['s1']}))!;
+	await second.commit({
+		...second.raw,
+		groups: [{...items(second.raw, 'groups')[0], name: 'Second'}],
+	});
+	const delta = (await restarted.endCheckpoint(checkpoint))!;
+
+	assert.deepEqual(Object.keys(delta.records).toSorted(), [
+		`${SESSION_KEY_PREFIX}s1.1`,
+		`${SESSION_PAGE_KEY_PREFIX}0.1`,
+	]);
+	await restarted.restoreCheckpoint(delta);
+	assert.deepEqual(await restarted.read(), base);
+	assert.deepEqual(await restarted.verify(), []);
+});
