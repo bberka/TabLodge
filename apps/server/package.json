@@ -12,7 +12,7 @@
 		"build": "vp build",
 		"start": "node dist/node.js",
 		"cf:dev": "wrangler dev",
-		"cf:deploy": "wrangler deploy",
+		"cf:deploy": "node scripts/deploy-cloudflare.ts",
 		"cf:delete": "wrangler delete",
 		"cf:setup": "node scripts/setup-cloudflare.ts",
 		"cf:bundle": "node scripts/cloudflare-deploy.ts"
