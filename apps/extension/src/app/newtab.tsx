@@ -1605,7 +1605,7 @@ function NewTab() {
 		);
 	}
 
-	function sessionTargets() {
+	const cachedSessionTargets = useMemo(() => {
 		const archivedId = archivedFolderId(state?.folders ?? []);
 		return (state?.groups ?? [])
 			.filter((group) => group.folderId !== archivedId)
@@ -1613,6 +1613,10 @@ function NewTab() {
 				id: group.id,
 				name: group.name.trim() || 'Untitled session',
 			}));
+	}, [state?.groups, state?.folders]);
+
+	function sessionTargets() {
+		return cachedSessionTargets;
 	}
 
 	const pasteSessions = sessionTargets();
