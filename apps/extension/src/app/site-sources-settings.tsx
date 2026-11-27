@@ -544,12 +544,11 @@ function siteState(entry: SiteSourceStatus | undefined): SiteState {
 
 function SiteSummary({
 	source,
-	entry,
+	problem,
 }: {
 	source: SiteSource;
-	entry: SiteSourceStatus | undefined;
+	problem: string | undefined;
 }) {
-	const state = siteState(entry);
 	return (
 		<>
 			<Favicon
@@ -564,16 +563,13 @@ function SiteSummary({
 				<span className="block truncate text-xs text-muted-foreground">
 					{source.hosts[0]}
 				</span>
-				{state.problem && (
+				{problem && (
 					<span className="flex items-center gap-1 text-xs text-destructive">
 						<CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-						{state.problem}
+						{problem}
 					</span>
 				)}
 			</span>
-			<Badge variant={state.variant} className="shrink-0 text-center">
-				{state.badge}
-			</Badge>
 		</>
 	);
 }
@@ -797,38 +793,34 @@ export function SiteSourcesSettings({
 				<ul className="divide-y divide-border rounded-md border border-border">
 					{listed.map((source) => {
 						const entry = status(source);
+						const state = siteState(entry);
 						const isOpen = openId === source.id;
 						const panelId = `${panelBaseId}-${source.id}`;
+						const badgeId = `${panelBaseId}-${source.id}-state`;
 						const canOpenSavedPage = Boolean(
 							entry?.enabled && source.savedPageUrl,
 						);
 						return (
 							<li key={source.id} data-site-source={source.id}>
-								<div className="flex min-h-12 items-center">
+								<div className="relative flex min-h-12 items-center gap-3 px-3 py-2 hover:bg-accent/50">
 									<button
 										type="button"
-										className="flex min-h-12 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+										className="flex min-w-0 flex-1 items-center gap-3 text-left after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
 										aria-expanded={isOpen}
 										aria-controls={isOpen ? panelId : undefined}
+										aria-describedby={badgeId}
 										onClick={() => {
 											setOpenId(isOpen ? undefined : source.id);
 										}}
 									>
-										<SiteSummary source={source} entry={entry} />
-										<ChevronDown
-											className={cn(
-												'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-												isOpen && 'rotate-180',
-											)}
-											aria-hidden="true"
-										/>
+										<SiteSummary source={source} problem={state.problem} />
 									</button>
 									{canOpenSavedPage && (
 										<IconTooltip label={`Open saved page for ${source.label}`}>
 											<Button
 												variant="ghost"
 												size="icon"
-												className="mr-2 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+												className="relative z-10 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
 												disabled={openingSavedPages}
 												aria-label={`Open saved page for ${source.label}`}
 												onClick={() => void openSourceSavedPage(source)}
@@ -837,6 +829,20 @@ export function SiteSourcesSettings({
 											</Button>
 										</IconTooltip>
 									)}
+									<Badge
+										id={badgeId}
+										variant={state.variant}
+										className="pointer-events-none shrink-0 text-center"
+									>
+										{state.badge}
+									</Badge>
+									<ChevronDown
+										className={cn(
+											'pointer-events-none h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+											isOpen && 'rotate-180',
+										)}
+										aria-hidden="true"
+									/>
 								</div>
 								{isOpen && (
 									<div
