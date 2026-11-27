@@ -28,6 +28,8 @@ export type SiteSource = {
 	discussion?: {name: string; url: (href: string) => string | null};
 	saveLoadsPage?: true;
 	keepOffSite?: true;
+	savedPageUrl?: string;
+	savedPageNeedsUsername?: true;
 };
 
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
@@ -371,6 +373,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		scriptId: 'tablodge-source-youtube',
 		canonicalUrl: youtubeVideoUrl,
 		keepOffSite: true,
+		savedPageUrl: 'https://www.youtube.com/playlist?list=WL',
 	},
 	{
 		id: 'reddit',
@@ -383,6 +386,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		scriptId: 'tablodge-source-reddit',
 		canonicalUrl: redditPermalinkUrl,
 		keepOffSite: true,
+		savedPageUrl: 'https://www.reddit.com/user/me/saved',
 	},
 	{
 		id: 'x',
@@ -395,6 +399,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		scriptId: 'tablodge-source-x',
 		canonicalUrl: xPostUrl,
 		keepOffSite: true,
+		savedPageUrl: 'https://x.com/i/bookmarks',
 	},
 	{
 		id: 'instagram',
@@ -407,6 +412,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		scriptId: 'tablodge-source-instagram',
 		canonicalUrl: instagramPostUrl,
 		keepOffSite: true,
+		savedPageNeedsUsername: true,
 	},
 	{
 		id: 'github',
@@ -419,6 +425,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		scriptId: 'tablodge-source-github',
 		canonicalUrl: githubRepoUrl,
 		keepOffSite: true,
+		savedPageUrl: 'https://github.com/stars',
 	},
 	{
 		id: 'hackernews',

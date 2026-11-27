@@ -138,8 +138,8 @@ import {
 	type SettingField,
 } from './settings-fields';
 import {
-	AddSiteSource,
 	SiteSourcesSettings,
+	SourcesHeaderActions,
 	SOURCES_DESCRIPTION,
 	SOURCES_TITLE,
 	SOURCES_WORDS,
@@ -1645,7 +1645,7 @@ function Options() {
 							description={SOURCES_DESCRIPTION}
 							icon={Inbox}
 							className={SECTION_SCROLL_CLASS}
-							action={<AddSiteSource controller={siteSources} />}
+							action={<SourcesHeaderActions controller={siteSources} />}
 						>
 							<SiteSourcesSettings
 								controller={siteSources}

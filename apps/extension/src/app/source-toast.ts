@@ -432,6 +432,7 @@ function render(
 		closed = true;
 		current.closers = current.closers.filter((closer) => closer !== close);
 		clearTimeout(timer);
+		document.removeEventListener('visibilitychange', onVisibilityChange);
 		for (const {expiry} of buttons) {
 			clearTimeout(expiry);
 		}
@@ -455,10 +456,22 @@ function render(
 	const schedule = () => {
 		clearTimeout(timer);
 		const ms = toastMs(asking ? ASKING_VISIBLE_MS : VISIBLE_MS, prefs.duration);
-		if (!hovered && !focused && !closed && ms !== undefined) {
+		if (
+			!hovered &&
+			!focused &&
+			!closed &&
+			!document.hidden &&
+			ms !== undefined
+		) {
 			timer = setTimeout(close, ms);
 		}
 	};
+
+	function onVisibilityChange() {
+		schedule();
+	}
+
+	document.addEventListener('visibilitychange', onVisibilityChange);
 
 	box.addEventListener('pointerenter', () => {
 		hovered = true;

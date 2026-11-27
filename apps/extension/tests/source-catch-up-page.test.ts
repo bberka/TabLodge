@@ -436,3 +436,41 @@ test('the same items redrawn in another order are not counted again', async () =
 	assert.equal(counted, 1);
 	assert.equal(toasts.length, 1);
 });
+
+test('becoming visible re-checks a background tab whose list loaded later', async () => {
+	vi.useFakeTimers();
+	const page = savedPage([]);
+	let hidden = true;
+	Object.defineProperty(page.document, 'hidden', {
+		configurable: true,
+		get: () => hidden,
+	});
+	let items: SourceLink[] = [];
+	let counted = 0;
+	watchSavedPage({
+		source: siteSourceById('youtube')!,
+		read: () => items,
+		async send<T>(message: Record<string, unknown>) {
+			if (message.type === 'SITE_SOURCE_CATCH_UP') {
+				counted += 1;
+				return count(1, true, 'ask') as unknown as T;
+			}
+
+			return undefined;
+		},
+		appName: 'TabLodge',
+		undo: async () => '',
+	});
+
+	await vi.advanceTimersByTimeAsync(1000);
+	assert.equal(counted, 0);
+
+	items = [first];
+	hidden = false;
+	page.document.dispatchEvent(
+		new page.document.defaultView!.Event('visibilitychange'),
+	);
+	await vi.advanceTimersByTimeAsync(1000);
+	assert.equal(counted, 1);
+	assert.equal(toasts.length, 1);
+});

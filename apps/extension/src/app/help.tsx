@@ -525,10 +525,18 @@ function Help() {
 							its access back. Removing its access in one browser&apos;s
 							extension settings stops it only there; Settings then says so next
 							to the site and offers Allow again. To catch up on saves you made
-							on your phone or before you added the site, open the site&apos;s
-							saved page: your saved page on Reddit (new or old Reddit), Watch
-							later on YouTube, your bookmarks on X, All posts or a collection
-							under Saved on Instagram, or your own stars on GitHub. When some
+							on your phone or before you added the site, use Open saved pages
+							in Settings › Sources (or Open saved page on a site&apos;s row),
+							or open the site&apos;s saved page yourself: your saved page on
+							Reddit (new or old Reddit), Watch later on YouTube, your bookmarks
+							on X, All posts or a collection under Saved on Instagram, or your
+							own stars on GitHub. Open saved pages opens each added site that
+							has access and a saved page reader in a background tab, grouped
+							into a Saved pages tab group where the browser supports it;
+							Instagram saved is skipped because its saved page address includes
+							your username, so open it from your Instagram profile. Catch-up
+							runs in background tabs once the page loads its list, though some
+							sites load their list only when you switch to the tab. When some
 							of the saved items it shows are not in {PROJECT.name}, they are
 							added to the site&apos;s column in the order the site lists them,
 							and a notice says how many, with Undo. Under When a saved page has
@@ -548,7 +556,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now say how many undo add them automatically ask first save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default sync other browser on in another browser turn on',
+						'sources settings add a site remove open saved pages open saved page background tabs tab group skipped username youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now say how many undo add them automatically ask first save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default sync other browser on in another browser turn on',
 				},
 				{
 					title: 'Keep saves off the site',
