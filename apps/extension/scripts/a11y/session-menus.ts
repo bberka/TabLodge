@@ -607,11 +607,24 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 					exact: true,
 				});
 				const undoButton = page.getByRole('button', {name: 'Undo'});
+				const waitForMenuClose = async () => {
+					await until(
+						async () =>
+							(await page.getByRole('menu').count()) === 0 &&
+							(await trigger.evaluate(
+								(element: {ownerDocument: {activeElement: unknown}}) =>
+									element === element.ownerDocument.activeElement,
+							)),
+						'the session menu to close and return focus to its trigger',
+					);
+				};
+
 				const sessionMenuItem = async (name: string) => {
 					await trigger.focus();
 					await page.keyboard.press('Enter');
 					await page.getByRole('menuitem', {name, exact: true}).focus();
 					await page.keyboard.press('Enter');
+					await waitForMenuClose();
 				};
 
 				const windowMenuItem = async (name: string) => {
@@ -623,6 +636,7 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 					await page.keyboard.press('ArrowRight');
 					await page.getByRole('menuitem', {name, exact: true}).focus();
 					await page.keyboard.press('Enter');
+					await waitForMenuClose();
 				};
 
 				await until(async () => {

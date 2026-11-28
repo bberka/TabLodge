@@ -276,8 +276,8 @@ body {
 	.tn-checkbox[data-state='checked'] {
 		color: rgb(var(--primary-foreground));
 	}
-	.tn-select-content,
-	.tn-menu-content {
+	.tn-select-content[data-state='open'],
+	.tn-menu-content[data-state='open'] {
 		animation: pop-in 100ms ease-out;
 	}
 	.tn-dialog-overlay[data-state='open'] {
