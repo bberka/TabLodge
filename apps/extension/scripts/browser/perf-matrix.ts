@@ -16,6 +16,9 @@ export const SCENARIOS: Record<string, Scenario> = {
 	'oneSession-1000': {sessions: 1, tabsPerSession: 1000, columns: 1},
 	'oneSession-10000': {sessions: 1, tabsPerSession: 10_000, columns: 1},
 	'folders-100': {sessions: 300, folders: 100, columns: 1},
+	'folders-200': {sessions: 300, folders: 200, columns: 1},
+	'folders-500': {sessions: 1000, folders: 500, columns: 1},
+	'folders-200-sessions-10000': {sessions: 10_000, folders: 200, columns: 1},
 };
 
 const [endpoint, name, extra] = process.argv.slice(2);
@@ -49,11 +52,12 @@ async function restartWorker() {
 
 async function step<T>(label: string, work: () => Promise<T>, ms = 120_000) {
 	const started = Date.now();
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		const result = await Promise.race([
 			work(),
 			new Promise((_, reject) => {
-				setTimeout(
+				timer = setTimeout(
 					() => reject(new Error(`timed out after ${ms / 1000}s`)),
 					ms,
 				);
@@ -69,6 +73,8 @@ async function step<T>(label: string, work: () => Promise<T>, ms = 120_000) {
 		);
 		row[`${label}Ms`] = `FAILED after ${Date.now() - started}`;
 		return undefined;
+	} finally {
+		clearTimeout(timer);
 	}
 }
 
@@ -181,6 +187,8 @@ if (ready) {
 			domNodes: document.querySelectorAll('*').length,
 			bookmarkRows: document.querySelectorAll('[data-bookmark-id]').length,
 			sessionCards: document.querySelectorAll('article[id^="session-"]').length,
+			folderButtons: document.querySelectorAll('[data-session-folder-chip]')
+				.length,
 			tabRows: document.querySelectorAll('[data-tab-id]').length,
 			columnSections: document.querySelectorAll('section[data-column-id]')
 				.length,
@@ -248,6 +256,20 @@ await worker.evaluate(() => {
 await page.evaluate(() => {
 	globalThis.__longTasks.length = 0;
 });
+const secondFolder = page.locator('[data-session-folder-chip]').nth(2);
+if (row.folderListShown && (await secondFolder.count()) > 0) {
+	await page.evaluate(() => {
+		globalThis.__longTasks.length = 0;
+	});
+	await secondFolder.click();
+	await page.waitForTimeout(1500);
+	row.folderClickLongTaskMs = await page.evaluate(() =>
+		Math.round(globalThis.__longTasks.reduce((s, t) => s + t, 0)),
+	);
+	await page.locator('[data-session-folder-chip="all"]').click();
+	await page.waitForTimeout(500);
+}
+
 const editMessage =
 	library.bookmarks.length > 0
 		? {
