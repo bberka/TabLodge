@@ -58,6 +58,12 @@ import {
 	wakePrivate,
 } from './src/private/private-library';
 import {getPreferences, loadPreferences} from './src/settings/preferences';
+import {chooseStart, type StartChoice} from './src/library/start-choice';
+import {
+	loadLastUsed,
+	rememberTab,
+	setStartColumn,
+} from './src/library/last-used';
 import {requestJump, usePendingJump} from './src/library/jump';
 import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
 import {ConnectSheet} from './src/screens/settings/connect-sheet';
@@ -122,6 +128,19 @@ function Main() {
 	const {hasShareIntent, shareIntent, resetShareIntent} =
 		useShareIntentContext();
 	const [tab, setTab] = useState<Tab>('bookmarks');
+	const [booted, setBooted] = useState(false);
+	const routedRef = useRef(false);
+	const claimRoute = useCallback((next?: Tab) => {
+		routedRef.current = true;
+		if (next) {
+			setTab(next);
+		}
+	}, []);
+	useEffect(() => {
+		if (booted && tab !== 'settings') {
+			rememberTab(tab);
+		}
+	}, [booted, tab]);
 	const openSettings = useCallback(() => {
 		setTab('settings');
 	}, []);
@@ -176,7 +195,23 @@ function Main() {
 	}, [tab]);
 
 	useEffect(() => {
+		const chooseStartTab = async () => {
+			const choice: StartChoice = chooseStart(
+				getPreferences().startupTab,
+				await loadLastUsed(),
+			);
+			if (routedRef.current) {
+				setStartColumn(undefined);
+			} else {
+				setTab(choice.tab);
+				setStartColumn(choice.columnId);
+			}
+
+			setBooted(true);
+		};
+
 		void loadPreferences()
+			.finally(() => chooseStartTab())
 			.then(startLibrary)
 			.then(startWidgetSnapshot)
 			.then(startBackgroundSync)
@@ -311,6 +346,7 @@ function Main() {
 
 		const share: IncomingShare = shareIntent;
 		const quick = Date.now() - BOOT < COLD_MS;
+		claimRoute(quick ? 'bookmarks' : undefined);
 		resetShareIntent();
 		void openShare(readShare(share), quick).finally(() => {
 			for (const path of cacheCopies(share, Paths.cache.uri)) {
@@ -319,34 +355,37 @@ function Main() {
 				} catch {}
 			}
 		});
-	}, [hasShareIntent, shareIntent, resetShareIntent, openShare]);
+	}, [hasShareIntent, shareIntent, resetShareIntent, openShare, claimRoute]);
 
-	const openTile = useCallback(async (route: TileRoute) => {
-		const opening = ++openingRef.current;
-		setView('regular');
-		setTab('bookmarks');
-		if (route === 'search') {
-			setOpen(false);
-			requestSearch();
-			return;
-		}
+	const openTile = useCallback(
+		async (route: TileRoute) => {
+			const opening = ++openingRef.current;
+			setView('regular');
+			claimRoute('bookmarks');
+			if (route === 'search') {
+				setOpen(false);
+				requestSearch();
+				return;
+			}
 
-		const quick = Date.now() - BOOT < COLD_MS;
-		const parts = splitShared(await readClipboard());
-		if (opening !== openingRef.current) {
-			return;
-		}
+			const quick = Date.now() - BOOT < COLD_MS;
+			const parts = splitShared(await readClipboard());
+			if (opening !== openingRef.current) {
+				return;
+			}
 
-		setDraft((current) => ({
-			key: current.key + 1,
-			text: parts.url ?? '',
-			title: parts.title,
-			urls: [],
-			many: false,
-			quick,
-		}));
-		setOpen(true);
-	}, []);
+			setDraft((current) => ({
+				key: current.key + 1,
+				text: parts.url ?? '',
+				title: parts.title,
+				urls: [],
+				many: false,
+				quick,
+			}));
+			setOpen(true);
+		},
+		[claimRoute],
+	);
 
 	useEffect(() => {
 		const follow = (url?: string | null) => {
@@ -358,6 +397,7 @@ function Main() {
 
 			const page = parseImportRoute(url);
 			if (page) {
+				claimRoute();
 				openingRef.current += 1;
 				setOpen(false);
 				setSharedFile(undefined);
@@ -370,6 +410,7 @@ function Main() {
 				return;
 			}
 
+			claimRoute();
 			openingRef.current += 1;
 			setView('regular');
 			setOpen(false);
@@ -383,7 +424,7 @@ function Main() {
 		return () => {
 			subscription.remove();
 		};
-	}, [openTile]);
+	}, [openTile, claimRoute]);
 
 	const openBlank = useCallback(() => {
 		openingRef.current += 1;
@@ -478,7 +519,7 @@ function Main() {
 		>
 			<SafeAreaView edges={['top']} style={styles.body}>
 				<StatusBar style="auto" />
-				{tab === 'bookmarks' && (
+				{booted && tab === 'bookmarks' && (
 					<BookmarksScreen
 						onAdd={openBlank}
 						onConnect={connect}
@@ -486,7 +527,7 @@ function Main() {
 						onOpenSettings={openSettings}
 					/>
 				)}
-				{tab === 'sessions' && (
+				{booted && tab === 'sessions' && (
 					<SessionsScreen
 						onConnect={connect}
 						onAdd={openBlank}
@@ -494,9 +535,14 @@ function Main() {
 						onOpenSettings={openSettings}
 					/>
 				)}
-				{tab === 'settings' && <SettingsScreen onConnect={connect} />}
+				{booted && tab === 'settings' && <SettingsScreen onConnect={connect} />}
 			</SafeAreaView>
-			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />
+			<TabBar
+				tabs={TABS}
+				selected={tab}
+				hidden={selecting || !booted}
+				onSelect={setTab}
+			/>
 			<SnackbarHost />
 			<DialogHost />
 			<PrivateSheetHost />

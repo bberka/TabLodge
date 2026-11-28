@@ -44,6 +44,10 @@ export const ROWS = {
 		label: 'Sync in the background',
 		hint: 'About every 15 minutes with the app closed, and updates the widgets',
 	},
+	startupTab: {
+		label: 'Open on',
+		hint: 'The tab the app starts on. Shares and links still open where they always do',
+	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
 		label: 'Accent color',
@@ -222,6 +226,20 @@ export const SECTIONS = {
 			ROWS.messagePosition,
 			ROWS.toastDuration,
 		],
+	},
+	startup: {
+		title: 'Startup',
+		aliases: [
+			'launch',
+			'start',
+			'open app',
+			'cold start',
+			'first screen',
+			'home',
+			'last used',
+			'remember',
+		],
+		rows: [ROWS.startupTab],
 	},
 	syncApp: {
 		title: 'Sync settings',

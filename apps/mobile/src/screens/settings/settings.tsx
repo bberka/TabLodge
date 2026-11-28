@@ -54,6 +54,7 @@ import {SharedPagesButton} from './shared-pages-settings';
 import {
 	BookmarkBehaviourCard,
 	SessionSettingsCard,
+	StartupCard,
 	SyncedSettingsCard,
 	Toggle,
 } from './behaviour-settings';
@@ -370,6 +371,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 									}}
 								/>
 							</SettingsCard>
+							<StartupCard />
 							<SessionSettingsCard />
 							<BookmarkBehaviourCard />
 							<SyncedSettingsCard />
