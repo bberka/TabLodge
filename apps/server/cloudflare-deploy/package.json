@@ -8,7 +8,7 @@
 		"node": ">=22"
 	},
 	"scripts": {
-		"deploy": "wrangler deploy"
+		"deploy": "node deploy.js"
 	},
 	"devDependencies": {
 		"wrangler": "^4.160.0"
@@ -17,6 +17,9 @@
 		"bindings": {
 			"TABLODGE_SYNC_TOKEN": {
 				"description": "The password your browsers use to reach this server: at least 32 random characters. A password manager can generate one, or run `openssl rand -base64 32`. Save it, because you enter it in TabLodge with the Worker's address."
+			},
+			"CUSTOM_DOMAIN": {
+				"description": "Optional. A hostname on a domain already active in this Cloudflare account, such as sync.example.com, with no existing CNAME or conflicting DNS record. The deploy replaces what already uses the hostname. Leave empty to use only the workers.dev address."
 			}
 		}
 	}

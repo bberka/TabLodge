@@ -10,6 +10,7 @@ import {
 	cleanColumnName,
 	DEFAULT_BOOKMARK_COLUMN_ID,
 	DEFAULT_BOOKMARK_COLUMN_NAME,
+	insertNewBookmarks,
 } from '../../../extension/src/shared/bookmark-rules';
 import {deviceStamp} from '../../../extension/src/shared/device';
 import {
@@ -287,7 +288,11 @@ export function importIntoStore(
 			folders,
 			bookmarkColumns,
 			groups: [...sessions, ...store.groups],
-			bookmarks: [...store.bookmarks, ...bookmarks],
+			bookmarks: insertNewBookmarks(
+				store.bookmarks,
+				bookmarks,
+				store.settings.newBookmarkPosition,
+			),
 			updatedAt: now,
 		},
 		groups,

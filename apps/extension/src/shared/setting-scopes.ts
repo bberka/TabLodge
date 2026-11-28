@@ -56,6 +56,7 @@ export const LIBRARY_SETTINGS = {
 	bookmarkColumnWidth: ['platform', BOARD],
 	bookmarkColumnsPerRow: ['platform', BOARD],
 	bookmarkSort: ['all', BOTH],
+	newBookmarkPosition: ['all', BOTH],
 	bookmarkDensity: ['all', BOTH],
 	limitBookmarksPerColumn: [
 		'platform',
@@ -196,6 +197,10 @@ export const ANDROID_PREFERENCES = {
 	accent: ['platform', PHONE_LOOK],
 	compactSessions: ['platform', PHONE_LOOK],
 	showSavedOn: ['platform', PHONE_LOOK],
+	startupTab: [
+		'platform',
+		'The tab the app opens on, which is the same on every phone so that a new phone starts where the others do.',
+	],
 	tapAction: ['platform', GESTURES],
 	swipeRight: ['platform', GESTURES],
 	swipeLeft: ['platform', GESTURES],

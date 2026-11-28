@@ -1494,4 +1494,229 @@ describe('disconnecting and locking by itself', () => {
 		prefs.privateLockMode = 'manual';
 		phone = await startPhone();
 	});
+
+	describe('private erase notice', () => {
+		const BASE =
+			'Erasing deletes the private library from this phone, with its password, and asks for a new one.';
+		const NO_SERVER = `${BASE} This cannot be undone.`;
+		const CONFIRMED = `${BASE} Your server keeps its copy.`;
+		const MAY_HAVE_COPY = `${BASE} Your server may have a copy; check it before erasing.`;
+
+		test('no server says erasing cannot be undone', async () => {
+			const phone = await startPhone();
+			await phone.setupPrivate(PIN);
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				NO_SERVER,
+			);
+		});
+
+		test('server connected with private sync off hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await phone.syncPrivate();
+			prefs.syncPrivate = false;
+			await phone.applyPrivateSyncSetting();
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('server connected with private sync on and last push complete promises a server copy', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await addLink(phone, 'https://synced.example/');
+			await phone.syncPrivate();
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				CONFIRMED,
+			);
+
+			const restarted = await startPhone();
+			assert.equal(
+				restarted.privateEraseNotice(await restarted.privateEraseCopy()),
+				CONFIRMED,
+			);
+		});
+
+		test('missing push evidence after an older version hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await phone.syncPrivate();
+			memory.delete('tablodge.private.unpushed');
+			await addLink(phone, 'https://legacy-unsynced.example/');
+			memory.delete('tablodge.private.unpushed');
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('a successful sync response with a clock refusal hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await addLink(phone, 'https://clock-refused.example/');
+			server.setNow(0);
+			await phone.syncPrivate();
+			assert.ok(phone.getPrivateStatus().refused > 0);
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('a private change completing after the sync snapshot keeps push evidence dirty', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await phone.syncPrivate();
+			await addLink(phone, 'https://snapshot.example/');
+
+			const responseGate = Promise.withResolvers<void>();
+			const started = Promise.withResolvers<void>();
+			const baseFetch = globalThis.fetch;
+			vi.stubGlobal(
+				'fetch',
+				async (input: string | URL | Request, init?: RequestInit) => {
+					const url =
+						typeof input === 'string'
+							? input
+							: input instanceof URL
+								? input.href
+								: input.url;
+					if (url.endsWith('/private/v1/changes') && init?.method === 'POST') {
+						started.resolve();
+						await responseGate.promise;
+					}
+
+					return baseFetch(input, init);
+				},
+			);
+			try {
+				await phone.beginPrivateChange();
+				const syncing = phone.syncPrivate();
+				await started.promise;
+				phone.nudgePrivate(false);
+				responseGate.resolve();
+				await syncing;
+			} finally {
+				vi.stubGlobal('fetch', baseFetch);
+			}
+
+			await phone.lockPrivate();
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('an edit is not saved when its dirty marker cannot be persisted', async () => {
+			const phone = await startPhone();
+			await phone.setupPrivate(PIN);
+			const before = phone.getPrivateStore();
+			failWrite.add('tablodge.private.unpushed');
+
+			await assert.rejects(
+				addLink(phone, 'https://marker-failed.example/'),
+				/storage failed/,
+			);
+			assert.equal(phone.getPrivateStore(), before);
+		});
+
+		test('private trash is not changed when its dirty marker cannot be persisted', async () => {
+			const phone = await startPhone();
+			await phone.setupPrivate(PIN);
+			await connectPhone(phone);
+			await phone.syncPrivate();
+			const trashKey = 'tablodge.private.trash';
+			memory.set(trashKey, JSON.stringify([{id: 'kept-until-marked'}]));
+			failWrite.add('tablodge.private.unpushed');
+
+			const {emptyTrash} = await import('../src/library/trash-store');
+			await assert.rejects(emptyTrash('private'), /storage failed/);
+			assert.equal(
+				memory.get(trashKey),
+				JSON.stringify([{id: 'kept-until-marked'}]),
+			);
+		});
+
+		test('server connected with private sync on and a push pending hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await phone.syncPrivate();
+			await addLink(phone, 'https://unsynced.example/');
+			await phone.lockPrivate();
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('server connected with private sync on and a failed push hedges even when the key is stored', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await addLink(phone, 'https://failed.example/');
+
+			const baseFetch = globalThis.fetch;
+			vi.stubGlobal(
+				'fetch',
+				async (input: string | URL | Request, init?: RequestInit) => {
+					const url =
+						typeof input === 'string'
+							? input
+							: input instanceof URL
+								? input.href
+								: input.url;
+					return url.endsWith('/private/v1/changes') && init?.method === 'POST'
+						? Response.json({error: 'server'}, {status: 500})
+						: baseFetch(input, init);
+				},
+			);
+			try {
+				await phone.syncPrivate();
+			} finally {
+				vi.stubGlobal('fetch', baseFetch);
+			}
+
+			await phone.lockPrivate();
+			assert.equal((await phone.privateServerInfo()).hasKey, true);
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+
+		test('key lookup failed hedges', async () => {
+			const phone = await startPhone();
+			await connectPhone(phone);
+			await phone.setupPrivate(PIN);
+			await addLink(phone, 'https://offline.example/');
+			await phone.syncPrivate();
+			await phone.lockPrivate();
+			server.setOnline(false);
+
+			assert.equal(
+				phone.privateEraseNotice(await phone.privateEraseCopy()),
+				MAY_HAVE_COPY,
+			);
+		});
+	});
 });

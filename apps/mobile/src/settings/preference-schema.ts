@@ -56,6 +56,9 @@ export type BarSize = (typeof BAR_SIZES)[number];
 const BAR_LABELS = ['active', 'always', 'never'] as const;
 export type BarLabels = (typeof BAR_LABELS)[number];
 
+export const STARTUP_TABS = ['bookmarks', 'sessions', 'last'] as const;
+export type StartupTab = (typeof STARTUP_TABS)[number];
+
 const AFTER_SHARE = ['close', 'stay'] as const;
 export type AfterShare = (typeof AFTER_SHARE)[number];
 
@@ -93,6 +96,7 @@ export type Preferences = {
 	privateOpenApp: string;
 	compactSessions: boolean;
 	messagePosition: 'top' | 'bottom';
+	startupTab: StartupTab;
 	showSavedOn: boolean;
 	deviceName: string;
 };
@@ -154,6 +158,7 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	privateOpenApp: field('', text),
 	compactSessions: field(false, bool),
 	messagePosition: field('top', oneOf(['top', 'bottom'])),
+	startupTab: field('bookmarks', oneOf(STARTUP_TABS)),
 	showSavedOn: field(true, bool),
 	deviceName: field('', (raw) => cleanDeviceName(raw)),
 };

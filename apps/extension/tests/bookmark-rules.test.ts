@@ -5,6 +5,7 @@ import {
 	cleanColumnName,
 	columnNameProblem,
 	DEFAULT_BOOKMARK_COLUMN_ID,
+	insertNewBookmarks,
 	landingColumnId,
 	sortBookmarks,
 } from '../src/shared/bookmark-rules';
@@ -89,5 +90,38 @@ describe('sortBookmarks', () => {
 			list.map((entry) => entry.url),
 			before,
 		);
+	});
+});
+
+describe('insertNewBookmarks', () => {
+	test('appends by default and when set to bottom', () => {
+		assert.deepEqual(insertNewBookmarks(['a', 'b'], ['c', 'd']), [
+			'a',
+			'b',
+			'c',
+			'd',
+		]);
+		assert.deepEqual(insertNewBookmarks(['a', 'b'], ['c', 'd'], 'bottom'), [
+			'a',
+			'b',
+			'c',
+			'd',
+		]);
+	});
+
+	test('prepends in batch order when set to top', () => {
+		assert.deepEqual(insertNewBookmarks(['a', 'b'], ['c', 'd'], 'top'), [
+			'c',
+			'd',
+			'a',
+			'b',
+		]);
+	});
+
+	test('returns a copy unchanged when nothing is added', () => {
+		const existing = ['a', 'b'];
+		const result = insertNewBookmarks(existing, [], 'top');
+		assert.deepEqual(result, ['a', 'b']);
+		assert.notEqual(result, existing);
 	});
 });

@@ -8,6 +8,7 @@ import {
 	columnNameProblem,
 	DEFAULT_BOOKMARK_COLUMN_ID,
 	DEFAULT_BOOKMARK_COLUMN_NAME,
+	insertNewBookmarks,
 	landingColumnId,
 } from '../../../extension/src/shared/bookmark-rules';
 import {
@@ -221,7 +222,15 @@ export function addBookmark(
 		),
 		input,
 	);
-	return {...next, bookmarks: [...next.bookmarks, bookmark], updatedAt: now};
+	return {
+		...next,
+		bookmarks: insertNewBookmarks(
+			next.bookmarks,
+			[bookmark],
+			next.settings.newBookmarkPosition,
+		),
+		updatedAt: now,
+	};
 }
 
 export function updateBookmark(
@@ -592,14 +601,64 @@ export function addBookmarks(
 	device?: DeviceStamp,
 ): Store {
 	let next = store;
-	for (const [index, url] of urls.entries()) {
-		next = addBookmark(
-			next,
-			{url, title: '', columnId, device},
-			ids[index] ?? `${now}-${index}`,
-			now,
-		);
+	const added: Bookmark[] = [];
+	const handling = duplicateHandlingOf(store.settings);
+	for (const [index, rawUrl] of urls.entries()) {
+		const url = extractUrl(rawUrl);
+		if (!url) {
+			continue;
+		}
+
+		if (next.bookmarkColumns.length === 0) {
+			next = {
+				...next,
+				bookmarkColumns: [
+					{
+						id: DEFAULT_BOOKMARK_COLUMN_ID,
+						name: DEFAULT_BOOKMARK_COLUMN_NAME,
+						createdAt: now,
+						isDefault: true,
+					},
+				],
+			};
+		}
+
+		const targetColumnId = landingColumnId(next.bookmarkColumns, columnId, {
+			claimedId: columnForUrl(next.bookmarkColumns, url)?.id,
+		});
+		if (
+			bookmarkIsDuplicate(
+				[...next.bookmarks, ...added],
+				targetColumnId,
+				url,
+				handling,
+			)
+		) {
+			continue;
+		}
+
+		added.push({
+			id: ids[index] ?? `${now}-${index}`,
+			title: hostOf(url),
+			url,
+			columnId: targetColumnId,
+			...device,
+			createdAt: now,
+			updatedAt: now,
+		});
 	}
 
-	return next;
+	if (added.length === 0) {
+		return store;
+	}
+
+	return {
+		...next,
+		bookmarks: insertNewBookmarks(
+			next.bookmarks,
+			added,
+			next.settings.newBookmarkPosition,
+		),
+		updatedAt: now,
+	};
 }

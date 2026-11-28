@@ -1,5 +1,17 @@
 import {useRef, useState} from 'react';
 
+export function useUnchanged<T>(
+	value: T,
+	isSame: (held: T, next: T) => boolean,
+): T {
+	const ref = useRef(value);
+	if (!isSame(ref.current, value)) {
+		ref.current = value;
+	}
+
+	return ref.current;
+}
+
 export function useStableCallbacks<
 	T extends Record<string, (...args: never[]) => unknown>,
 >(latest: T): T {

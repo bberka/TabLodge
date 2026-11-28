@@ -157,6 +157,36 @@ describe('bookmarks', () => {
 		assert.deepEqual(ids(store, 'c1'), ['a', 'b']);
 	});
 
+	test('puts new bookmarks first in the column when newBookmarkPosition is top, preserving batch order', () => {
+		let store = addColumn(emptyStore(NOW), 'Read', 'c1', NOW);
+		store = {
+			...store,
+			settings: {...store.settings, newBookmarkPosition: 'top'},
+		};
+		store = addBookmark(
+			store,
+			{url: 'https://a.test', title: 'A', columnId: 'c1'},
+			'a',
+			NOW,
+		);
+		store = addBookmark(
+			store,
+			{url: 'https://b.test', title: 'B', columnId: 'c1'},
+			'b',
+			NOW,
+		);
+		assert.deepEqual(ids(store, 'c1'), ['b', 'a']);
+
+		store = addBookmarks(
+			store,
+			['https://c.test', 'https://d.test'],
+			'c1',
+			['c', 'd'],
+			NOW,
+		);
+		assert.deepEqual(ids(store, 'c1'), ['c', 'd', 'b', 'a']);
+	});
+
 	test('files a link into the column that claims its site, then the default column', () => {
 		let store = addColumn(emptyStore(NOW), 'News', 'c1', NOW);
 		store = {
