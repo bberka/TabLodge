@@ -7,7 +7,11 @@ import type {SourceLink} from '../src/app/source-reader';
 
 type Shown = {
 	text: string;
-	actions: Array<{label: string; run: () => Promise<unknown>}>;
+	actions: Array<{
+		label: string;
+		onFirstSeen?: () => Promise<void>;
+		run: () => Promise<unknown>;
+	}>;
 };
 const toasts: Shown[] = vi.hoisted(() => [] as Shown[]);
 vi.mock('../src/app/source-toast', () => ({
@@ -169,6 +173,7 @@ test('Add them automatically adds the items at once and reports them with Undo',
 		]),
 		[['Added 1 to TabLodge in YouTube.', ['Undo']]],
 	);
+	assert.equal(toasts[0].actions[0].onFirstSeen, undefined);
 	await toasts[0].actions[0].run();
 	assert.deepEqual(undone, ['undo-1']);
 });
@@ -473,4 +478,45 @@ test('becoming visible re-checks a background tab whose list loaded later', asyn
 	await vi.advanceTimersByTimeAsync(1000);
 	assert.equal(counted, 1);
 	assert.equal(toasts.length, 1);
+});
+
+test('a background tab adds at once and starts the Undo time only when its notice is first seen', async () => {
+	vi.useFakeTimers();
+	const page = savedPage([first]);
+	Object.defineProperty(page.document, 'hidden', {
+		configurable: true,
+		get: () => true,
+	});
+	const sent: Array<Record<string, unknown>> = [];
+	watchSavedPage({
+		source: siteSourceById('youtube')!,
+		read: page.read,
+		async send<T>(message: Record<string, unknown>) {
+			sent.push(message);
+			return (message.type === 'SITE_SOURCE_CATCH_UP'
+				? count(1, true, 'add')
+				: {
+						ok: true,
+						added: 1,
+						column: 'YouTube',
+						undoId: 'undo-bg',
+					}) as unknown as T;
+		},
+		appName: 'TabLodge',
+		undo: async () => '',
+	});
+
+	await vi.advanceTimersByTimeAsync(1000);
+	assert.deepEqual(sent.at(-1), {
+		type: 'SITE_SOURCE_CATCH_UP_ADD',
+		source: 'youtube',
+		links: [first],
+		automatic: true,
+		unseen: true,
+	});
+	await toasts[0].actions[0].onFirstSeen?.();
+	assert.deepEqual(sent.at(-1), {
+		type: 'SITE_SOURCE_UNDO_SEEN',
+		id: 'undo-bg',
+	});
 });

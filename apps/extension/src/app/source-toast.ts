@@ -27,6 +27,7 @@ type Theme = 'light' | 'dark';
 export type ToastAction = {
 	label: string;
 	expiresMs?: number;
+	onFirstSeen?: () => Promise<void>;
 	run: () => Promise<string | ToastStep | undefined>;
 };
 type ToastStep = {text: string; action?: ToastAction};
@@ -341,6 +342,7 @@ function render(
 		action?: ToastAction;
 		button: HTMLButtonElement;
 		expiry?: ReturnType<typeof setTimeout>;
+		waiting?: boolean;
 	};
 	const buttons = actions.map((action): ToastButton => {
 		const button = document.createElement('button');
@@ -468,6 +470,12 @@ function render(
 	};
 
 	function onVisibilityChange() {
+		for (const entry of buttons) {
+			if (entry.waiting) {
+				arm(entry);
+			}
+		}
+
 		schedule();
 	}
 
@@ -537,10 +545,14 @@ function render(
 
 	const arm = (entry: ToastButton) => {
 		clearTimeout(entry.expiry);
-		const ms = entry.action?.expiresMs;
-		if (ms !== undefined) {
-			entry.expiry = setTimeout(expire, ms, entry);
+		const {expiresMs, onFirstSeen} = entry.action ?? {};
+		entry.waiting = Boolean(onFirstSeen) && document.hidden;
+		if (expiresMs === undefined || entry.waiting) {
+			return;
 		}
+
+		void onFirstSeen?.();
+		entry.expiry = setTimeout(expire, expiresMs, entry);
 	};
 
 	const run = async (entry: ToastButton) => {
@@ -561,6 +573,7 @@ function render(
 		}
 
 		button.setAttribute('aria-disabled', 'true');
+		entry.waiting = false;
 		clearTimeout(entry.expiry);
 		const next = await action.run();
 		if (next === undefined) {

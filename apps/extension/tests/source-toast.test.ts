@@ -292,3 +292,42 @@ test('a toast shown in a hidden background tab waits until the tab is visible be
 	await vi.advanceTimersByTimeAsync(2);
 	assert.equal(hosts(), 0);
 });
+
+test('Undo in a background tab keeps its full time until the tab is first seen, and counts it once', async () => {
+	let hidden = true;
+	Object.defineProperty(document, 'hidden', {
+		configurable: true,
+		get: () => hidden,
+	});
+	const show = async (next: boolean) => {
+		hidden = next;
+		document.dispatchEvent(new document.defaultView!.Event('visibilitychange'));
+		await vi.advanceTimersByTimeAsync(0);
+	};
+
+	let seen = 0;
+	askForPrefs('default', 'dismiss');
+	showSourceToast('Added 1.', {
+		actions: [
+			{
+				...undoOf([], 'A'),
+				expiresMs: UNDO_OFFER_MS,
+				async onFirstSeen() {
+					seen += 1;
+				},
+			},
+		],
+	});
+	await vi.advanceTimersByTimeAsync(10 * 60_000);
+	assert.deepEqual(buttonLabels(), ['Undo']);
+	assert.equal(seen, 0);
+
+	await show(false);
+	await vi.advanceTimersByTimeAsync(UNDO_OFFER_MS - 1000);
+	await show(true);
+	await show(false);
+	assert.equal(seen, 1);
+	assert.deepEqual(buttonLabels(), ['Undo']);
+	await vi.advanceTimersByTimeAsync(2000);
+	assert.deepEqual(buttonLabels(), ['Close']);
+});

@@ -53,6 +53,7 @@ This is the last of the code comments in `apps/extension/shell/`. [ADR 34](0034-
 * **The items of a saved page that the library lacks** are the ones not in any column and not in the trash, as a click-save counts them (`service-worker.ts:missingFromSource`).
 * **Catch-up adds are applied in the page's order,** one after another, as the site lists them (`service-worker.ts:addSourceCatchUp`).
 * **Adding catch-up sites runs through the library's mutation queue, with Undo** (`service-worker.ts:addSourceCatchUp`). **Dismissing a catch-up runs in the sources queue** (`service-worker.ts:dismissSourceCatchUp`).
+* **A catch-up added in a hidden tab holds its Undo until the notice is seen,** and removes only its own bookmarks: **Open saved pages** adds from several tabs in turn, so a whole-library Undo would refuse all but the last (`service-worker.ts:removeCatchUp`, `service-worker.ts:startUndoTime`).
 * **A source save's result waits for the next page in its tab for a short time.** A click on a favorite link can load another page before the first one can show the result (`service-worker.ts:PENDING_SOURCE_MS`, `service-worker.ts:pendingSourceSaves`).
 * **The last source save of each tab is kept from the moment it starts,** so a page that loads while the save still runs waits for it (`service-worker.ts:pendingSourceSaves`).
 * **Toast Undo acts only on what that page's toast reported.** The undo ids of each toast are tied to its tab (`service-worker.ts:bindToastUndo`, `service-worker.ts:claimToastUndo`).

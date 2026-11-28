@@ -229,7 +229,12 @@ function createWorkerHarness(
 
 	const alarms = new Map<
 		string,
-		{name: string; periodInMinutes?: number; delayInMinutes?: number}
+		{
+			name: string;
+			periodInMinutes?: number;
+			delayInMinutes?: number;
+			when?: number;
+		}
 	>();
 	const alarmCalls: string[] = [];
 	const downloads: Array<{url: string; filename: string}> = [];
@@ -891,7 +896,11 @@ function createWorkerHarness(
 			alarms: {
 				async create(
 					name: string,
-					info: {periodInMinutes?: number; delayInMinutes?: number},
+					info: {
+						periodInMinutes?: number;
+						delayInMinutes?: number;
+						when?: number;
+					},
 				) {
 					alarmCalls.push(`create:${name}:${info.periodInMinutes}`);
 					alarms.set(name, {name, ...info});
@@ -15375,6 +15384,162 @@ test('Add them automatically adds the new items, skips the ones answered Not now
 	assert.equal(undone.ok, true, undone.ok ? '' : undone.error);
 	assert.deepEqual(inColumn(), []);
 	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+const addUnseen = async (
+	harness: ReturnType<typeof sourcesHarness>,
+	links: unknown[],
+) => {
+	const added = await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_CATCH_UP_ADD',
+			source: 'reddit',
+			links,
+			automatic: true,
+			unseen: true,
+		},
+		redditSaved,
+	);
+	const undoId = added.ok && added.undoId;
+	assert.ok(undoId);
+	return undoId;
+};
+
+const redditAddresses = (harness: ReturnType<typeof sourcesHarness>) =>
+	harness.state.bookmarks.map((bookmark) => bookmark.url?.split('/', 7)[6]);
+
+test('Undo for a catch-up added in a background tab starts when the notice is first seen, after later adds and edits too', async () => {
+	vi.useFakeTimers({toFake: ['Date']});
+	try {
+		const harness = sourcesHarness();
+		await switchOnReddit(harness);
+		const columns = harness.state.bookmarkColumns.length;
+		const first = await addUnseen(harness, [savedPost('aaa111')]);
+		const second = await addUnseen(harness, [savedPost('bbb222')]);
+		for (const name of ['One', 'Two', 'Three', 'Four']) {
+			await harness.sendMessage({type: 'CREATE_BOOKMARK_COLUMN', name});
+		}
+
+		vi.advanceTimersByTime(60 * 60_000);
+		await harness.fire('alarm', {name: 'tablodge-undo'});
+		await settle();
+		await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO_SEEN', id: first},
+			redditSaved,
+		);
+		vi.advanceTimersByTime(110_000);
+		const undone = await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO', id: first},
+			redditSaved,
+		);
+		assert.equal(undone.ok, true, undone.ok ? '' : undone.error);
+		assert.deepEqual(redditAddresses(harness), ['bbb222']);
+		assert.equal(harness.state.bookmarkColumns.length, columns + 5);
+
+		await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO_SEEN', id: second},
+			redditSaved,
+		);
+		vi.advanceTimersByTime(121_000);
+		await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO_SEEN', id: second},
+			redditSaved,
+		);
+		const late = await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO', id: second},
+			redditSaved,
+		);
+		assert.equal(late.ok, false);
+		assert.deepEqual(redditAddresses(harness), ['bbb222']);
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test('an unseen catch-up Undo record is deleted when its seven days end, with no other activity', async () => {
+	vi.useFakeTimers({toFake: ['Date']});
+	try {
+		const harness = sourcesHarness();
+		await switchOnReddit(harness);
+		await addUnseen(harness, [savedPost('aaa111')]);
+		const expiry = Date.now() + 7 * 24 * 60 * 60_000;
+		vi.advanceTimersByTime(3 * 60_000);
+		harness.alarms.delete('tablodge-undo');
+		await harness.fire('alarm', {name: 'tablodge-undo'});
+		await settle();
+		assert.equal(harness.alarms.get('tablodge-undo')?.when, expiry);
+
+		vi.setSystemTime(expiry);
+		harness.alarms.delete('tablodge-undo');
+		await harness.fire('alarm', {name: 'tablodge-undo'});
+		await settle();
+		assert.equal(harness.extraStorage['tablodge.undo'], undefined);
+		assert.equal(harness.alarms.has('tablodge-undo'), false);
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test('Undo of a background catch-up removes the column it made, but refuses once an added bookmark changed', async () => {
+	vi.useFakeTimers({toFake: ['Date']});
+	try {
+		const harness = sourcesHarness();
+		await switchOnReddit(harness);
+		const columns = harness.state.bookmarkColumns.map((column) => column.id);
+		const removed = await addUnseen(harness, [savedPost('aaa111')]);
+		const undone = await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO', id: removed},
+			redditSaved,
+		);
+		assert.equal(undone.ok, true, undone.ok ? '' : undone.error);
+		assert.deepEqual(redditAddresses(harness), []);
+		assert.deepEqual(
+			harness.state.bookmarkColumns.map((column) => column.id),
+			columns,
+		);
+
+		const edited = await addUnseen(harness, [savedPost('bbb222')]);
+		vi.advanceTimersByTime(1000);
+		await harness.sendMessage({
+			type: 'UPDATE_BOOKMARK',
+			bookmarkId: harness.state.bookmarks[0].id!,
+			fields: {title: 'Mine now'},
+		});
+		const refused = await harness.sendMessage(
+			{type: 'SITE_SOURCE_UNDO', id: edited},
+			redditSaved,
+		);
+		assert.equal(refused.ok, false);
+		assert.deepEqual(redditAddresses(harness), ['bbb222']);
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test('Undo of a background catch-up refuses once its column was deleted and the bookmarks moved', async () => {
+	const harness = sourcesHarness();
+	await switchOnReddit(harness);
+	const undoId = await addUnseen(harness, [savedPost('aaa111')]);
+	const {columnId} = harness.state.bookmarks[0];
+	await harness.sendMessage({type: 'CREATE_BOOKMARK_COLUMN', name: 'Keep'});
+	const keep = harness.state.bookmarkColumns.find(
+		(column) => column.name === 'Keep',
+	)!;
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: columnId!,
+		targetColumnId: keep.id,
+	});
+	assert.equal(deleted.ok, true, deleted.ok ? '' : deleted.error);
+
+	const refused = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: undoId},
+		redditSaved,
+	);
+
+	assert.equal(refused.ok, false);
+	assert.deepEqual(redditAddresses(harness), ['aaa111']);
+	assert.equal(harness.state.bookmarks[0].columnId, keep.id);
 });
 
 test('Ask first is kept from the setting and adds only when Add them is answered', async () => {

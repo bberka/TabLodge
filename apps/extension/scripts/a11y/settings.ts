@@ -396,6 +396,27 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 			try {
 				await setTheme(page, theme);
 				await writeSources(page, {
+					github: {enabled: true},
+					reddit: {enabled: false, notice: 'revoked'},
+				});
+				await page
+					.getByRole('button', {name: 'Open saved page for GitHub stars'})
+					.waitFor();
+				const arrows = await Promise.all(
+					['github', 'reddit'].map(async (id) =>
+						page
+							.locator(`[data-site-source="${id}"] svg.lucide-chevron-down`)
+							.boundingBox(),
+					),
+				);
+				assert.ok(arrows[0], 'the GitHub row has an arrow');
+				assert.ok(arrows[1], 'the Reddit row has an arrow');
+				assert.equal(
+					arrows[0].x,
+					arrows[1].x,
+					'the open icon does not push its row arrow out of line',
+				);
+				await writeSources(page, {
 					github: {enabled: false, notice: 'revoked'},
 					reddit: {enabled: false, notice: 'revoked'},
 				});

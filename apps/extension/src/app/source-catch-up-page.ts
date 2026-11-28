@@ -35,11 +35,13 @@ export function watchSavedPage({
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	const add = async (links: SourceLink[], automatic = false) => {
+		const unseen = automatic && document.hidden;
 		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>>({
 			type: 'SITE_SOURCE_CATCH_UP_ADD',
 			source: source.id,
 			links,
 			...(automatic && {automatic: true}),
+			...(unseen && {unseen: true}),
 		});
 		if (!result) {
 			return `${appName} could not add them.`;
@@ -64,6 +66,11 @@ export function watchSavedPage({
 					action: {
 						label: 'Undo',
 						expiresMs: UNDO_OFFER_MS,
+						...(unseen && {
+							async onFirstSeen() {
+								await send({type: 'SITE_SOURCE_UNDO_SEEN', id: undoId});
+							},
+						}),
 						run: async () => undo(undoId),
 					},
 				}

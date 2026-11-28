@@ -44,6 +44,7 @@ export type UndoableEdit = (typeof UNDOABLE_EDITS)[number]['type'];
 
 export const UNDO_WINDOW_MS = 120_000;
 export const UNDO_OFFER_MS = UNDO_WINDOW_MS - 10_000;
+export const UNSEEN_UNDO_HOLD_MS = 7 * 24 * 60 * 60_000;
 export const undoExpiry = () => Date.now() + UNDO_OFFER_MS;
 
 export const undoableEdit = (type: string) =>
