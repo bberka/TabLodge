@@ -22,6 +22,7 @@ import {
 	openPage,
 	type ScrollViewport,
 	setTheme,
+	waitForMenuClose,
 } from './pages.ts';
 
 async function verifySelectedLinksOpen(
@@ -742,7 +743,8 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 			const ids = (
 				await attributes(page, '[data-bookmark-id]', 'data-bookmark-id')
 			).slice(0, 2);
-			await cards.first().locator('[data-move-focus]').focus();
+			const firstTrigger = cards.first().locator('[data-move-focus]');
+			await firstTrigger.focus();
 			await page.keyboard.press('Enter');
 			assert.equal(
 				await page
@@ -755,7 +757,8 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 				.getByRole('menuitem', {name: 'Select bookmark', exact: true})
 				.focus();
 			await page.keyboard.press('Enter');
-			await cards.first().locator('[data-move-focus]').focus();
+			await waitForMenuClose(page, firstTrigger, 'the bookmark menu');
+			await firstTrigger.focus();
 			await page.keyboard.press('Enter');
 			assert.equal(
 				await page
@@ -765,6 +768,7 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 				1,
 			);
 			await page.keyboard.press('Escape');
+			await waitForMenuClose(page, firstTrigger, 'the bookmark menu');
 			await cards.nth(1).getByRole('checkbox').focus();
 			await page.keyboard.press('Space');
 			await page

@@ -82,6 +82,22 @@ export async function openMenuByKeyboard(page: Page, trigger: Locator) {
 	}, 'the menu to open');
 }
 
+export async function waitForMenuClose(
+	page: Page,
+	trigger: Locator,
+	label = 'the menu',
+) {
+	await until(
+		async () =>
+			(await page.getByRole('menu').count()) === 0 &&
+			(await trigger.evaluate(
+				(element: {ownerDocument: {activeElement: unknown}}) =>
+					element === element.ownerDocument.activeElement,
+			)),
+		`${label} to close and return focus to its trigger`,
+	);
+}
+
 export async function openMenuItemByKeyboard(
 	page: Page,
 	trigger: Locator,
