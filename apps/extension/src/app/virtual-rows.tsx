@@ -26,13 +26,11 @@ export type VirtualRowsHandle = {
 	) => void;
 };
 
-function withRowAndNeighbors(range: Range, row: number | null) {
+function withTabStops(range: Range, focused: number | null) {
 	const rows = defaultRangeExtractor(range);
-	if (row === null) {
-		return rows;
-	}
-
-	const kept = [row - 1, row, row + 1].filter(
+	const aroundFocus =
+		focused === null ? [] : [focused - 1, focused, focused + 1];
+	const kept = [0, ...aroundFocus, range.count - 1].filter(
 		(index) => index >= 0 && index < range.count,
 	);
 	return [...new Set([...rows, ...kept])].toSorted((a, b) => a - b);
@@ -70,7 +68,7 @@ export function VirtualRows({
 	active = true,
 	itemKey,
 	handleRef,
-	keepFocused = false,
+	keepTabStops = false,
 	children,
 }: {
 	count: number;
@@ -80,7 +78,7 @@ export function VirtualRows({
 	active?: boolean;
 	itemKey: (index: number) => string;
 	handleRef?: Ref<VirtualRowsHandle>;
-	keepFocused?: boolean;
+	keepTabStops?: boolean;
 	children: (index: number) => ReactNode;
 }) {
 	const [focusedRow, setFocusedRow] = useState<number | null>(null);
@@ -91,7 +89,10 @@ export function VirtualRows({
 		overscan: VIRTUAL_OVERSCAN,
 		gap,
 		getItemKey: itemKey,
-		rangeExtractor: (range) => withRowAndNeighbors(range, focusedRow),
+		rangeExtractor: (range) =>
+			keepTabStops
+				? withTabStops(range, focusedRow)
+				: defaultRangeExtractor(range),
 		initialRect: {width: 0, height: 800},
 	});
 	useImperativeHandle(
@@ -122,7 +123,7 @@ export function VirtualRows({
 							transform: `translateY(${item.start}px)`,
 						}}
 						onFocus={
-							keepFocused
+							keepTabStops
 								? () => {
 										setFocusedRow(item.index);
 									}

@@ -91,7 +91,9 @@ await page.addInitScript(() => {
 	globalThis.__longTasks = tasks;
 	new PerformanceObserver((list) => {
 		for (const entry of list.getEntries()) {
-			tasks.push(entry.duration);
+			if (entry.startTime >= (globalThis.__longTasksFrom ?? 0)) {
+				tasks.push(entry.duration);
+			}
 		}
 	}).observe({type: 'longtask', buffered: true});
 });
@@ -253,9 +255,6 @@ await worker.evaluate(() => {
 		return original.call(area, items, ...rest);
 	};
 });
-await page.evaluate(() => {
-	globalThis.__longTasks.length = 0;
-});
 const secondFolder = page.locator('[data-session-folder-chip]').nth(2);
 if (row.folderListShown && (await secondFolder.count()) > 0) {
 	await page.evaluate(() => {
@@ -267,7 +266,7 @@ if (row.folderListShown && (await secondFolder.count()) > 0) {
 		Math.round(globalThis.__longTasks.reduce((s, t) => s + t, 0)),
 	);
 	await page.locator('[data-session-folder-chip="all"]').click();
-	await page.waitForTimeout(500);
+	await page.waitForTimeout(1500);
 }
 
 const editMessage =
@@ -282,6 +281,10 @@ const editMessage =
 				groupId: library.groups[0].id,
 				fields: {name: `edit ${Date.now()}`},
 			};
+await page.evaluate(() => {
+	globalThis.__longTasksFrom = performance.now();
+	globalThis.__longTasks.length = 0;
+});
 await step('editRoundTrip', () => send(editMessage));
 await page.waitForTimeout(2500);
 row.afterEditLongTaskMs = await page.evaluate(() =>

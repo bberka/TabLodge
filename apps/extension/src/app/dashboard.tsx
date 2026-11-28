@@ -163,7 +163,12 @@ import {
 	sendLinksToPrivate,
 	useSendToPrivate,
 } from './send-to-private';
-import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
+import {
+	focusAfterMove,
+	neighborId,
+	whenMounted,
+	type MoveDirection,
+} from './reorder';
 import {FocusViewHint} from './focus-hint';
 import {
 	SESSION_FOLDER_HINT_KEY,
@@ -359,7 +364,7 @@ export function SessionManager({
 	const [revealTick, setRevealTick] = useState(0);
 	const revealRef = useRef<{id: string; focus: boolean} | null>(null);
 	const [revealFolderTick, setRevealFolderTick] = useState(0);
-	const revealFolderRef = useRef<string | null>(null);
+	const revealFolderRef = useRef<{id: string} | null>(null);
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
 	const archivedId = archivedFolderId(folders);
@@ -662,57 +667,48 @@ export function SessionManager({
 			align: 'center',
 			behavior: 'auto',
 		});
-		let cancelled = false;
-		let frames = 0;
-		let frame = 0;
-		const focusRevealed = () => {
-			if (cancelled || revealRef.current !== reveal) {
+		return whenMounted(selector, (card) => {
+			if (revealRef.current !== reveal) {
 				return;
 			}
 
-			const card = document.querySelector(selector);
 			if (card) {
 				finishReveal(card, 'auto');
 				return;
 			}
 
-			frames += 1;
-			if (frames < 30) {
-				frame = requestAnimationFrame(focusRevealed);
-				return;
-			}
-
-			if (revealRef.current === reveal) {
-				revealRef.current = null;
-			}
-		};
-
-		frame = requestAnimationFrame(focusRevealed);
-		return () => {
-			cancelled = true;
-			cancelAnimationFrame(frame);
-		};
+			revealRef.current = null;
+		});
 	}, [revealTick, visibleGroups]);
 
 	function focusFolderChip(id: string) {
-		revealFolderRef.current = id;
+		revealFolderRef.current = {id};
 		setRevealFolderTick((tick) => tick + 1);
 	}
 
 	useEffect(() => {
-		const targetId = revealFolderRef.current;
-		if (!targetId) {
+		const reveal = revealFolderRef.current;
+		if (!reveal) {
 			return;
 		}
 
-		const index = folderEntries.findIndex((entry) => entry.id === targetId);
+		const index = folderEntries.findIndex((entry) => entry.id === reveal.id);
 		if (index === -1) {
 			return;
 		}
 
-		revealFolderRef.current = null;
 		folderListRef.current?.scrollToIndex(index, {align: 'auto'});
-		focusAfterMove(`[data-session-folder-chip="${CSS.escape(targetId)}"]`);
+		return whenMounted(
+			`[data-session-folder-chip="${CSS.escape(reveal.id)}"]`,
+			(chip) => {
+				if (revealFolderRef.current !== reveal) {
+					return;
+				}
+
+				revealFolderRef.current = null;
+				chip?.focus();
+			},
+		);
 	}, [revealFolderTick, folderEntries]);
 
 	useEffect(() => {
@@ -3964,11 +3960,11 @@ const SessionFolderNav = memo(
 					<ScrollArea
 						type="auto"
 						viewportRef={setScrollElement}
-						className="flex max-h-[min(44rem,calc(100vh-14rem))] flex-col"
+						className="flex max-h-[max(10rem,min(44rem,calc(100vh-14rem)))] flex-col"
 						viewportClassName="min-h-0"
 					>
 						<VirtualRows
-							keepFocused
+							keepTabStops
 							handleRef={listRef}
 							count={entries.length}
 							scrollElement={scrollElement}

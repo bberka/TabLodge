@@ -307,39 +307,99 @@ export async function longFolderListCheck(env: Env, theme: Theme) {
 				(await folders.locator('[data-session-folder-chip]').count()) < 50,
 				'only the folders near the visible area should be mounted',
 			);
-			assert.equal(await chip('folder-long-99').count(), 0);
+			assert.equal(await chip('folder-long-90').count(), 0);
 
-			const distanceFromEnd = await folders
-				.locator('[data-radix-scroll-area-viewport]')
-				.evaluate(
-					async (node: {
-						scrollTop: number;
-						scrollHeight: number;
-						clientHeight: number;
-					}) => {
-						node.scrollTop = node.scrollHeight;
-						await new Promise((resolve) => {
-							setTimeout(resolve, 500);
-						});
-						return node.scrollHeight - node.clientHeight - node.scrollTop;
-					},
+			const list = folders.locator('[data-radix-scroll-area-viewport]');
+			const focusedFolder = () =>
+				page.locator(':focus').getAttribute('data-session-folder-chip');
+			const newFolder = folders.getByRole('button', {name: 'New folder'});
+			const listedIds = () =>
+				folders
+					.locator('[data-session-folder-chip]')
+					.evaluateAll((nodes: Array<{dataset: Record<string, string>}>) =>
+						nodes.map((node) => node.dataset.sessionFolderChip),
+					);
+			await newFolder.focus();
+			await page.keyboard.press('Shift+Tab');
+			const lastId = await focusedFolder();
+			assert.equal(lastId, (await listedIds()).at(-1));
+			assert.ok(lastId, 'a folder should have focus');
+			const focusedRow = () =>
+				page
+					.locator(':focus')
+					.evaluate((node: {parentElement: {dataset: {index?: string}}}) =>
+						Number(node.parentElement.dataset.index),
+					);
+			const lastRow = await focusedRow();
+			assert.ok(lastRow >= 100, 'the last folder should be the last row');
+			for (let back = 1; back <= 20; back += 1) {
+				await page.keyboard.press('Shift+Tab');
+				assert.equal(
+					await focusedRow(),
+					lastRow - back,
+					'Shift+Tab must visit every folder in order',
 				);
+			}
+
+			await chip('all').focus();
+			await page.keyboard.press('Shift+Tab');
+			assert.equal(
+				await focusedFolder(),
+				null,
+				'Shift+Tab must leave the list',
+			);
+			await list.evaluate((node: {scrollTop: number; scrollHeight: number}) => {
+				node.scrollTop = node.scrollHeight;
+			});
+			await page.keyboard.press('Tab');
+			assert.equal(await focusedFolder(), 'all');
+			await page.keyboard.press('Tab');
+			assert.equal(await focusedFolder(), (await listedIds())[1]);
+			await chip(lastId).focus();
+			await page.keyboard.press('Tab');
+			assert.ok(
+				await newFolder.evaluate((node: {matches: (s: string) => boolean}) =>
+					node.matches(':focus'),
+				),
+				'Tab must leave the list after the last folder',
+			);
+
+			const distanceFromEnd = await list.evaluate(
+				async (node: {
+					scrollTop: number;
+					scrollHeight: number;
+					clientHeight: number;
+				}) => {
+					node.scrollTop = node.scrollHeight;
+					await new Promise((resolve) => {
+						setTimeout(resolve, 500);
+					});
+					return node.scrollHeight - node.clientHeight - node.scrollTop;
+				},
+			);
 			assert.ok(
 				distanceFromEnd < 2,
 				'scrolling away from the focused folder must not snap back',
+			);
+			await list.evaluate((node: {scrollTop: number}) => {
+				node.scrollTop = 0;
+			});
+			await until(
+				async () => (await chip('folder-long-90').count()) === 0,
+				'the destination folder to be unmounted before the move',
 			);
 
 			const card = page.locator('#session-dev-session-1');
 			await openMenuByKeyboard(page, card.locator('[data-move-focus]'));
 			await page.getByRole('menuitem', {name: 'Move to folder…'}).focus();
 			await page.keyboard.press('Enter');
-			await page.keyboard.type('Long folder 99');
+			await page.keyboard.type('Long folder 90');
 			await page.keyboard.press('Enter');
 			await until(
 				async () =>
 					(await page
 						.locator(':focus')
-						.getAttribute('data-session-folder-chip')) === 'folder-long-99',
+						.getAttribute('data-session-folder-chip')) === 'folder-long-90',
 				'focus to move to the destination folder below the visible area',
 			);
 
