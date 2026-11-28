@@ -29,19 +29,58 @@ const images = createImageStore(storage);
 
 export type PhoneImage = Omit<SavedThumb, 'thumb'> & {uri: string};
 
+let allThumbs: ReadonlyMap<string, PhoneImage> = new Map();
 let thumbs: ReadonlyMap<string, PhoneImage> = new Map();
+const hiddenUrls = new Set<string>();
 const listeners = new Set<() => void>();
 
+function publish(): void {
+	if (hiddenUrls.size === 0) {
+		thumbs = allThumbs;
+	} else {
+		const visible = new Map<string, PhoneImage>();
+		for (const [url, image] of allThumbs) {
+			if (!hiddenUrls.has(url)) {
+				visible.set(url, image);
+			}
+		}
+
+		thumbs = visible;
+	}
+
+	for (const listener of listeners) {
+		listener();
+	}
+}
+
 export async function refreshImageThumbs(): Promise<void> {
-	thumbs = new Map(
+	allThumbs = new Map(
 		(await images.thumbs()).map(({thumb, held: _held, ...meta}) => [
 			meta.url,
 			{...meta, uri: thumbDataUrl(thumb)},
 		]),
 	);
-	for (const listener of listeners) {
-		listener();
+	publish();
+}
+
+export const getImageThumbs = (): ReadonlyMap<string, PhoneImage> => thumbs;
+
+export function hideImageThumb(url: string): boolean {
+	if (hiddenUrls.has(url) || !allThumbs.has(url)) {
+		return false;
 	}
+
+	hiddenUrls.add(url);
+	publish();
+	return true;
+}
+
+export function showImageThumb(url: string): void {
+	if (!hiddenUrls.delete(url)) {
+		return;
+	}
+
+	publish();
 }
 
 export const useImageThumbs = (): ReadonlyMap<string, PhoneImage> =>
@@ -66,15 +105,19 @@ export const thumbSync = {
 export async function removeImageThumb(
 	url: string,
 ): Promise<SavedThumb | undefined> {
-	const [found] = await images.thumbs([url]);
-	if (!found) {
-		return undefined;
-	}
+	try {
+		const [found] = await images.thumbs([url]);
+		if (!found) {
+			return undefined;
+		}
 
-	await images.remove(url);
-	await refreshImageThumbs();
-	const {held: _held, ...thumb} = found;
-	return thumb;
+		await images.remove(url);
+		const {held: _held, ...thumb} = found;
+		return thumb;
+	} finally {
+		hiddenUrls.delete(url);
+		await refreshImageThumbs();
+	}
 }
 
 export async function putImageThumbs(
