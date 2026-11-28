@@ -28,6 +28,7 @@ import {
 	openMenuByKeyboard,
 	openPage,
 	setTheme,
+	waitForMenuClose,
 } from './pages.ts';
 
 export async function sessionMoveCheck(env: Env) {
@@ -612,6 +613,7 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 					await page.keyboard.press('Enter');
 					await page.getByRole('menuitem', {name, exact: true}).focus();
 					await page.keyboard.press('Enter');
+					await waitForMenuClose(page, trigger, 'the session menu');
 				};
 
 				const windowMenuItem = async (name: string) => {
@@ -623,6 +625,7 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 					await page.keyboard.press('ArrowRight');
 					await page.getByRole('menuitem', {name, exact: true}).focus();
 					await page.keyboard.press('Enter');
+					await waitForMenuClose(page, trigger, 'the session menu');
 				};
 
 				await until(async () => {
