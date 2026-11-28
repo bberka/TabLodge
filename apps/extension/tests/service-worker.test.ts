@@ -229,7 +229,12 @@ function createWorkerHarness(
 
 	const alarms = new Map<
 		string,
-		{name: string; periodInMinutes?: number; delayInMinutes?: number}
+		{
+			name: string;
+			periodInMinutes?: number;
+			delayInMinutes?: number;
+			when?: number;
+		}
 	>();
 	const alarmCalls: string[] = [];
 	const downloads: Array<{url: string; filename: string}> = [];
@@ -891,7 +896,11 @@ function createWorkerHarness(
 			alarms: {
 				async create(
 					name: string,
-					info: {periodInMinutes?: number; delayInMinutes?: number},
+					info: {
+						periodInMinutes?: number;
+						delayInMinutes?: number;
+						when?: number;
+					},
 				) {
 					alarmCalls.push(`create:${name}:${info.periodInMinutes}`);
 					alarms.set(name, {name, ...info});
@@ -15442,6 +15451,30 @@ test('Undo for a catch-up added in a background tab starts when the notice is fi
 		);
 		assert.equal(late.ok, false);
 		assert.deepEqual(redditAddresses(harness), ['bbb222']);
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test('an unseen catch-up Undo record is deleted when its seven days end, with no other activity', async () => {
+	vi.useFakeTimers({toFake: ['Date']});
+	try {
+		const harness = sourcesHarness();
+		await switchOnReddit(harness);
+		await addUnseen(harness, [savedPost('aaa111')]);
+		const expiry = Date.now() + 7 * 24 * 60 * 60_000;
+		vi.advanceTimersByTime(3 * 60_000);
+		harness.alarms.delete('tablodge-undo');
+		await harness.fire('alarm', {name: 'tablodge-undo'});
+		await settle();
+		assert.equal(harness.alarms.get('tablodge-undo')?.when, expiry);
+
+		vi.setSystemTime(expiry);
+		harness.alarms.delete('tablodge-undo');
+		await harness.fire('alarm', {name: 'tablodge-undo'});
+		await settle();
+		assert.equal(harness.extraStorage['tablodge.undo'], undefined);
+		assert.equal(harness.alarms.has('tablodge-undo'), false);
 	} finally {
 		vi.useRealTimers();
 	}

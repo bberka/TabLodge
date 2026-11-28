@@ -8637,9 +8637,11 @@ const isUndoRecord = (value: unknown): value is UndoRecord =>
 const undoHash = (value: unknown) =>
 	value === undefined ? 'none' : hashText(JSON.stringify(value));
 
-const isUndoLive = (record: UndoRecord) =>
-	Number(record.createdAt) >
-	Date.now() - (record.catchUp?.unseen ? UNSEEN_UNDO_HOLD_MS : UNDO_WINDOW_MS);
+const undoExpiry = (record: UndoRecord) =>
+	Number(record.createdAt) +
+	(record.catchUp?.unseen ? UNSEEN_UNDO_HOLD_MS : UNDO_WINDOW_MS);
+
+const isUndoLive = (record: UndoRecord) => undoExpiry(record) > Date.now();
 
 async function readUndo(): Promise<UndoRecord[]> {
 	const raw = await readKey<Raw>(UNDO_KEY);
@@ -9036,6 +9038,12 @@ async function purgeUndo(): Promise<void> {
 
 		return live;
 	});
+	if (records.length > 0) {
+		await chrome.alarms?.create?.(ALARM_UNDO, {
+			when: Math.min(...records.map((record) => undoExpiry(record))),
+		});
+	}
+
 	await finishSendCleanup(records);
 }
 
