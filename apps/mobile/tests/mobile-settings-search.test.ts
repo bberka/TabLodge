@@ -41,6 +41,12 @@ describe('settings search', () => {
 		assert.deepEqual(visible('counters'), ['Links and titles']);
 	});
 
+	test('finds Ask before deleting in the Trash card', () => {
+		assert.deepEqual(visible('ask before deleting'), ['Trash']);
+		assert.deepEqual(visible('confirm'), ['Trash']);
+		assert.ok(RESETS.has(ROWS.askBeforeDeleting));
+	});
+
 	test('finds a card by an alias', () => {
 		assert.ok(visible('token').includes('Sync'));
 		assert.ok(visible('theme').includes('Appearance'));

@@ -10,6 +10,24 @@ import {
 	SCHEMA_VERSION,
 } from '../src/shared/library-normalize';
 
+describe('Ask before deleting', () => {
+	test('is off for a library saved before it existed or holding junk', () => {
+		for (const askBeforeDeleting of [undefined, 'true', 1, false]) {
+			assert.equal(
+				normalizeSettings({askBeforeDeleting}).askBeforeDeleting,
+				false,
+			);
+		}
+	});
+
+	test('stays on once chosen', () => {
+		assert.equal(
+			normalizeSettings({askBeforeDeleting: true}).askBeforeDeleting,
+			true,
+		);
+	});
+});
+
 describe('normalizeStore', () => {
 	test('turns nothing into an empty library with the default column and folder', () => {
 		const store = normalizeStore(null);

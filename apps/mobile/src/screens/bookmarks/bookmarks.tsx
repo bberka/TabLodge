@@ -33,12 +33,15 @@ import {
 } from '../../library/board-edits';
 import {
 	edit,
+	getShownLibrary,
 	newId,
 	setSyncedSetting,
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
 import {editDone, editWithUndo} from '../../library/undoable-edit';
+import {askBeforeDeleting} from '../../library/delete-prompt';
+import {bookmarkDeleteQuestion} from '../../../../extension/src/shared/delete-question';
 import {trashDeleted} from '../../library/trash-store';
 import {linkToOpen} from '../../library/links';
 import {openAll, openLink} from '../../platform/open-links';
@@ -357,8 +360,8 @@ export function BookmarksScreen({
 			]
 		: [];
 
-	const remove = (ids: ReadonlySet<string>) => {
-		const gone = removedBookmarks(store, ids);
+	const deleteNow = (ids: ReadonlySet<string>) => {
+		const gone = removedBookmarks(getShownLibrary(), ids);
 		if (gone.length === 0) {
 			return;
 		}
@@ -382,6 +385,20 @@ export function BookmarksScreen({
 						),
 					);
 				},
+			},
+		);
+	};
+
+	const remove = (ids: ReadonlySet<string>) => {
+		const chosen = removedBookmarks(store, ids);
+		if (chosen.length === 0) {
+			return;
+		}
+
+		askBeforeDeleting(
+			bookmarkDeleteQuestion(chosen.map((entry) => entry.bookmark)),
+			() => {
+				deleteNow(ids);
 			},
 		);
 	};

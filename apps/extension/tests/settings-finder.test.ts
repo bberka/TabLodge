@@ -136,3 +136,14 @@ test('rows that cannot exist in Firefox are left out of its finder', () => {
 		);
 	}
 });
+
+test('Ask before deleting is found by the words people use for it', () => {
+	for (const query of ['ask before deleting', 'confirm delete']) {
+		assert.ok(
+			settingIds(query).includes(
+				`setting:${fieldEntryId('askBeforeDeleting')}`,
+			),
+			query,
+		);
+	}
+});

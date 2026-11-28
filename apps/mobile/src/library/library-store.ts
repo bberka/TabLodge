@@ -12,6 +12,7 @@ import {SHARED_PAGE_LIVE_PASSWORD_FEATURE} from '../../../extension/src/shared/s
 import {
 	disconnectPrivate,
 	editPrivate,
+	getPrivateStore,
 	reconnectPrivate,
 	usePrivateStore,
 } from '../private/private-library';
@@ -280,6 +281,9 @@ export async function wakeSync(): Promise<void> {
 export const subscribeLibrary = core.subscribe;
 
 export const getLibrary = (): Store => core.store;
+
+export const getShownLibrary = (): Store =>
+	isPrivateView() ? getPrivateStore() : core.store;
 
 export async function resetSyncedSettings(
 	keys: ReadonlyArray<keyof LinkSettings> = Object.keys(LINK_DEFAULTS) as Array<

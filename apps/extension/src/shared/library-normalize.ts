@@ -184,6 +184,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	autoBackupKeep: 7,
 	autoBackupToDownloads: false,
 	trashRetentionDays: 30,
+	askBeforeDeleting: false,
 	autoArchiveDays: 0,
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
@@ -1020,6 +1021,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
 		autoBackupToDownloads: raw.autoBackupToDownloads === true,
 		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
+		askBeforeDeleting: raw.askBeforeDeleting === true,
 		autoArchiveDays: clampInteger(raw.autoArchiveDays, 0, 3650, 0),
 		sessionNameStyle: isOneOf(SESSION_NAME_STYLES, raw.sessionNameStyle)
 			? raw.sessionNameStyle

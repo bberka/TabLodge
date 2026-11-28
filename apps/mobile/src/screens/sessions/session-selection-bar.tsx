@@ -1,6 +1,8 @@
 import {useState} from 'react';
 import type {Session, Store} from '../../../../extension/src/shared/types';
-import {edit} from '../../library/library-store';
+import {edit, getShownLibrary} from '../../library/library-store';
+import {askBeforeDeleting} from '../../library/delete-prompt';
+import {sessionDeleteQuestion} from '../../../../extension/src/shared/delete-question';
 import {linkToOpen, type LinkSettings} from '../../library/links';
 import {openAll} from '../../platform/open-links';
 import {showSnack} from '../../ui/snackbar';
@@ -36,8 +38,10 @@ export function SessionSelectionBar({
 }) {
 	const colors = useColors();
 	const [moving, setMoving] = useState(false);
-	const deleteChosen = () => {
-		const gone = chosen;
+	const deleteSelected = (ids: ReadonlySet<string>) => {
+		const gone = getShownLibrary().groups.filter((session) =>
+			ids.has(session.id),
+		);
 		if (gone.length === 0) {
 			return;
 		}
@@ -50,6 +54,17 @@ export function SessionSelectionBar({
 			run() {
 				void edit((current) => restoreSessions(current, gone, Date.now));
 			},
+		});
+	};
+
+	const deleteChosen = () => {
+		if (chosen.length === 0) {
+			return;
+		}
+
+		const ids = new Set(chosen.map((session) => session.id));
+		askBeforeDeleting(sessionDeleteQuestion(chosen), () => {
+			deleteSelected(ids);
 		});
 	};
 

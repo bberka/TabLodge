@@ -95,6 +95,7 @@ import type {
 	Settings,
 	TabLodgeState,
 } from '../shared/types';
+import {sessionDeleteQuestion} from '../shared/delete-question';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
 import {hostOf, webUrl} from '../shared/web-url';
 import {
@@ -157,6 +158,7 @@ import {
 } from './target-picker-dialog';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
+import {useDeleteConfirmation} from './delete-confirmation';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
 import {
 	SEND_TO_PRIVATE_LABEL,
@@ -380,6 +382,9 @@ export function SessionManager({
 		[visibleFolders],
 	);
 	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
+	const {askBeforeDeleting, confirmationDialog} = useDeleteConfirmation(
+		settings.askBeforeDeleting === true,
+	);
 	const folderList = isFolderListShown(
 		visibleFolders.length,
 		settings.sessionFolderView,
@@ -991,6 +996,13 @@ export function SessionManager({
 		}
 	}
 
+	function requestDeleteGroup(group: Session, closeEditor = false) {
+		askBeforeDeleting(
+			sessionDeleteQuestion([group]),
+			() => void deleteGroup(group, closeEditor),
+		);
+	}
+
 	async function deleteGroup(group: Session, closeEditor = false) {
 		const result = await send('DELETE_GROUP', {groupId: group.id});
 		if (!result?.ok) {
@@ -1360,7 +1372,7 @@ export function SessionManager({
 			),
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
-		deleteGroup: (group) => deleteGroup(group),
+		deleteGroup: (group) => requestDeleteGroup(group),
 		deleteTab: deleteSavedTab,
 		editTab: (group, tab) => setEditingTab({group, tab}),
 		editGroup: (group) => openGroupDetails(group),
@@ -2095,6 +2107,7 @@ export function SessionManager({
 				request={targetPicker}
 				onClose={() => setTargetPicker(null)}
 			/>
+			{confirmationDialog}
 			<ImportDialog
 				open={importOpen}
 				initialKind="sessions"
@@ -2420,7 +2433,7 @@ export function SessionManager({
 								<Button
 									type="button"
 									variant="destructive"
-									onClick={() => deleteGroup(editingGroup, true)}
+									onClick={() => requestDeleteGroup(editingGroup, true)}
 								>
 									<Trash2 />
 									Delete

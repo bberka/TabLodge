@@ -842,6 +842,12 @@ export const settingsFieldGroups = ({
 				type: 'switch',
 			},
 			{
+				name: 'askBeforeDeleting',
+				label: 'Ask before deleting',
+				help: 'Asks before a bookmark, session or column is deleted. Off, it is deleted at once with Undo. The Android app follows this too.',
+				type: 'switch',
+			},
+			{
 				name: 'trashRetentionDays',
 				label: 'Keep items in the trash bin for',
 				help: 'Then deleted items are removed for good. The Android app follows this too.',
@@ -990,6 +996,13 @@ export const SETTING_WORDS: Partial<Record<keyof Settings, string[]>> = {
 	autoBackup: ['backups', 'scheduled backup', 'safety backup'],
 	autoBackupKeep: ['backup count', 'keep backups', 'how many backups'],
 	autoBackupToDownloads: ['downloads', 'download folder', 'backup file'],
+	askBeforeDeleting: [
+		'confirm delete',
+		'delete confirmation',
+		'ask before delete',
+		'undo',
+		'remove',
+	],
 	trashRetentionDays: ['trash', 'bin', 'retention', 'deleted items', 'days'],
 	defaultShareMode: [
 		'share',

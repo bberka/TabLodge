@@ -27,6 +27,7 @@ export type LinkSettings = Pick<
 	| 'sessionNameFallback'
 	| 'autoArchiveDays'
 	| 'trashRetentionDays'
+	| 'askBeforeDeleting'
 	| 'defaultShareMode'
 	| 'toastDuration'
 	| 'siteIcons'
@@ -51,6 +52,7 @@ export const DEFAULTS: LinkSettings = {
 	sessionNameFallback: DEFAULT_SETTINGS.sessionNameFallback,
 	autoArchiveDays: DEFAULT_SETTINGS.autoArchiveDays,
 	trashRetentionDays: DEFAULT_SETTINGS.trashRetentionDays,
+	askBeforeDeleting: DEFAULT_SETTINGS.askBeforeDeleting,
 	defaultShareMode: DEFAULT_SETTINGS.defaultShareMode,
 	toastDuration: 'default',
 	siteIcons: 'server',

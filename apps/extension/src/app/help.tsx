@@ -1026,11 +1026,15 @@ function Help() {
 							Undo that restores from the trash bin has no such limit. Settings
 							› Recovery &amp; backups has a Trash bin button too, and Empty
 							trash bin at the bottom of the bin deletes everything in it for
-							good.
+							good. Deleting a bookmark, session, or column happens at once. To
+							be asked first, turn on Ask before deleting in Settings › Recovery
+							&amp; backups; the Android app follows it too. Delete column
+							already asks when the column has bookmarks or a site source, and
+							does not ask twice.
 						</>
 					),
 					searchText:
-						'toast position messages stay notification corner top bottom longer until dismissed undo two minutes deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
+						'toast position messages stay notification corner top bottom longer until dismissed undo two minutes deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin ask before deleting confirm delete confirmation',
 				},
 				{
 					title: 'Automatic backups',

@@ -28,6 +28,7 @@ export const RESETS = new Map<Row, Reset>([
 	[ROWS.sessionNameTemplate, {synced: ['sessionNameTemplate']}],
 	[ROWS.sessionNameFallback, {synced: ['sessionNameFallback']}],
 	[ROWS.archiveSessions, {synced: ['autoArchiveDays']}],
+	[ROWS.askBeforeDeleting, {synced: ['askBeforeDeleting']}],
 	[ROWS.trashRetention, {synced: ['trashRetentionDays']}],
 	[ROWS.sessionView, {prefs: ['sessionView']}],
 	[ROWS.bookmarkView, {prefs: ['bookmarkView']}],
