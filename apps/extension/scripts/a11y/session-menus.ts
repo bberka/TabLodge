@@ -270,6 +270,110 @@ export async function sessionFolderMoveFocusCheck(env: Env, theme: Theme) {
 	);
 }
 
+export async function longFolderListCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(
+		`a long folder list stays windowed and reveals the folder in use (${theme})`,
+		async () => {
+			const page = await openPage(context, extensionId, 'newtab');
+			await setTheme(page, theme);
+			const original = await readDevStore(page);
+			const fixture = createDevFixture(original);
+			const template = fixture.folders.find(
+				(folder) => folder.id === 'folder-work',
+			);
+			assert.ok(template, 'the fixture needs the Work folder');
+			fixture.folders = [
+				...fixture.folders,
+				...Array.from({length: 100}, (_, index) => ({
+					...template,
+					id: `folder-long-${index}`,
+					name: `Long folder ${index}`,
+				})),
+			];
+			const moved = fixture.groups.find(
+				(group) => group.id === 'dev-session-1',
+			);
+			assert.ok(moved, 'the fixture needs a session to move');
+			moved.folderId = 'folder-work';
+			await writeDevStore(page, fixture);
+			await page.reload();
+
+			const folders = page.getByRole('navigation', {name: 'Session folders'});
+			const chip = (id: string) =>
+				folders.locator(`[data-session-folder-chip="${id}"]`);
+			await chip('folder-work').click();
+			assert.ok(
+				(await folders.locator('[data-session-folder-chip]').count()) < 50,
+				'only the folders near the visible area should be mounted',
+			);
+			assert.equal(await chip('folder-long-99').count(), 0);
+
+			const distanceFromEnd = await folders
+				.locator('[data-radix-scroll-area-viewport]')
+				.evaluate(
+					async (node: {
+						scrollTop: number;
+						scrollHeight: number;
+						clientHeight: number;
+					}) => {
+						node.scrollTop = node.scrollHeight;
+						await new Promise((resolve) => {
+							setTimeout(resolve, 500);
+						});
+						return node.scrollHeight - node.clientHeight - node.scrollTop;
+					},
+				);
+			assert.ok(
+				distanceFromEnd < 2,
+				'scrolling away from the focused folder must not snap back',
+			);
+
+			const card = page.locator('#session-dev-session-1');
+			await openMenuByKeyboard(page, card.locator('[data-move-focus]'));
+			await page.getByRole('menuitem', {name: 'Move to folder…'}).focus();
+			await page.keyboard.press('Enter');
+			await page.keyboard.type('Long folder 99');
+			await page.keyboard.press('Enter');
+			await until(
+				async () =>
+					(await page
+						.locator(':focus')
+						.getAttribute('data-session-folder-chip')) === 'folder-long-99',
+				'focus to move to the destination folder below the visible area',
+			);
+
+			await page.keyboard.press('Enter');
+			await card.waitFor();
+			await folders.getByRole('button', {name: 'New folder'}).focus();
+			await page.keyboard.press('Enter');
+			await page
+				.getByRole('dialog')
+				.getByRole('textbox', {name: 'Name'})
+				.fill(`Newest folder ${theme}`);
+			await page.keyboard.press('Enter');
+			const created = folders
+				.locator('[data-session-folder-chip][aria-pressed="true"]')
+				.filter({hasText: `Newest folder ${theme}`});
+			await until(async () => {
+				const viewport = await folders
+					.locator('[data-radix-scroll-area-viewport]')
+					.boundingBox();
+				const box =
+					(await created.count()) > 0 ? await created.boundingBox() : null;
+				return Boolean(
+					viewport &&
+					box &&
+					box.y >= viewport.y - 1 &&
+					box.y + box.height <= viewport.y + viewport.height + 1,
+				);
+			}, 'the new folder to be scrolled into view');
+			await writeDevStore(page, original);
+			await page.close();
+		},
+	);
+}
+
 export async function closeDuplicateTabsCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
 	await check(

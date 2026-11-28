@@ -1,4 +1,9 @@
-import {useVirtualizer, useWindowVirtualizer} from '@tanstack/react-virtual';
+import {
+	defaultRangeExtractor,
+	type Range,
+	useVirtualizer,
+	useWindowVirtualizer,
+} from '@tanstack/react-virtual';
 import {
 	type ReactNode,
 	type Ref,
@@ -11,7 +16,7 @@ import {
 
 export const VIRTUAL_OVERSCAN = 6;
 
-export type WindowVirtualRowsHandle = {
+export type VirtualRowsHandle = {
 	scrollToIndex: (
 		index: number,
 		options?: {
@@ -20,6 +25,18 @@ export type WindowVirtualRowsHandle = {
 		},
 	) => void;
 };
+
+function withRowAndNeighbors(range: Range, row: number | null) {
+	const rows = defaultRangeExtractor(range);
+	if (row === null) {
+		return rows;
+	}
+
+	const kept = [row - 1, row, row + 1].filter(
+		(index) => index >= 0 && index < range.count,
+	);
+	return [...new Set([...rows, ...kept])].toSorted((a, b) => a - b);
+}
 
 export function useNearViewport(margin = 600) {
 	const ref = useRef<HTMLElement>(null);
@@ -52,6 +69,8 @@ export function VirtualRows({
 	gap,
 	active = true,
 	itemKey,
+	handleRef,
+	keepFocused = false,
 	children,
 }: {
 	count: number;
@@ -60,8 +79,11 @@ export function VirtualRows({
 	gap: number;
 	active?: boolean;
 	itemKey: (index: number) => string;
+	handleRef?: Ref<VirtualRowsHandle>;
+	keepFocused?: boolean;
 	children: (index: number) => ReactNode;
 }) {
+	const [focusedRow, setFocusedRow] = useState<number | null>(null);
 	const virtualizer = useVirtualizer({
 		count,
 		getScrollElement: () => scrollElement,
@@ -69,8 +91,18 @@ export function VirtualRows({
 		overscan: VIRTUAL_OVERSCAN,
 		gap,
 		getItemKey: itemKey,
+		rangeExtractor: (range) => withRowAndNeighbors(range, focusedRow),
 		initialRect: {width: 0, height: 800},
 	});
+	useImperativeHandle(
+		handleRef,
+		() => ({
+			scrollToIndex(index, options) {
+				virtualizer.scrollToIndex(index, options);
+			},
+		}),
+		[virtualizer],
+	);
 	return (
 		<div
 			data-virtual-rows
@@ -89,6 +121,13 @@ export function VirtualRows({
 							width: '100%',
 							transform: `translateY(${item.start}px)`,
 						}}
+						onFocus={
+							keepFocused
+								? () => {
+										setFocusedRow(item.index);
+									}
+								: undefined
+						}
 					>
 						{children(item.index)}
 					</div>
@@ -109,7 +148,7 @@ export function WindowVirtualRows({
 	estimate: number;
 	gap: number;
 	itemKey: (index: number) => string;
-	handleRef?: Ref<WindowVirtualRowsHandle>;
+	handleRef?: Ref<VirtualRowsHandle>;
 	children: (index: number) => ReactNode;
 }) {
 	const listRef = useRef<HTMLDivElement>(null);
