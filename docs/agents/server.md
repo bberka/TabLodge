@@ -1,15 +1,15 @@
 # Sync server (`apps/server`)
 
-Hono server for self hosters, as Docker image (Node, SQLite) or Cloudflare Worker with Durable Object. Users read [Self hosting](../self-hosting.md); [Architecture](../architecture.md#sync-protocol) and [ADR 1](../adr/0001-record-level-sync-protocol.md) describe protocol.
+Hono sync server: Docker image (Node, SQLite) or Cloudflare Worker with Durable Object. Users: [Self hosting](../self-hosting.md); [Architecture](../architecture.md#sync-protocol) and [ADR 1](../adr/0001-record-level-sync-protocol.md): protocol.
 
 ## Where things are
 
 | Path | Holds |
 | --- | --- |
 | `src/` | API (`api.ts`), SQLite change log, Node entry (`node.ts`), Worker entry (`worker.ts`) |
-| `scripts/` | `cloudflare-deploy.ts` (bundles button's Worker), `setup-cloudflare.ts`, `transfer.ts` |
-| `cloudflare-deploy/` | What button copies, with update workflow; `worker.js` is generated |
-| `Dockerfile`, `compose*.yaml`, `wrangler.jsonc` | Docker and Cloudflare deployment |
+| `scripts/` | `cloudflare-deploy.ts` (bundles button's Worker), `deploy-cloudflare.ts`, `setup-cloudflare.ts`, `transfer.ts` |
+| `cloudflare-deploy/` | Button copy, update workflow, generated `worker.js`, shared `deploy.js` |
+| `Dockerfile`, `compose*.yaml`, `wrangler.jsonc` | Docker, Cloudflare deployment |
 
 Protocol code (`apps/extension/src/shared/sync/`) shared with extension and Android app; server imports it from there.
 
