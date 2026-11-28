@@ -74,6 +74,7 @@ import {
 } from './session-cards.ts';
 import {
 	closeDuplicateTabsCheck,
+	longFolderListCheck,
 	sessionArchiveCheck,
 	sessionFolderMoveFocusCheck,
 	sessionMenuOrderCheck,
@@ -203,7 +204,7 @@ async function main() {
 		await columnMoveCheck(env);
 		await sessionMoveCheck(env);
 		await sessionArchiveCheck(env);
-		await eachTheme(env, [sessionFolderMoveFocusCheck]);
+		await eachTheme(env, [sessionFolderMoveFocusCheck, longFolderListCheck]);
 		await eachTheme(env, [closeDuplicateTabsCheck]);
 		await archivedHiddenCheck(env);
 		await sharePreviewCheck(env);

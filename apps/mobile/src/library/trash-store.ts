@@ -1,5 +1,9 @@
 import {useEffect, useState} from 'react';
-import {getPrivateStore, nudgePrivate} from '../private/private-library';
+import {
+	beginPrivateChange,
+	getPrivateStore,
+	nudgePrivate,
+} from '../private/private-library';
 import {isPrivateView} from './view';
 import {
 	editIn,
@@ -32,9 +36,19 @@ const change = async (
 	work: (items: TrashEntry[]) => TrashEntry[],
 	{quiet = false} = {},
 ): Promise<void> => {
-	await changeTrash(name, retentionDays(name), work);
-	if (!quiet) {
-		(name === 'private' ? nudgePrivate : nudgeRegular)();
+	const isPrivate = name === 'private';
+	if (isPrivate) {
+		await beginPrivateChange();
+	}
+
+	try {
+		await changeTrash(name, retentionDays(name), work);
+	} finally {
+		if (isPrivate) {
+			nudgePrivate(!quiet);
+		} else if (!quiet) {
+			nudgeRegular();
+		}
 	}
 };
 

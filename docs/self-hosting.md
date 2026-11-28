@@ -105,7 +105,7 @@ This runs the server as a Worker with one Durable Object on your own Cloudflare 
 1. [Create a token](#create-a-token) and keep it at hand. The **No server yet?** button in **Settings › Sync** opens a dialog that walks through these same steps and has the button too.
 2. Choose the button and log in to Cloudflare, or create a free account.
 3. Connect your GitHub or GitLab account when asked. Cloudflare copies the server into a new repository there and deploys it from that repository.
-4. Paste the token as the value of `TABLODGE_SYNC_TOKEN`, keep the other settings, and deploy.
+4. Paste the token as the value of `TABLODGE_SYNC_TOKEN`, keep the other settings, and deploy. `CUSTOM_DOMAIN` is optional and empty by default; read [Your own domain](#your-own-domain) before you set it.
 
 When it finishes, Cloudflare shows the Worker's address, such as `https://tablodge-sync.<your-subdomain>.workers.dev`. That and the token are what you enter in TabLodge.
 
@@ -120,11 +120,11 @@ pnpm install
 pnpm run cf:setup
 ```
 
-The script opens a browser window to log in to Cloudflare if needed. It then deploys the Worker, creates a token, stores it as a Worker secret, and prints the address (`https://tablodge-sync.<your-subdomain>.workers.dev`) and the token. The token is shown only once, so save it.
+The script asks for an optional [domain of your own](#your-own-domain), or takes it from `--domain sync.example.com`. It opens a browser window to log in to Cloudflare if needed, deploys the Worker, creates a token, stores it as a Worker secret, and prints the address and the token. The address is your domain if you set one, otherwise `https://tablodge-sync.<your-subdomain>.workers.dev`. The token is shown only once, so save it.
 
 ### 2. Check it
 
-Open `https://tablodge-sync.<your-subdomain>.workers.dev/health` in a browser, or run:
+Open `https://tablodge-sync.<your-subdomain>.workers.dev/health` (or `/health` on your own domain) in a browser, or run:
 
 ```sh
 curl https://tablodge-sync.<your-subdomain>.workers.dev/health
@@ -134,11 +134,23 @@ It answers `{"ok":true}`. For a few seconds right after the first deploy, Cloudf
 
 ### Your own domain
 
-In the Cloudflare dashboard, open the `tablodge-sync` Worker and add a custom domain in its settings, for example `sync.example.com` on a zone you have on Cloudflare. Use that address in TabLodge instead.
+The Worker can answer at a hostname of yours, such as `sync.example.com`. The domain must be an active zone on the same Cloudflare account as the Worker, and the hostname must have no existing `CNAME` record. Cloudflare creates the DNS record and the certificate. Pick a hostname that nothing else uses: a deploy by the button's repository or by `cf:setup` does not ask before it takes the hostname from another Worker or replaces another DNS record on it.
+
+Set the domain in one of these ways:
+
+* **From your computer:** run `pnpm run cf:setup --domain sync.example.com`, or enter the hostname when `cf:setup` asks. After a successful deploy it saves the hostname as `CUSTOM_DOMAIN` under `vars` in `apps/server/wrangler.jsonc`, and later `cf:setup` and `cf:deploy` runs keep it.
+* **With the button:** after the first deploy, open `wrangler.jsonc` in the repository Cloudflare created. If `CUSTOM_DOMAIN` under `vars` does not hold your hostname, enter it and commit. Cloudflare deploys the commit, and every later deploy reads the file. This needs `"deploy": "node deploy.js"` in the repository's `package.json`. A repository with `wrangler deploy` there ignores `CUSTOM_DOMAIN`, so use the dashboard.
+* **In the Cloudflare dashboard:** open **Workers & Pages**, then the `tablodge-sync` Worker, then **Settings › Domains & Routes**. Choose **Add**, then **Custom Domain**, and enter the hostname. Leave `CUSTOM_DOMAIN` empty if you use this way.
+
+When the certificate is ready, open `https://sync.example.com/health`, and use `https://sync.example.com` in TabLodge.
+
+While `CUSTOM_DOMAIN` is set, each deploy makes it the Worker's only custom domain. Changing it detaches the old hostname, and so does a deploy after you add another one in the dashboard, so move your devices to the new address. Emptying `CUSTOM_DOMAIN` leaves the domain attached; remove it under **Settings › Domains & Routes**.
+
+The `workers.dev` address keeps working beside your domain, so devices already using it keep syncing. Each deploy turns it on again, even if you turned it off in the dashboard. To turn it off for good once every device uses your domain, add `"workers_dev": false` to `wrangler.jsonc`. In a repository created by the button, that line makes the [Update TabLodge workflow](#update-automatically) stop at every new release, because the file then differs outside `vars`.
 
 ### Settings on Cloudflare
 
-`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `wrangler.jsonc`. If you deployed with the button, edit that file in the repository Cloudflare created and commit; Cloudflare deploys the commit. If you deployed from your computer, edit `apps/server/wrangler.jsonc` and run `pnpm run cf:deploy`. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `apps/server/.dev.vars` and run `pnpm run cf:dev`.
+`MAX_RECORDS`, `RETENTION_DAYS`, `RATE_LIMIT_PER_MINUTE`, and `CUSTOM_DOMAIN` are under `vars` in `wrangler.jsonc`. If you deployed with the button, edit that file in the repository Cloudflare created and commit; Cloudflare deploys the commit. If you deployed from your computer, edit `apps/server/wrangler.jsonc` and run `pnpm run cf:deploy`. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `apps/server/.dev.vars` and run `pnpm run cf:dev`.
 
 ## Option C: Docker on this computer
 
@@ -393,8 +405,8 @@ Run these from the root of your copy of the repository. Anything after the comma
 
 | Command | What it does |
 | --- | --- |
-| `pnpm run cf:setup` | Deploys to Cloudflare, creating and printing a token on the first run. `--rotate-token` replaces the token |
-| `pnpm run cf:deploy` | Deploys an update without touching the token |
+| `pnpm run cf:setup` | Deploys to Cloudflare, creating and printing a token on the first run. `--domain <hostname>` sets a custom domain; `--rotate-token` replaces the token |
+| `pnpm run cf:deploy` | Deploys an update without touching the token, keeping `CUSTOM_DOMAIN` from `apps/server/wrangler.jsonc` when set |
 | `pnpm run cf:dev` | Runs the Worker on this computer, with the token from `apps/server/.dev.vars` |
 | `pnpm run cf:delete` | Deletes the Worker and its library from Cloudflare |
 | `pnpm run server:build` | Builds the Node server into `apps/server/dist/node.js` |
@@ -408,6 +420,7 @@ Run these from the root of your copy of the repository. Anything after the comma
 | --- | --- | --- |
 | `TABLODGE_SYNC_TOKEN` | none, required | The token browsers send, at least 32 characters |
 | `TABLODGE_DOMAIN` | none | Your domain, for `compose.https.yaml` |
+| `CUSTOM_DOMAIN` | empty | Cloudflare only: [your own domain](#your-own-domain) for the Worker, under `vars` in `wrangler.jsonc` |
 | `TABLODGE_IMAGE` | `ghcr.io/bberka/tablodge-sync:latest` | The image `compose.https.yaml` runs, for example to pin a version |
 | `TABLODGE_HTTP_PORT`, `TABLODGE_HTTPS_PORT` | `80`, `443` | Host ports Caddy listens on in `compose.https.yaml` |
 | `COMPOSE_PROFILES` | none | `autoupdate` starts the [daily update](#update-automatically) in `compose.https.yaml` |

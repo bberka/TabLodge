@@ -18,6 +18,7 @@ export type LinkSettings = Pick<
 	| 'bookmarkDensity'
 	| 'showAllBookmarks'
 	| 'bookmarkSort'
+	| 'newBookmarkPosition'
 	| 'sessionSort'
 	| 'showSessionFaviconPreviews'
 	| 'expandSessionsByDefault'
@@ -42,6 +43,7 @@ export const DEFAULTS: LinkSettings = {
 	bookmarkDensity: 'comfortable',
 	showAllBookmarks: true,
 	bookmarkSort: 'manual',
+	newBookmarkPosition: DEFAULT_SETTINGS.newBookmarkPosition,
 	sessionSort: 'newest',
 	showSessionFaviconPreviews: true,
 	expandSessionsByDefault: false,

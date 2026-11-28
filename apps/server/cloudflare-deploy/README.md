@@ -4,6 +4,10 @@ This folder is what the **Deploy to Cloudflare** button copies into a new reposi
 
 `worker.js` is built from the TabLodge source (`apps/server/src`), so do not edit it here.
 
+## Your own domain
+
+To serve the Worker at a hostname of yours, set `CUSTOM_DOMAIN` under `vars` in `wrangler.jsonc` and commit. Read the [requirements and effects](https://github.com/bberka/TabLodge/blob/master/docs/self-hosting.md#your-own-domain) first.
+
 ## Update
 
 Copy the newest [`worker.js`](https://github.com/bberka/TabLodge/blob/release/apps/server/cloudflare-deploy/worker.js) from TabLodge's `release` branch over the one in your repository (on GitHub: open the file, choose **Edit**, paste, and commit). Cloudflare deploys the commit, and your library and token stay as they are.

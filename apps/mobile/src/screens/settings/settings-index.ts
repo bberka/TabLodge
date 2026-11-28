@@ -44,6 +44,10 @@ export const ROWS = {
 		label: 'Sync in the background',
 		hint: 'About every 15 minutes with the app closed, and updates the widgets',
 	},
+	startupTab: {
+		label: 'Open on',
+		hint: 'The tab the app starts on. Shares and links still open where they always do',
+	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
 		label: 'Accent color',
@@ -148,6 +152,10 @@ export const ROWS = {
 		label: 'Sort bookmarks',
 		hint: 'Only Manual order can be rearranged',
 	},
+	newBookmarkPosition: {
+		label: 'Add new bookmarks to',
+		hint: 'Bottom or top of a column under Manual order. The extension uses it too',
+	},
 	sessionName: {
 		label: 'Session name',
 		hint: 'How a new session is named. The name field on the save sheet wins when you type one',
@@ -223,6 +231,20 @@ export const SECTIONS = {
 			ROWS.toastDuration,
 		],
 	},
+	startup: {
+		title: 'Startup',
+		aliases: [
+			'launch',
+			'start',
+			'open app',
+			'cold start',
+			'first screen',
+			'home',
+			'last used',
+			'remember',
+		],
+		rows: [ROWS.startupTab],
+	},
 	syncApp: {
 		title: 'Sync settings',
 		aliases: ['phones', 'devices', 'share settings'],
@@ -288,6 +310,7 @@ export const SECTIONS = {
 			ROWS.spacing,
 			ROWS.showAll,
 			ROWS.sortBookmarks,
+			ROWS.newBookmarkPosition,
 			ROWS.siteIcons,
 			ROWS.savePreview,
 			ROWS.afterShare,
