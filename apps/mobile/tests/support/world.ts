@@ -23,20 +23,29 @@ export const URL_BASE = 'https://sync.test';
 export const TOKEN = 'phone-private-test-token-0123456789-abcdef';
 
 export function makeServer() {
+	let serverNow = Date.now;
 	const main = createApi({
 		token: TOKEN,
+		now: () => serverNow(),
 		log: (() => {
 			const log = new ChangeLog();
 			return () => log;
 		})(),
 	});
 	const privateLog = new ChangeLog();
-	const priv = createApi({token: TOKEN, log: () => privateLog});
+	const priv = createApi({
+		token: TOKEN,
+		log: () => privateLog,
+		now: () => serverNow(),
+	});
 	let online = true;
 	return {
 		privateLog,
 		setOnline(value: boolean) {
 			online = value;
+		},
+		setNow(now: number) {
+			serverNow = () => now;
 		},
 		async fetch(url: string, init: RequestInit = {}): Promise<Response> {
 			if (!online) {

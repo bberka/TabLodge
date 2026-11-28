@@ -18,11 +18,14 @@ import {
 	eraseFailureNotice,
 	isPrivateOpen,
 	openFromServer,
+	privateEraseCopy,
+	privateEraseNotice,
 	privateServerInfo,
 	protectPrivate,
 	removePrivate,
 	setupPrivate,
 	unlockPrivate,
+	type PrivateEraseCopy,
 } from './private-library';
 
 export type PrivateSheet = 'setup' | 'unlock' | 'server' | 'protect' | 'change';
@@ -259,12 +262,12 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
-	const [server, setServer] = useState<{hasKey: boolean; failed: boolean}>();
+	const [eraseCopy, setEraseCopy] = useState<PrivateEraseCopy>();
 	useEffect(() => {
 		let live = true;
-		void privateServerInfo().then((info) => {
+		void privateEraseCopy().then((copy) => {
 			if (live) {
-				setServer(info);
+				setEraseCopy(copy);
 			}
 		});
 		return () => {
@@ -345,15 +348,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 					confirmErase(onDone, setErasing);
 				}}
 			/>
-			<Text style={{color: colors.muted}}>
-				Erasing deletes the private library from this phone, with its password,
-				and asks for a new one.
-				{server === undefined
-					? ''
-					: server.hasKey && !server.failed
-						? ' Your server keeps its copy.'
-						: ' This cannot be undone.'}
-			</Text>
+			<Text style={{color: colors.muted}}>{privateEraseNotice(eraseCopy)}</Text>
 		</View>
 	);
 }
