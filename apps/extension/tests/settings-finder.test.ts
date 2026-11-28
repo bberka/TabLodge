@@ -105,6 +105,8 @@ test('obvious synonyms find the field, whichever section it sits in', () => {
 	found('unloading', 'unloadRestoredTabs');
 	found('split', 'saveSplitTabs');
 	found('session name', 'sessionNameStyle');
+	found('new bookmark', 'newBookmarkPosition');
+	found('prepend', 'newBookmarkPosition');
 });
 
 test('the catch-up setting is found through its Settings section', () => {

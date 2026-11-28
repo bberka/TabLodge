@@ -1,4 +1,9 @@
-import type {Bookmark, BookmarkColumn, BookmarkSort} from './types';
+import type {
+	Bookmark,
+	BookmarkColumn,
+	BookmarkSort,
+	NewBookmarkPosition,
+} from './types';
 import {siteName} from './web-url';
 
 export const DEFAULT_BOOKMARK_COLUMN_ID = 'bookmark-default';
@@ -72,6 +77,23 @@ export const BOOKMARK_SORT_OPTIONS = [
 	['title', 'Title A–Z'],
 	['site', 'Site A–Z'],
 ] as const satisfies ReadonlyArray<readonly [BookmarkSort, string]>;
+
+export const NEW_BOOKMARK_POSITION_OPTIONS = [
+	['bottom', 'Bottom'],
+	['top', 'Top'],
+] as const satisfies ReadonlyArray<readonly [NewBookmarkPosition, string]>;
+
+export function insertNewBookmarks<T>(
+	existing: readonly T[],
+	added: readonly T[],
+	position: NewBookmarkPosition = 'bottom',
+): T[] {
+	if (added.length === 0) {
+		return [...existing];
+	}
+
+	return position === 'top' ? [...added, ...existing] : [...existing, ...added];
+}
 
 export function sortBookmarks<
 	T extends Pick<Bookmark, 'title' | 'url' | 'createdAt'>,

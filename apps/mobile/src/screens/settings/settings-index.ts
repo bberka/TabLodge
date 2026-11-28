@@ -148,6 +148,10 @@ export const ROWS = {
 		label: 'Sort bookmarks',
 		hint: 'Only Manual order can be rearranged',
 	},
+	newBookmarkPosition: {
+		label: 'Add new bookmarks to',
+		hint: 'Bottom or top of a column under Manual order. The extension uses it too',
+	},
 	sessionName: {
 		label: 'Session name',
 		hint: 'How a new session is named. The name field on the save sheet wins when you type one',
@@ -284,6 +288,7 @@ export const SECTIONS = {
 			ROWS.spacing,
 			ROWS.showAll,
 			ROWS.sortBookmarks,
+			ROWS.newBookmarkPosition,
 			ROWS.siteIcons,
 			ROWS.savePreview,
 			ROWS.afterShare,

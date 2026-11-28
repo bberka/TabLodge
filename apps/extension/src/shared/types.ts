@@ -48,6 +48,7 @@ export type RestoreMode = 'keep' | 'remove';
 export type SessionSort =
 	'newest' | 'oldest' | 'opened' | 'name' | 'tabs' | 'custom';
 export type BookmarkSort = 'manual' | 'newest' | 'oldest' | 'title' | 'site';
+export type NewBookmarkPosition = 'bottom' | 'top';
 export type TabGroupColor = `${chrome.tabGroups.Color}`;
 export type DuplicateMode = 'skip' | 'allow';
 export type TitlePolicy = 'existing' | 'latest';
@@ -117,6 +118,7 @@ export type Settings = {
 	paletteLocation: PaletteLocation;
 	sessionSort: SessionSort;
 	bookmarkSort: BookmarkSort;
+	newBookmarkPosition: NewBookmarkPosition;
 	expandSessionsByDefault: boolean;
 	showSessionFaviconPreviews: boolean;
 	sessionQuickActions: SessionQuickAction[];
